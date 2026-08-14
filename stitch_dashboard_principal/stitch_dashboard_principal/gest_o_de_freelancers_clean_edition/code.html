@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Gestão de Freelancers - Nightlife Ops</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-primary-container": "#00214f",
+              "inverse-on-surface": "#9b9d9e",
+              "on-surface-variant": "#595c5d",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#003e50",
+              "inverse-primary": "#4b8eff",
+              "tertiary": "#00647f",
+              "on-primary": "#f0f2ff",
+              "secondary-fixed-dim": "#4decc9",
+              "secondary": "#006855",
+              "on-primary-fixed": "#000000",
+              "error-container": "#fb5151",
+              "tertiary-dim": "#00576f",
+              "surface-container-high": "#e0e3e4",
+              "surface-variant": "#dadddf",
+              "on-background": "#2c2f30",
+              "background": "#f5f6f7",
+              "surface-bright": "#f5f6f7",
+              "on-surface": "#2c2f30",
+              "on-tertiary-fixed": "#002733",
+              "outline": "#757778",
+              "error": "#b31b25",
+              "surface-dim": "#d1d5d7",
+              "secondary-dim": "#005b4a",
+              "surface-container": "#e6e8ea",
+              "secondary-fixed": "#5ffbd6",
+              "surface-tint": "#0058bb",
+              "on-secondary-fixed-variant": "#006855",
+              "primary-container": "#6c9fff",
+              "on-secondary": "#c4ffec",
+              "on-error-container": "#570008",
+              "primary": "#0058bb",
+              "on-secondary-fixed": "#00483b",
+              "outline-variant": "#abadae",
+              "on-tertiary": "#e4f5ff",
+              "surface": "#f5f6f7",
+              "tertiary-container": "#02cbff",
+              "on-error": "#ffefee",
+              "tertiary-fixed": "#02cbff",
+              "tertiary-fixed-dim": "#00bced",
+              "primary-fixed": "#6c9fff",
+              "primary-dim": "#004ca4",
+              "on-primary-fixed-variant": "#002a61",
+              "secondary-container": "#5ffbd6",
+              "surface-container-low": "#eff1f2",
+              "surface-container-highest": "#dadddf",
+              "on-tertiary-fixed-variant": "#00475c",
+              "on-secondary-container": "#005d4c",
+              "primary-fixed-dim": "#5191ff",
+              "error-dim": "#9f0519",
+              "inverse-surface": "#0c0f10"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface antialiased">
+<!-- Sidebar Navigation (SideNavBar) -->
+<aside class="fixed left-0 top-0 h-full w-64 bg-slate-50 dark:bg-slate-950 flex flex-col h-screen py-6 px-4 z-50">
+<div class="mb-10 px-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined" data-icon="local_bar">local_bar</span>
+</div>
+<div>
+<h1 class="font-headline font-extrabold text-blue-600 dark:text-blue-400 leading-none">Nightlife Ops</h1>
+<p class="text-[10px] uppercase tracking-widest text-slate-500 mt-1">Premium Management</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-900/50 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-manrope text-sm tracking-wide">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-900/50 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span class="font-manrope text-sm tracking-wide">Inventory</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-blue-600 dark:text-blue-400 font-bold border-r-4 border-blue-600 dark:border-blue-400 bg-white dark:bg-slate-900 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-manrope text-sm tracking-wide">Staff</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-900/50 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-manrope text-sm tracking-wide">Schedule</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-900/50 transition-all duration-300 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-manrope text-sm tracking-wide">Reports</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-slate-200 dark:border-slate-800 space-y-2">
+<button class="w-full flex items-center justify-center gap-2 py-3 px-4 bg-primary text-white rounded-xl font-headline text-sm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all mb-4">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                Add Freelancer
+            </button>
+<a class="flex items-center gap-3 px-4 py-2 text-slate-500 hover:text-on-surface transition-colors text-sm" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+                Help Center
+            </a>
+<a class="flex items-center gap-3 px-4 py-2 text-slate-500 hover:text-error transition-colors text-sm" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+                Logout
+            </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 min-h-screen p-8 lg:p-12">
+<!-- Top Navigation (TopNavBar Context) -->
+<header class="flex justify-between items-center mb-12">
+<div>
+<h2 class="font-headline text-3xl font-extrabold text-on-surface tracking-tight">Gestão de Freelancers</h2>
+<p class="text-on-surface-variant mt-1 font-body">Coordene turnos, pagamentos e disponibilidade em tempo real.</p>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full hover:bg-surface-container-low transition-colors text-on-surface-variant relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-surface"></span>
+</button>
+<button class="bg-gradient-to-r from-primary to-primary-container text-white px-6 py-3 rounded-xl font-headline font-bold flex items-center gap-2 shadow-xl shadow-primary/10 hover:shadow-primary/20 transition-all active:scale-95">
+<span class="material-symbols-outlined" data-icon="person_add">person_add</span>
+                    + Nova Diária
+                </button>
+</div>
+</header>
+<!-- Bento Layout Grid -->
+<div class="grid grid-cols-12 gap-8">
+<!-- Filter & Stats Section -->
+<section class="col-span-12 lg:col-span-8 space-y-8">
+<!-- Filter Bar -->
+<div class="flex flex-wrap items-center justify-between gap-6 p-1 bg-surface-container-low rounded-2xl">
+<div class="flex p-1 gap-1">
+<button class="px-6 py-2 rounded-xl bg-surface-container-lowest text-primary font-semibold shadow-sm transition-all">Hoje</button>
+<button class="px-6 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-highest/50 transition-all">Semana</button>
+<button class="px-6 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-highest/50 transition-all">Mês</button>
+</div>
+<div class="flex items-center gap-2 pr-4">
+<span class="text-xs font-label text-on-surface-variant uppercase tracking-widest mr-2">Função:</span>
+<div class="flex gap-2">
+<button class="px-4 py-1.5 rounded-full border border-outline-variant/20 text-sm font-medium hover:bg-surface-container-lowest transition-colors">Barman</button>
+<button class="px-4 py-1.5 rounded-full border border-outline-variant/20 text-sm font-medium hover:bg-surface-container-lowest transition-colors">Garçom</button>
+<button class="px-4 py-1.5 rounded-full border border-outline-variant/20 text-sm font-medium hover:bg-surface-container-lowest transition-colors">Cozinha</button>
+</div>
+</div>
+</div>
+<!-- Freelancer Feed (Editorial Grid) -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Freelancer Card: Em Turno -->
+<div class="bg-surface-container-lowest rounded-2xl p-6 transition-all hover:shadow-xl hover:shadow-on-surface/5 group">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-4">
+<img alt="Ricardo Alves" class="w-14 h-14 rounded-2xl object-cover" data-alt="portrait of a professional bartender wearing a stylish dark apron in a modern dimly lit upscale bar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLUK_0nt1iOMXY4isHF_UpbtSOlSxkTjnXRly3vOscbot3g3xAhqe0vcX6FsT9wnRS-r_knQw4sOkeihz8A__vWSS8JWNI9jxJFSNElJiRdcnXwzvH73D6LasUeIDTtc7la-RFta_Y-vYvnZ5qnLjjEv00bo7bahCl3F5TXPB3WVC-KUTwTnVm59MA9_cq3tADmM3BepB4xfTwYQfswxZR7OHski_jooCy-Y1RiShLxne-taSYSbfkK-y6d8xkyDrOu8A6wczWf63E"/>
+<div>
+<h4 class="font-headline font-bold text-lg text-on-surface">Ricardo Alves</h4>
+<p class="text-sm text-on-surface-variant font-label">Head Mixologist</p>
+</div>
+</div>
+<span class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+                                Em turno
+                            </span>
+</div>
+<div class="flex items-end justify-between">
+<div>
+<p class="text-xs text-on-surface-variant font-label mb-1">Valor Diária</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">R$ 280,00</p>
+</div>
+<button class="p-3 rounded-xl bg-surface-container-low text-on-surface-variant opacity-0 group-hover:opacity-100 transition-all">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Freelancer Card: Pendente -->
+<div class="bg-surface-container-lowest rounded-2xl p-6 transition-all border-l-4 border-error-container/40 hover:shadow-xl hover:shadow-on-surface/5">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-4">
+<img alt="Marina Santos" class="w-14 h-14 rounded-2xl object-cover" data-alt="professional waitress with a friendly smile wearing a crisp white shirt in a high-end restaurant setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3GQiUc-iSWamBKQ5iZPc3yv4M7R4owb_P1jaPftGrgkCr3hr6g_7y3EucQhU97Xlrw3q5AL5ouWfVf26sJOmZ5yWQu2sR9-6ij9mk0UWLMl00Bn8irTtScQLBPewJz18WDYm5n_ni2HlHiB43UwdpTtFTYMX8gLQ6DOikxE0aGY_uw0ZBzO8YEKoWWZF9ljg8MynLi7s5BqA0GJRjlTszVsBHsInUBYbeJMIVAczKFKmwseMXuJB_3GF6qGLKSIIchfO4T3NwmgCd"/>
+<div>
+<h4 class="font-headline font-bold text-lg text-on-surface">Marina Santos</h4>
+<p class="text-sm text-on-surface-variant font-label">Garçonete Senior</p>
+</div>
+</div>
+<span class="px-3 py-1 rounded-full bg-error-container/20 text-on-error-container text-[11px] font-bold uppercase tracking-wider">
+                                Pendente Pgto
+                            </span>
+</div>
+<div class="flex items-end justify-between">
+<div>
+<p class="text-xs text-on-surface-variant font-label mb-1">Valor Diária</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">R$ 190,00</p>
+</div>
+<button class="bg-primary-container/20 text-primary px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-primary hover:text-white transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="payments">payments</span>
+                                Dar Baixa
+                            </button>
+</div>
+</div>
+<!-- Freelancer Card: Disponível -->
+<div class="bg-surface-container-lowest rounded-2xl p-6 transition-all hover:shadow-xl hover:shadow-on-surface/5 group">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-4">
+<img alt="Lucas Silva" class="w-14 h-14 rounded-2xl object-cover" data-alt="focused male chef in a professional kitchen uniform with a clean minimal background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMP-StxQk1Ux8rAkKle80LaxVpq9vn2_oTqN00trgCXjICxv5VkEFyc5mkG3MNlRpIyivayVPiSbxEL2NE-XqphtWKI7pSl0eBEl-N_dPfPANyyiSca7RCxzK0rReFmW3n8emsX1p4UKRcqTTatlEuAFem3M8KdJo5xtxDO3IJnsmR8LCULhe938bp3DD6mrLIUAeMgTUk6eyjN2DZzh4jrkiJgzFQXDwj2Q1wv4P9ij5hXyb1qPnUjmVieRvlsJUOWCyYT6Cxtm-u"/>
+<div>
+<h4 class="font-headline font-bold text-lg text-on-surface">Lucas Silva</h4>
+<p class="text-sm text-on-surface-variant font-label">Cozinha / Parrilla</p>
+</div>
+</div>
+<span class="px-3 py-1 rounded-full bg-tertiary-container/20 text-on-tertiary-container text-[11px] font-bold uppercase tracking-wider">
+                                Disponível
+                            </span>
+</div>
+<div class="flex items-end justify-between">
+<div>
+<p class="text-xs text-on-surface-variant font-label mb-1">Valor Diária</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">R$ 250,00</p>
+</div>
+<button class="p-3 rounded-xl bg-surface-container-low text-on-surface-variant opacity-0 group-hover:opacity-100 transition-all">
+<span class="material-symbols-outlined" data-icon="edit">edit</span>
+</button>
+</div>
+</div>
+<!-- Freelancer Card: Em Turno -->
+<div class="bg-surface-container-lowest rounded-2xl p-6 transition-all hover:shadow-xl hover:shadow-on-surface/5 group">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-4">
+<img alt="Ana Beatriz" class="w-14 h-14 rounded-2xl object-cover" data-alt="elegant young woman working in a high-end service industry setting with soft ambient lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNeG1q_kub0NHVdZb0Ed-ELi1qp3bgJoTkL7Z91lLVvBVCyxlOsa3YVWH0yBw4XUpSniMONBXk8Re3hlP7FOxW_KYjc54mnblafSea1xkZrONUDj2AFWuyLa3r9T6OABbH34nTMrBAhuVQRtAw_LRXMA4Te9HiATc4LfX0ba_c1sjO7GbxRXJ1o6iTnFuPSewAByIyWlYBgH-S1LrVieaI1SAIYvV8VEyjxbg-zYT_Rrm_FOTPHVKRLTXEbg1g7-R_0ekMkLAeJOiY"/>
+<div>
+<h4 class="font-headline font-bold text-lg text-on-surface">Ana Beatriz</h4>
+<p class="text-sm text-on-surface-variant font-label">Hostess</p>
+</div>
+</div>
+<span class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+                                Em turno
+                            </span>
+</div>
+<div class="flex items-end justify-between">
+<div>
+<p class="text-xs text-on-surface-variant font-label mb-1">Valor Diária</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">R$ 150,00</p>
+</div>
+<button class="p-3 rounded-xl bg-surface-container-low text-on-surface-variant opacity-0 group-hover:opacity-100 transition-all">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Sidebar Form Section (Nova Diária) -->
+<section class="col-span-12 lg:col-span-4">
+<div class="bg-surface-container-lowest rounded-3xl p-8 sticky top-8 shadow-2xl shadow-on-surface/5 border border-white">
+<div class="flex items-center gap-3 mb-8">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="assignment_add">assignment_add</span>
+</div>
+<h3 class="font-headline font-bold text-xl text-on-surface">Registrar Diária</h3>
+</div>
+<form class="space-y-6">
+<div class="space-y-2">
+<label class="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">Selecionar Freelancer</label>
+<div class="relative">
+<select class="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none">
+<option>Selecione um profissional</option>
+<option>Ricardo Alves</option>
+<option>Marina Santos</option>
+<option>Lucas Silva</option>
+</select>
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="person_search">person_search</span>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">Data do Turno</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all" type="date"/>
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="calendar_month">calendar_month</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-2">
+<label class="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">Função</label>
+<div class="relative">
+<select class="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-4 pr-10 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none">
+<option>Barman</option>
+<option>Garçom</option>
+<option>Cozinha</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">Valor (R$)</label>
+<input class="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all font-bold" placeholder="0,00" type="number"/>
+</div>
+</div>
+<div class="pt-4">
+<button class="w-full py-4 bg-gradient-to-r from-primary to-primary-container text-white rounded-2xl font-headline font-bold text-lg shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all" type="submit">
+                                Confirmar Agendamento
+                            </button>
+<p class="text-center text-[11px] text-on-surface-variant mt-4 leading-relaxed px-4">
+                                Ao confirmar, o freelancer receberá uma notificação via app para aceitar o turno.
+                            </p>
+</div>
+</form>
+</div>
+<!-- Quick Stats Mini Bento -->
+<div class="mt-8 grid grid-cols-2 gap-4">
+<div class="bg-primary/5 rounded-2xl p-4 border border-primary/10">
+<span class="text-[10px] font-bold text-primary uppercase tracking-wider block mb-1">Custos Hoje</span>
+<p class="text-2xl font-headline font-extrabold text-primary">R$ 430</p>
+</div>
+<div class="bg-secondary/5 rounded-2xl p-4 border border-secondary/10">
+<span class="text-[10px] font-bold text-secondary uppercase tracking-wider block mb-1">Ativos Agora</span>
+<p class="text-2xl font-headline font-extrabold text-secondary">02</p>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Visual Accents (Editorial Aesthetics) -->
+<div class="fixed top-0 right-0 w-1/3 h-1/2 bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10"></div>
+<div class="fixed bottom-0 left-0 w-1/4 h-1/3 bg-secondary/5 blur-[100px] rounded-full pointer-events-none -z-10"></div>
+</body></html>

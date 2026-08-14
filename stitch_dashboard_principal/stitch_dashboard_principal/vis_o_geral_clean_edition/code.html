@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-br"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BarFlow - Dashboard Executivo</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Manrope & Inter -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-fixed-dim": "#5191ff",
+              "outline-variant": "#abadae",
+              "on-primary": "#f0f2ff",
+              "on-surface": "#2c2f30",
+              "surface-container-highest": "#dadddf",
+              "secondary-dim": "#005b4a",
+              "tertiary": "#00647f",
+              "surface-container-lowest": "#ffffff",
+              "tertiary-container": "#02cbff",
+              "background": "#f5f6f7",
+              "on-tertiary-fixed-variant": "#00475c",
+              "secondary-container": "#5ffbd6",
+              "tertiary-fixed": "#02cbff",
+              "on-tertiary": "#e4f5ff",
+              "inverse-primary": "#4b8eff",
+              "surface": "#f5f6f7",
+              "on-tertiary-fixed": "#002733",
+              "tertiary-fixed-dim": "#00bced",
+              "primary": "#0058bb",
+              "surface-bright": "#f5f6f7",
+              "tertiary-dim": "#00576f",
+              "on-background": "#2c2f30",
+              "on-secondary-fixed": "#00483b",
+              "surface-dim": "#d1d5d7",
+              "primary-container": "#6c9fff",
+              "on-surface-variant": "#595c5d",
+              "on-primary-fixed-variant": "#002a61",
+              "inverse-surface": "#0c0f10",
+              "surface-tint": "#0058bb",
+              "on-primary-container": "#00214f",
+              "on-error": "#ffefee",
+              "secondary-fixed-dim": "#4decc9",
+              "on-error-container": "#570008",
+              "on-primary-fixed": "#000000",
+              "secondary-fixed": "#5ffbd6",
+              "on-secondary": "#c4ffec",
+              "inverse-on-surface": "#9b9d9e",
+              "surface-container": "#e6e8ea",
+              "surface-container-low": "#eff1f2",
+              "secondary": "#006855",
+              "surface-container-high": "#e0e3e4",
+              "on-tertiary-container": "#003e50",
+              "primary-fixed": "#6c9fff",
+              "on-secondary-fixed-variant": "#006855",
+              "primary-dim": "#004ca4",
+              "error-dim": "#9f0519",
+              "outline": "#757778",
+              "error-container": "#fb5151",
+              "on-secondary-container": "#005d4c",
+              "error": "#b31b25",
+              "surface-variant": "#dadddf"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased selection:bg-primary-container/30">
+<!-- SideNavBar Integration -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col bg-slate-100 dark:bg-slate-950 font-manrope text-sm font-medium p-4 space-y-2 z-50">
+<div class="mb-8 px-2 flex items-center gap-3">
+<div class="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">local_bar</span>
+</div>
+<div>
+<h2 class="text-lg font-black tracking-tighter text-slate-900 dark:text-white">The Glass House</h2>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold">Premium Lounge</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Active Tab: Dashboard -->
+<a class="flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm rounded-lg scale-100 active:scale-[0.98] transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span>Inventory</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span>Staff</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="bar_chart">bar_chart</span>
+<span>Sales</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="pt-4 border-t border-slate-200/50 dark:border-slate-800/50">
+<button class="w-full bg-gradient-to-r from-primary to-primary-container text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                New Order
+            </button>
+<a class="mt-4 flex items-center gap-3 px-3 py-2 text-slate-500 hover:text-slate-900 transition-colors" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="help">help</span>
+<span>Help Center</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Wrapper -->
+<main class="ml-64 min-h-screen flex flex-col">
+<!-- TopNavBar Integration -->
+<header class="w-full sticky top-0 z-40 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md shadow-sm dark:shadow-none font-manrope antialiased tracking-tight flex justify-between items-center px-8 h-16">
+<div class="flex items-center gap-6">
+<div class="relative w-96 group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-xl">search</span>
+<input class="w-full pl-11 pr-4 py-2 bg-surface-container-low border-none rounded-full focus:ring-2 focus:ring-primary-container/30 transition-all text-sm" placeholder="Search analytics, staff or stock..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:bg-slate-200/50 rounded-full transition-colors active:scale-95">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="h-8 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1"></div>
+<div class="flex items-center gap-3 pl-2">
+<div class="text-right hidden sm:block">
+<p class="text-xs font-bold text-on-surface">Alex Rivera</p>
+<p class="text-[10px] text-on-surface-variant">General Manager</p>
+</div>
+<img alt="User avatar" class="w-9 h-9 rounded-full object-cover ring-2 ring-primary-container/20" data-alt="Professional headshot of a smiling male bar manager in a modern setting with soft warm light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnAiBdvbFHIU_AojuM_Cn4E75QDQoOBroox5x_mmIuyPtLglF2xWJGOozljzpOGnCppjIVxXHVKxzvLzjMBQDIQzU2T4ZQ0hQbmldgvmx_xCvZ6sH5tSpX1P0eJLMQFfWQFi1FrZuH_Bme_XWdML3-fLQtPDh8iTKJ6xBuCYGqTvbWusWjrl0pJhurURv6caCcWDYKtdzuJ-tzU2NGYfkNcSWFMSBXl_e0hR-l2RSs7YJQzTfKuZlNceLdZlSHJUUGUR0RKgDSGPi_"/>
+</div>
+</div>
+</header>
+<!-- Dashboard Canvas -->
+<div class="p-8 space-y-8">
+<!-- Executive Summary: Trio of Bento Cards -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm border-none flex flex-col justify-between h-40 group hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start">
+<div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-2xl" style="font-variation-settings: 'FILL' 1;">payments</span>
+</div>
+<span class="text-secondary font-semibold text-xs bg-secondary-container/30 px-2 py-1 rounded-full">+12.5%</span>
+</div>
+<div>
+<p class="text-on-surface-variant text-xs font-medium uppercase tracking-wider">Faturamento Diário</p>
+<h3 class="text-3xl font-black text-on-surface mt-1 tracking-tight">R$ 14.850,00</h3>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm border-none flex flex-col justify-between h-40 group hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start">
+<div class="w-12 h-12 bg-tertiary/10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary text-2xl" style="font-variation-settings: 'FILL' 1;">engineering</span>
+</div>
+<span class="text-on-surface-variant text-xs bg-surface-container/50 px-2 py-1 rounded-full">4 Ativos</span>
+</div>
+<div>
+<p class="text-on-surface-variant text-xs font-medium uppercase tracking-wider">Custo de Freelas Hoje</p>
+<h3 class="text-3xl font-black text-on-surface mt-1 tracking-tight">R$ 620,00</h3>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm border-none flex flex-col justify-between h-40 group hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start">
+<div class="w-12 h-12 bg-error/10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-error text-2xl" style="font-variation-settings: 'FILL' 1;">warning</span>
+</div>
+<span class="text-error font-bold text-xs animate-pulse">CRÍTICO</span>
+</div>
+<div>
+<p class="text-on-surface-variant text-xs font-medium uppercase tracking-wider">Alerta de Estoque</p>
+<h3 class="text-3xl font-black text-on-surface mt-1 tracking-tight">3 Itens</h3>
+</div>
+</div>
+</section>
+<!-- Main Insights Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Financial Chart: Receita vs Despesas -->
+<section class="lg:col-span-2 bg-surface-container-lowest p-8 rounded-xl shadow-sm space-y-6">
+<div class="flex justify-between items-end">
+<div>
+<h2 class="text-xl font-extrabold tracking-tight">Performance Semanal</h2>
+<p class="text-sm text-on-surface-variant">Comparativo de Receita vs. Despesas</p>
+</div>
+<div class="flex gap-4 text-xs font-bold">
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-primary"></span>
+<span class="text-on-surface-variant">Receita</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-error-container"></span>
+<span class="text-on-surface-variant">Despesas</span>
+</div>
+</div>
+</div>
+<!-- Simplified Visual Chart Placeholder (Using Gradients and Flex) -->
+<div class="h-64 flex items-end justify-between gap-4 pt-4 px-2">
+<!-- Monday -->
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full flex items-end justify-center gap-1 h-full">
+<div class="w-1/3 bg-primary/20 rounded-t-md group-hover:bg-primary/30 transition-all" style="height: 65%;"></div>
+<div class="w-1/3 bg-error-container/20 rounded-t-md" style="height: 40%;"></div>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant">SEG</span>
+</div>
+<!-- Tuesday -->
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full flex items-end justify-center gap-1 h-full">
+<div class="w-1/3 bg-primary/20 rounded-t-md group-hover:bg-primary/30 transition-all" style="height: 75%;"></div>
+<div class="w-1/3 bg-error-container/20 rounded-t-md" style="height: 35%;"></div>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant">TER</span>
+</div>
+<!-- Wednesday -->
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full flex items-end justify-center gap-1 h-full">
+<div class="w-1/3 bg-primary rounded-t-md shadow-lg shadow-primary/10" style="height: 95%;"></div>
+<div class="w-1/3 bg-error-container/20 rounded-t-md" style="height: 30%;"></div>
+</div>
+<span class="text-[10px] font-bold text-primary">QUA</span>
+</div>
+<!-- Thursday -->
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full flex items-end justify-center gap-1 h-full">
+<div class="w-1/3 bg-primary/20 rounded-t-md group-hover:bg-primary/30 transition-all" style="height: 85%;"></div>
+<div class="w-1/3 bg-error-container/20 rounded-t-md" style="height: 45%;"></div>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant">QUI</span>
+</div>
+<!-- Friday -->
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full flex items-end justify-center gap-1 h-full">
+<div class="w-1/3 bg-primary/20 rounded-t-md group-hover:bg-primary/30 transition-all" style="height: 90%;"></div>
+<div class="w-1/3 bg-error-container/20 rounded-t-md" style="height: 50%;"></div>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant">SEX</span>
+</div>
+<!-- Saturday -->
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full flex items-end justify-center gap-1 h-full">
+<div class="w-1/3 bg-primary/20 rounded-t-md group-hover:bg-primary/30 transition-all" style="height: 98%;"></div>
+<div class="w-1/3 bg-error-container/20 rounded-t-md" style="height: 40%;"></div>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant">SÁB</span>
+</div>
+<!-- Sunday -->
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full flex items-end justify-center gap-1 h-full">
+<div class="w-1/3 bg-primary/20 rounded-t-md group-hover:bg-primary/30 transition-all" style="height: 80%;"></div>
+<div class="w-1/3 bg-error-container/20 rounded-t-md" style="height: 30%;"></div>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant">DOM</span>
+</div>
+</div>
+</section>
+<!-- Top 5 Sold: Modern List -->
+<section class="bg-surface-container-lowest p-8 rounded-xl shadow-sm">
+<div class="flex items-center justify-between mb-8">
+<h2 class="text-xl font-extrabold tracking-tight">Top 5 Vendidos</h2>
+<button class="text-xs font-bold text-primary hover:underline">Ver Todos</button>
+</div>
+<div class="space-y-6">
+<!-- Item 1 -->
+<div class="flex items-center gap-4">
+<div class="relative">
+<img alt="Negroni Cocktail" class="w-12 h-12 rounded-lg object-cover" data-alt="Close-up of a vibrant orange Negroni cocktail with a large ice cube and citrus garnish on a dark bar surface" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuCHK5wpr6u_99q5uEEkAgfKIRbU9Mx4ntCaCTUcURZVJuXFz2C2J6_PcN6odgSySrH2QlkbdJquzfCt8lwEZANlXUd5pCnF7OTOb_Dpks0fDU9ob-8kL06uzuR9HrlB8Gnp_rTGT9G8ojhd1otT1Lg2TAwhnCbCretIE2eqL5Biy8sW_g2bpHGtFxYNKuo3r_GxfSmX2GeSiRiEgWa8ntp_FOB9mPEJxVrMVqxJKvniwtte4C4wn3c4ovGNtHGNZJt4ER8NqRvs0t"/>
+<span class="absolute -top-2 -right-2 bg-secondary text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full">1</span>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="text-sm font-bold truncate">Negroni Clássico</h4>
+<p class="text-xs text-on-surface-variant">Coquetelaria</p>
+</div>
+<div class="text-right">
+<p class="text-sm font-black">124</p>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold">Pedidos</p>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="flex items-center gap-4">
+<div class="relative">
+<img alt="Craft Beer" class="w-12 h-12 rounded-lg object-cover" data-alt="A pint of golden craft beer with thick white foam head in a crystal glass with moisture drops" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEGWTKXscF9RpLHHUKIhPvy-yW8ha7IPrRVBPGDL8N1CKaQMRGiz719YqBuO5gY6OUaHtAHqHqTXVcesKsv3vAYGE4phbRUzsXOQa9RU5GP7NPiWF_TODctO-uEaMZcMB8ZOtLu6jS9O5uEmiRKRRqj6gwCjG7rDC9hDDT4cPAJMeYbFK5oVVOg3IqD5s_mANYoAhWoBatRBVDVxyORQTrpKCuJ7fjJAfQYuIVagWpG-ccQM4rtLYQko5MQbxdIY53AD9hJIvaB3xE"/>
+<span class="absolute -top-2 -right-2 bg-slate-400 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full">2</span>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="text-sm font-bold truncate">IPA Artesanal</h4>
+<p class="text-xs text-on-surface-variant">Cervejas</p>
+</div>
+<div class="text-right">
+<p class="text-sm font-black">98</p>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold">Pedidos</p>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="flex items-center gap-4">
+<div class="relative">
+<img alt="Gin Tonic" class="w-12 h-12 rounded-lg object-cover" data-alt="Refreshing gin and tonic with botanical garnish and cucumber slices in a large balloon glass" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmX1XAKBcil8jYhcmNZgZmDg_HZ0iXeeJ11O4As-1pcIyYetMyrttwd-QJwW6OP0JnxxDG-f-LkNN5AOdYwfT4mg5j_yY90nMZlNsXPNANCBxDhDJDtSkpgY2fa8WAKS0ZPk8iLuEB4EHzRM-W3_x-asVD65Xvc965he7js2Qj14llKtzv8s1EVHa-pIWZ3H-LkyrJFv_T8OiFseM47zCGSKm3U8_zW6FkmyxdR2ppjYQfRud69TrBzEd0UT7hgQ3cZt6ehxvKVDhL"/>
+<span class="absolute -top-2 -right-2 bg-slate-300 text-on-surface text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full">3</span>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="text-sm font-bold truncate">Gin Tônica Premium</h4>
+<p class="text-xs text-on-surface-variant">Coquetelaria</p>
+</div>
+<div class="text-right">
+<p class="text-sm font-black">82</p>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold">Pedidos</p>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="flex items-center gap-4 opacity-80">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant">fastfood</span>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="text-sm font-bold truncate">Tábua de Frios</h4>
+<p class="text-xs text-on-surface-variant">Petiscos</p>
+</div>
+<div class="text-right">
+<p class="text-sm font-black">74</p>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold">Pedidos</p>
+</div>
+</div>
+<!-- Item 5 -->
+<div class="flex items-center gap-4 opacity-80">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant">local_bar</span>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="text-sm font-bold truncate">Margarita</h4>
+<p class="text-xs text-on-surface-variant">Coquetelaria</p>
+</div>
+<div class="text-right">
+<p class="text-sm font-black">66</p>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold">Pedidos</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Contextual Operational Section -->
+<section class="bg-primary/5 rounded-2xl p-8 border border-primary/10 flex flex-col md:flex-row items-center gap-8">
+<div class="md:w-1/4">
+<img alt="Stock Promotion" class="rounded-xl shadow-xl rotate-3" data-alt="Artistic shot of a luxury cocktail being prepared with professional bar tools and dramatic lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNt6UIQlkTELByPX0sgXYzqujQ639Hz_JiLAHZVRUFgKwThpAwhj0__3pMkZMsUZ9eqbcMTLD3IzIhSPHK5Q2lEV8o-cLvy-2BDXHvc7j7cAuzieGY__o2pMFJm0RTNMPIclqVWJKqAA_KO3qDgFNqOYsCh7CHHi8qckb6sCFS-enfoHmJHWs3WV1TP4I3M4jAvCfRwWVDoOOw5lgL3uldKUBDEQhpEhjgD4wRqIFDWIyKgh0LRzKlQCcR0NzCPMSryk1Uc2hLAGG8"/>
+</div>
+<div class="flex-1 space-y-4 text-center md:text-left">
+<h2 class="text-2xl font-black text-on-primary-container tracking-tight">Otimize seu Estoque de Destilados</h2>
+<p class="text-on-surface-variant max-w-xl text-lg leading-relaxed">Detectamos que a saída de <strong>Gin Beefeater</strong> aumentou 40% este mês. Gostaria de automatizar o pedido de reposição?</p>
+<div class="flex flex-wrap gap-3 justify-center md:justify-start">
+<button class="px-6 py-3 bg-primary text-white font-bold rounded-xl shadow-md hover:shadow-lg active:scale-95 transition-all">Configurar Agora</button>
+<button class="px-6 py-3 bg-white text-primary font-bold rounded-xl border border-primary/20 hover:bg-primary/5 transition-all">Ignorar</button>
+</div>
+</div>
+</section>
+</div>
+<!-- Footer / Soft Ending -->
+<footer class="mt-auto p-8 text-center text-xs text-on-surface-variant/60 font-medium">
+            © 2024 BarFlow Management Systems. Built for high-pressure environments.
+        </footer>
+</main>
+<!-- Contextual FAB (Only for Home/Dashboard) -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-gradient-to-br from-secondary to-secondary-dim text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform z-50 group">
+<span class="material-symbols-outlined text-3xl" data-icon="add_circle">add_circle</span>
+<span class="absolute right-16 bg-on-surface text-white px-3 py-1.5 rounded-lg text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Nova Venda</span>
+</button>
+</body></html>

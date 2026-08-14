@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Speakeasy Slate - Controle de Estoque</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-secondary-fixed-variant": "#006855",
+              "primary-container": "#6c9fff",
+              "tertiary-fixed-dim": "#00bced",
+              "on-primary-container": "#00214f",
+              "tertiary-container": "#02cbff",
+              "secondary": "#006855",
+              "inverse-surface": "#0c0f10",
+              "primary-fixed": "#6c9fff",
+              "on-error": "#ffefee",
+              "primary-fixed-dim": "#5191ff",
+              "surface-bright": "#f5f6f7",
+              "inverse-on-surface": "#9b9d9e",
+              "surface": "#f5f6f7",
+              "on-tertiary-fixed": "#002733",
+              "on-primary-fixed": "#000000",
+              "surface-container": "#e6e8ea",
+              "outline": "#757778",
+              "tertiary": "#00647f",
+              "on-tertiary-container": "#003e50",
+              "secondary-fixed": "#5ffbd6",
+              "surface-tint": "#0058bb",
+              "on-primary-fixed-variant": "#002a61",
+              "on-tertiary": "#e4f5ff",
+              "background": "#f5f6f7",
+              "on-secondary-container": "#005d4c",
+              "surface-variant": "#dadddf",
+              "error-dim": "#9f0519",
+              "outline-variant": "#abadae",
+              "on-secondary-fixed": "#00483b",
+              "error-container": "#fb5151",
+              "on-background": "#2c2f30",
+              "tertiary-dim": "#00576f",
+              "primary-dim": "#004ca4",
+              "tertiary-fixed": "#02cbff",
+              "surface-container-lowest": "#ffffff",
+              "secondary-fixed-dim": "#4decc9",
+              "on-surface": "#2c2f30",
+              "on-error-container": "#570008",
+              "on-secondary": "#c4ffec",
+              "on-primary": "#f0f2ff",
+              "on-tertiary-fixed-variant": "#00475c",
+              "primary": "#0058bb",
+              "surface-container-high": "#e0e3e4",
+              "surface-dim": "#d1d5d7",
+              "surface-container-low": "#eff1f2",
+              "error": "#b31b25",
+              "secondary-dim": "#005b4a",
+              "secondary-container": "#5ffbd6",
+              "surface-container-highest": "#dadddf",
+              "inverse-primary": "#4b8eff",
+              "on-surface-variant": "#595c5d"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased min-h-screen">
+<!-- SideNavBar Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-slate-50 dark:bg-slate-950 flex flex-col p-4 gap-y-2 z-50">
+<div class="mb-8 px-2 flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-lg">
+<span class="material-symbols-outlined" data-icon="local_bar">local_bar</span>
+</div>
+<div>
+<h2 class="font-bold text-lg tracking-tight text-slate-900 dark:text-white leading-tight">The Pour House</h2>
+<p class="text-xs text-slate-500 font-medium">Premium Spirits</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:translate-x-1 transition-transform duration-200 font-manrope text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                Dashboard
+            </a>
+<!-- Active State: Inventory -->
+<a class="flex items-center gap-3 px-3 py-2 text-teal-700 dark:text-teal-300 bg-white dark:bg-slate-900 rounded-lg shadow-sm font-bold font-manrope text-sm transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2" style="font-variation-settings: 'FILL' 1;">inventory_2</span>
+                Inventory
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:translate-x-1 transition-transform duration-200 font-manrope text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+                Sales
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:translate-x-1 transition-transform duration-200 font-manrope text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+                Staff
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:translate-x-1 transition-transform duration-200 font-manrope text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+                Analytics
+            </a>
+</nav>
+<div class="mt-auto pt-4 border-t border-slate-200/50 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:translate-x-1 transition-transform duration-200 font-manrope text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+                Help Center
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:translate-x-1 transition-transform duration-200 font-manrope text-sm font-medium" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+                Logout
+            </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 min-h-screen">
+<!-- TopNavBar Shell -->
+<header class="sticky top-0 w-full z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-sm dark:shadow-none px-6 py-3 flex justify-between items-center font-manrope antialiased tracking-tight">
+<div class="flex items-center gap-4">
+<h1 class="text-xl font-bold text-slate-800 dark:text-slate-100">Speakeasy Slate</h1>
+<div class="hidden md:flex items-center bg-slate-50 dark:bg-slate-800/50 px-3 py-1.5 rounded-full border-none">
+<span class="material-symbols-outlined text-slate-400 text-sm" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm text-slate-600 placeholder:text-slate-400 ml-2 w-64" placeholder="Buscar produto..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors rounded-full active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors rounded-full active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-slate-200 overflow-hidden ml-2">
+<img class="w-full h-full object-cover" data-alt="professional male manager portrait in a modern hospitality setting with soft ambient lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAyB1wXdoy0WnV0pOfQ8xXT7WCyp_NM7BnJuadfbfU5UfI603eb_JDMPJRlBPbXv0-HdqakkD5AoxN4Qntetekp-shfY_K_AiWNzgY8V3ngOpuO819eZydGOhzVP3YNJy0Iq-aAVPZJYj0uCnksl5P0eff3NCQV2lTmYg36isQH8BMCmmqpxmP0R2m5bSqeDqVbYntdZAsZHWPacUXyseRkBxYqoRS8h0mKB3jsbL5df5P9Hz7scRZhkiL42XwGeE-mRAhCwPr1vIly"/>
+</div>
+</div>
+</header>
+<div class="p-8 max-w-7xl mx-auto space-y-8">
+<!-- Inventory Header Section -->
+<section class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div class="space-y-2">
+<h2 class="text-3xl font-extrabold text-on-background tracking-tight">Controle de Estoque e Produtos</h2>
+<p class="text-on-surface-variant max-w-xl font-body">Gerencie seu estoque, defina alertas de estoque mínimo e registre novas entradas com precisão editorial.</p>
+</div>
+<div>
+<button class="bg-gradient-to-r from-primary to-primary-container text-on-primary px-6 py-3 rounded-xl font-semibold flex items-center gap-2 shadow-lg shadow-primary/20 hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
+                        Registrar Entrada de Mercadoria
+                    </button>
+</div>
+</section>
+<!-- Inventory Filters -->
+<section class="flex flex-wrap items-center gap-3">
+<button class="px-5 py-2 bg-primary text-on-primary rounded-full text-sm font-semibold transition-all">Todos</button>
+<button class="px-5 py-2 bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high rounded-full text-sm font-medium transition-all">Cervejas</button>
+<button class="px-5 py-2 bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high rounded-full text-sm font-medium transition-all">Destilados</button>
+<button class="px-5 py-2 bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high rounded-full text-sm font-medium transition-all">Insumos</button>
+<button class="px-5 py-2 bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high rounded-full text-sm font-medium transition-all">Soft Drinks</button>
+</section>
+<!-- Product Table (Editorial Bento Style) -->
+<div class="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
+<th class="px-6 py-4">Item</th>
+<th class="px-6 py-4">Categoria</th>
+<th class="px-6 py-4">Estoque Atual</th>
+<th class="px-6 py-4">Estoque Mínimo</th>
+<th class="px-6 py-4 text-right">Preço de Custo</th>
+<th class="px-6 py-4 text-center">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-variant/30">
+<!-- Row 1: Low Stock Alert -->
+<tr class="bg-surface-container-lowest hover:bg-surface-bright transition-colors">
+<td class="px-6 py-5">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="premium glass gin bottle with elegant label design against a neutral professional studio background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCy6mHO6BQ3jHkOXYMkgzfNMR5XOp9cmvJG__q8UqOJxzYYlP0hInuBeukbHujd7ZDyzNtjkAyb4O0_R1lrdEf_sBbjAs5KSZOah5hT0Ao9ntnRzlMcNcIcYVHytXJSl7-Inuw9tOXRRDpv-kzg4jyL7pN4K_SnvX2DUAIOGmmYK1aHgQj_Ee_RoUw19U9JH-9yR-ufw2dXXpSVujtmSThXMrqbffpKX4pi0gB9s6sz1lTOdVmTKWxP2lTAS0b3fWpAyBo3FvKaKhlJ"/>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface">Gin Beefeater</span>
+<span class="text-xs text-on-surface-variant">London Dry Gin</span>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-container text-on-secondary-container">
+                                        Destilados
+                                    </span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="font-semibold text-error">4 garrafas</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="text-on-surface-variant">5 garrafas</span>
+</td>
+<td class="px-6 py-5 text-right font-medium">
+                                    R$ 120,00
+                                </td>
+<td class="px-6 py-5 text-center">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-error-container/10 text-error-dim border border-error/20">
+<span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
+                                        Estoque Baixo
+                                    </span>
+</td>
+</tr>
+<!-- Row 2: Good Stock -->
+<tr class="bg-surface-container-lowest hover:bg-surface-bright transition-colors">
+<td class="px-6 py-5">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="vibrant craft beer can with colorful artistic label isolated on a light gray background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAbyX2JpDEppRTaTQ3Vrjl7MyoWasgbq89qalYBovP9kuSc2u5o6q5M_ZoadK75ivseyzSLw2ynuDZkEVolh3g62t1DNC8m24Zq81yMwahJ4-R5kudxhbnkKy7kjWRQw6EQxIRTNSK9aoYXEmbtcqd-tndFo65rLcJJicFCZM8LMna_QRCO-hl13EA7oeiQHh9SKnlA3zS2tYyLdihfF42bc7CFofuSzRxIEd3KD5WO79rjv3DVgu9xJDgeY4p5BjpvyiYfR8tJ3LRj"/>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface">IPA Artesanal</span>
+<span class="text-xs text-on-surface-variant">Hoppy Heaven Brewery</span>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-container text-on-secondary-container">
+                                        Cervejas
+                                    </span>
+</td>
+<td class="px-6 py-5">
+<span class="font-semibold text-on-surface">48 latas</span>
+</td>
+<td class="px-6 py-5">
+<span class="text-on-surface-variant">24 latas</span>
+</td>
+<td class="px-6 py-5 text-right font-medium">
+                                    R$ 12,00
+                                </td>
+<td class="px-6 py-5 text-center">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-secondary-container/20 text-on-secondary-fixed-variant">
+                                        Estável
+                                    </span>
+</td>
+</tr>
+<!-- Row 3: Good Stock -->
+<tr class="bg-surface-container-lowest hover:bg-surface-bright transition-colors">
+<td class="px-6 py-5">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="clean clear ice cubes in a transparent bag on a cool blue surface with condensation" src="https://lh3.googleusercontent.com/aida-public/AB6AXuATrb95GgrifNn5ZTFGKBOO3ST2xuzttKMuPO21tPew8Bzeb3UowFhw7W7JPuHD03armjXVgDMfWq79f_IxkS6Ant9g94kkvwghZGZz1tY_d-a1jqeZXTPyjUoEuQj3UzPK_KUKPOtL0yJA_Jqp9HA2EAh3wnjfpNPk8OEGoMmnqpuQ4txI8OKgIIPruQWqYtqLABnNoiIjSvCr1J3TujAb_QMUY71yBS2sQvj2j9OfKsyH2lckNOcmk1Lp6U5MJeVvbUlS7b3z4cVl"/>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-on-surface">Gelo (Saco 5kg)</span>
+<span class="text-xs text-on-surface-variant">Crystal Ice Co.</span>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-container text-on-secondary-container">
+                                        Insumos
+                                    </span>
+</td>
+<td class="px-6 py-5">
+<span class="font-semibold text-on-surface">12 sacos</span>
+</td>
+<td class="px-6 py-5">
+<span class="text-on-surface-variant">5 sacos</span>
+</td>
+<td class="px-6 py-5 text-right font-medium">
+                                    R$ 8,00
+                                </td>
+<td class="px-6 py-5 text-center">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-secondary-container/20 text-on-secondary-fixed-variant">
+                                        Estável
+                                    </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Dashboard Style Metric Bento -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-surface-container-lowest p-6 rounded-2xl shadow-sm space-y-4">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined p-3 bg-error-container/10 text-error rounded-xl" data-icon="warning">warning</span>
+<span class="text-xs font-bold text-error uppercase tracking-wider">Ação Necessária</span>
+</div>
+<div>
+<h3 class="text-sm font-medium text-on-surface-variant">Itens em Estoque Baixo</h3>
+<p class="text-3xl font-extrabold text-on-surface">12</p>
+</div>
+<div class="w-full h-1 bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-error" style="width: 65%"></div>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl shadow-sm space-y-4">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined p-3 bg-secondary-container/20 text-secondary rounded-xl" data-icon="inventory">inventory</span>
+<span class="text-xs font-bold text-secondary uppercase tracking-wider">Ativo</span>
+</div>
+<div>
+<h3 class="text-sm font-medium text-on-surface-variant">Valor Total do Inventário</h3>
+<p class="text-3xl font-extrabold text-on-surface">R$ 14.850,00</p>
+</div>
+<div class="w-full h-1 bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-secondary" style="width: 45%"></div>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl shadow-sm space-y-4">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined p-3 bg-tertiary-container/10 text-tertiary rounded-xl" data-icon="trending_up">trending_up</span>
+<span class="text-xs font-bold text-tertiary uppercase tracking-wider">Eficiência</span>
+</div>
+<div>
+<h3 class="text-sm font-medium text-on-surface-variant">Giro de Estoque (Mês)</h3>
+<p class="text-3xl font-extrabold text-on-surface">4.2x</p>
+</div>
+<div class="w-full h-1 bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-tertiary" style="width: 80%"></div>
+</div>
+</div>
+</section>
+</div>
+<!-- System Footer -->
+<footer class="mt-12 px-8 py-6 border-t border-surface-variant/30 flex justify-between items-center text-on-surface-variant text-sm font-body">
+<div class="flex gap-6">
+<span class="font-semibold text-on-surface">Speakeasy Slate v2.4</span>
+<span>The Pour House Management</span>
+</div>
+<div class="flex gap-4">
+<a class="hover:text-primary transition-colors" href="#">Política de Privacidade</a>
+<a class="hover:text-primary transition-colors" href="#">Termos de Uso</a>
+</div>
+</footer>
+</main>
+<!-- Contextual FAB (Hidden on Mobile) -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all md:hidden z-50">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+</body></html>
