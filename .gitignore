@@ -15,8 +15,8 @@ logs
 .vscode/*
 !.vscode/extensions.json
 
-client/_mcp_*
-client/_payload_*
-client/_deploy_*
-client/_vercel_*
-client/_chunk_*
+apps/marquinhos/_mcp_*
+apps/marquinhos/_payload_*
+apps/marquinhos/_deploy_*
+apps/marquinhos/_vercel_*
+apps/marquinhos/_chunk_*

@@ -1,12 +1,17 @@
 {
-  "name": "speakeasy-slate",
+  "name": "freelanoleste",
   "private": true,
   "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "npm run dev --prefix client",
-    "dev:server": "npm run dev --prefix server",
-    "dev:all": "npm run dev:server & npm run dev",
-    "build": "npm run build --prefix client",
-    "start": "npm run start --prefix server"
+    "dev": "npm run dev -w @fnl/marquinhos",
+    "dev:marquinhos": "npm run dev -w @fnl/marquinhos",
+    "dev:plataforma": "npm run dev -w @fnl/freelanoleste",
+    "dev:api": "npm run dev -w @fnl/api",
+    "build": "npm run build -w @fnl/marquinhos",
+    "build:plataforma": "npm run build -w @fnl/freelanoleste"
   }
 }

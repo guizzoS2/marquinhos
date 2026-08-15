@@ -1,45 +1,76 @@
-# Marquinho's
+# FreelaNoLeste / Marquinho's
 
-Dashboard do Marquinho's Bar e Petiscos. React + Firebase (Auth/Firestore), com fallback local quando as envs não estão setadas.
+Monorepo dos **dois produtos**, um `main`, sem fork.
 
-## Stack
+| Pacote | Papel |
+| --- | --- |
+| `apps/marquinhos` | Bar original (tenant com branding fixo). Painel operacional **implementado**. |
+| `apps/freelanoleste` | Plataforma MT: landing, admin, cadastro de freela, marketplace (casca). |
+| `apps/api` | API mock do painel. |
+| `packages/dashboard` | Núcleo operacional compartilhado (extração módulo a módulo). |
+| `packages/ui` | Tokens de tema (logo/cores) para white-label. |
 
-- **client**: Vite + React + Tailwind + React Router + React Query + Firebase
-- Design system: amarelo `#FFDB15`, branco e preto (`client/tailwind.config.js`)
+Marquinho's original é o primeiro tenant (amarelo `#FFDB15`). Cliente da plataforma recebe o mesmo painel, com logo e cores dele.
 
-## Firebase
-
-Copie `client/.env.example` → `client/.env` e preencha:
+Regras de negócio, MT e GitHub: [`docs/regras-negocio-multitenant.md`](docs/regras-negocio-multitenant.md).
 
 ```
-FIREBASE_API_KEY=
-FIREBASE_AUTH_DOMAIN=
-FIREBASE_PROJECT_ID=
-FIREBASE_STORAGE_BUCKET=
-FIREBASE_MESSAGING_SENDER_ID=
-FIREBASE_APP_ID=
+apps/marquinhos          produto básico (hoje o código vive aqui)
+apps/freelanoleste       plataforma
+apps/api
+packages/dashboard       destino das extrações compartilhadas
+packages/ui              tema injetável
 ```
 
-Não use prefixo `VITE_` — o Vite injeta essas vars no bundle do browser.
+- Feature de caixa/estoque/fornecedores → núcleo (`apps/marquinhos` agora, `packages/dashboard` depois) → os dois produtos.
+- Stripe, reviews, cadastro de freela, admin MT → só `apps/freelanoleste`.
 
-Sem Firebase: modo local (`localStore`) + login demo.
+---
 
-## Login demo (modo local)
+## Rodar
+
+Na raiz:
+
+```bash
+npm install
+npm run dev:marquinhos    # :5173
+npm run dev:plataforma    # :5174
+npm run dev:api           # :3333 mock
+```
+
+### Marquinho's — login demo (modo local)
 
 - E-mail: `fabio@marquinhos.local`
 - Senha: `admin123`
 
-## Rodar
+Sem Firebase: `localStore`. Com Firebase: copie `apps/marquinhos/.env.example` → `.env` (**sem** `VITE_`).
 
-```bash
-cd client && npm run dev
-```
+### Rotas Marquinho's
 
-## Rotas
+| Rota | Tela |
+| --- | --- |
+| `/login` | Login |
+| `/` | Visão geral |
+| `/fluxo-caixa` | Fluxo de caixa |
+| `/estoque` | Estoque |
+| `/fornecedores` | Fornecedores |
+| `/freelancers` | Equipe do bar |
+| `/perfil` | Perfil |
 
-- `/` Visão Geral
-- `/fluxo-caixa` Fluxo de Caixa
-- `/estoque` Estoque
-- `/freelancers` Freelancers
-- `/perfil` Perfil
-- `/login` Login
+### Rotas FreelaNoLeste
+
+| Rota | Tela |
+| --- | --- |
+| `/` | Landing da plataforma |
+| `/login` | Login (dono / freela / admin) |
+| `/cadastro-freela` | Cadastro de freela |
+| `/freelas` | Lista para donos |
+| `/admin` | Painel da plataforma |
+
+---
+
+## Atores
+
+- **Admin da plataforma** — tenants, assinaturas, splits
+- **Dono do bar** — assina, opera o Marquinho's do tenant, contrata freelas
+- **Freela** — cadastra-se na plataforma, recebe via Stripe, avalia o bar

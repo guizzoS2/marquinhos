@@ -1,0 +1,10 @@
+{
+  "name": "@fnl/ui",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    "./tailwind.preset": "./tailwind.preset.js",
+    "./themes": "./src/themes.js"
+  }
+}
