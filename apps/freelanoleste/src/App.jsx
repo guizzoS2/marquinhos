@@ -8,9 +8,10 @@ import { AdminLayout } from './components/admin/AdminLayout';
 import { FreelaLayout } from './components/freela/FreelaLayout';
 import { BarLayout } from './components/bar/BarLayout';
 import { HomePage } from './pages/HomePage';
-import { LoginPage } from './pages/LoginPage';
+import { AuthGatewayPage } from './pages/AuthGatewayPage';
+import { RoleLoginPage } from './pages/LoginPage';
 import { FreelaSignupPage } from './pages/FreelaSignupPage';
-import { FreelasPage } from './pages/FreelasPage';
+import { PessoalPage } from './pages/PessoalPage';
 import { AdminOverviewPage } from './pages/admin/OverviewPage';
 import { AdminTenantsPage } from './pages/admin/TenantsPage';
 import { AdminUsersPage } from './pages/admin/UsersPage';
@@ -34,9 +35,13 @@ export default function App() {
         <Routes>
           <Route element={<Shell />}>
             <Route index element={<HomePage />} />
-            <Route path="login" element={<LoginPage />} />
+            <Route path="login" element={<AuthGatewayPage />} />
+            <Route path="login/bar" element={<RoleLoginPage role="owner" />} />
+            <Route path="login/freela" element={<RoleLoginPage role="freela" />} />
+            <Route path="login/admin" element={<RoleLoginPage role="admin" />} />
             <Route path="cadastro-freela" element={<FreelaSignupPage />} />
-            <Route path="freelas" element={<FreelasPage />} />
+            <Route path="pessoal" element={<PessoalPage />} />
+            <Route path="freelas" element={<Navigate to="/pessoal" replace />} />
           </Route>
           <Route element={<RequireAdmin />}>
             <Route path="admin" element={<AdminLayout />}>
