@@ -6,6 +6,7 @@ import {
   cashFlowFallback,
   inventoryFallback,
   freelancersFallback,
+  suppliersFallback,
   expenseCategories,
 } from './fallbacks';
 import {
@@ -19,6 +20,7 @@ const DOCS = {
   cashFlow: 'dashboard/cashFlow',
   inventory: 'dashboard/inventory',
   freelancers: 'dashboard/freelancers',
+  suppliers: 'dashboard/suppliers',
 };
 
 const CATEGORY_NATURE_FALLBACK = {
@@ -139,6 +141,11 @@ export async function ensureDashboardSeed() {
   if (!freelancers) {
     await writeDocument(DOCS.freelancers, freelancersFallback);
   }
+
+  const suppliers = await readDocument(DOCS.suppliers);
+  if (!suppliers) {
+    await writeDocument(DOCS.suppliers, suppliersFallback);
+  }
 }
 
 export async function getOverview() {
@@ -160,6 +167,11 @@ export async function getInventory() {
 export async function getFreelancers() {
   await ensureDashboardSeed();
   return (await readDocument(DOCS.freelancers)) || freelancersFallback;
+}
+
+export async function getSuppliers() {
+  await ensureDashboardSeed();
+  return (await readDocument(DOCS.suppliers)) || suppliersFallback;
 }
 
 const DEFAULT_AVATAR =
@@ -195,6 +207,7 @@ export async function createExpense(payload) {
     id: `exp-${Date.now()}`,
     date: formatExpenseDate(payload.date),
     supplier: payload.supplier.trim(),
+    supplierId: payload.supplierId || null,
     category: category.name,
     categoryId: category.id,
     categoryIcon: category.icon,
@@ -222,6 +235,18 @@ export async function createExpense(payload) {
   };
 
   await writeDocument(DOCS.cashFlow, next);
+
+  if (payload.supplierId) {
+    await recordSupplierPurchase({
+      supplierId: payload.supplierId,
+      date: expense.date,
+      category: category.name,
+      value: expense.value,
+      amount: amountCents,
+      expenseId: expense.id,
+    });
+  }
+
   return expense;
 }
 
@@ -337,6 +362,17 @@ export async function registerStockEntry(payload) {
     throw new Error('Quantidade inválida.');
   }
 
+  const amountCents =
+    payload.amount ?? parseMoneyToCents(payload.value);
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    throw new Error('Informe o valor da compra.');
+  }
+
+  const supplierName = String(payload.supplier || '').trim();
+  if (!supplierName) {
+    throw new Error('Informe o fornecedor.');
+  }
+
   const nextQty = parsed.qty + addQty;
   const unit = parsed.unit || minParsed.unit || 'un';
   const status = nextQty < minParsed.qty ? 'low' : 'stable';
@@ -354,7 +390,24 @@ export async function registerStockEntry(payload) {
     metrics: recomputeInventoryMetrics(items),
   };
   await writeDocument(DOCS.inventory, next);
+
+  await createExpense({
+    date: payload.date || new Date().toISOString().slice(0, 10),
+    supplier: supplierName,
+    supplierId: payload.supplierId || null,
+    categoryId: stockCategoryToExpense(item.category),
+    nature: 'variable',
+    amount: amountCents,
+    source: 'stock_entry',
+  });
+
   return items[index];
+}
+
+function stockCategoryToExpense(category) {
+  if (category === 'Insumos') return 'suprimentos';
+  if (['Cervejas', 'Destilados', 'Soft Drinks'].includes(category)) return 'bebidas';
+  return 'suprimentos';
 }
 
 export async function deleteInventoryItem(itemId) {
@@ -449,6 +502,71 @@ export async function addFreelancer(payload) {
   };
   await writeDocument(DOCS.freelancers, next);
   return person;
+}
+
+export async function addSupplier(payload) {
+  const current = await getSuppliers();
+  const nextId =
+    (current.suppliers || []).reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+
+  const supplier = {
+    id: nextId,
+    name: payload.name.trim(),
+    contact: payload.contact.trim(),
+    cnpj: payload.cnpj.trim(),
+    lastPurchase: '',
+    lastValue: '',
+    lastAmount: 0,
+    history: [],
+  };
+
+  const next = {
+    ...current,
+    suppliers: [...(current.suppliers || []), supplier],
+  };
+  await writeDocument(DOCS.suppliers, next);
+  return supplier;
+}
+
+export async function recordSupplierPurchase({
+  supplierId,
+  date,
+  category,
+  value,
+  amount,
+  expenseId,
+}) {
+  const current = await getSuppliers();
+  const suppliers = (current.suppliers || []).map((item) => {
+    if (String(item.id) !== String(supplierId)) return item;
+    const entry = {
+      id: expenseId || `hist-${Date.now()}`,
+      date,
+      category: category || 'Despesa',
+      value,
+      amount,
+    };
+    return {
+      ...item,
+      lastPurchase: date,
+      lastValue: value,
+      lastAmount: amount,
+      history: [entry, ...(item.history || [])],
+    };
+  });
+  const next = { ...current, suppliers };
+  await writeDocument(DOCS.suppliers, next);
+  return next;
+}
+
+export async function deleteSupplier(supplierId) {
+  const current = await getSuppliers();
+  const suppliers = (current.suppliers || []).filter(
+    (item) => String(item.id) !== String(supplierId)
+  );
+  const next = { ...current, suppliers };
+  await writeDocument(DOCS.suppliers, next);
+  return next;
 }
 
 export async function getUserProfile(uid) {

@@ -10,6 +10,7 @@ import { OverviewPage } from './pages/OverviewPage';
 import { CashFlowPage } from './pages/CashFlowPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { FreelancersPage } from './pages/FreelancersPage';
+import { SuppliersPage } from './pages/SuppliersPage';
 import { ProfilePage } from './pages/ProfilePage';
 
 const queryClient = new QueryClient({
@@ -35,6 +36,7 @@ function App() {
                     <Route index element={<OverviewPage />} />
                     <Route path="fluxo-caixa" element={<CashFlowPage />} />
                     <Route path="estoque" element={<InventoryPage />} />
+                    <Route path="fornecedores" element={<SuppliersPage />} />
                     <Route path="freelancers" element={<FreelancersPage />} />
                     <Route path="perfil" element={<ProfilePage />} />
                   </Route>

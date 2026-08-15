@@ -38,6 +38,7 @@ export function CashFlowPage() {
 
   function refreshCashFlow() {
     queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+    queryClient.invalidateQueries({ queryKey: ['suppliers'] });
   }
 
   function handleExport() {

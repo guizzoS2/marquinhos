@@ -46,6 +46,8 @@ export function InventoryPage() {
 
   function refreshInventory() {
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+    queryClient.invalidateQueries({ queryKey: ['suppliers'] });
   }
 
   function openStockEntry() {

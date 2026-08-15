@@ -10,6 +10,7 @@ const navItems = [
   { to: '/', label: 'Visão Geral', icon: 'dashboard', end: true },
   { to: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: 'payments' },
   { to: '/estoque', label: 'Estoque', icon: 'inventory_2' },
+  { to: '/fornecedores', label: 'Fornecedores', icon: 'local_shipping' },
   { to: '/freelancers', label: 'Freelancers', icon: 'group' },
   { to: '/perfil', label: 'Perfil', icon: 'person' },
 ];

@@ -52,8 +52,11 @@ export function OverviewPage() {
               <Button
                 onClick={() =>
                   openModal('stock-entry', {
-                    onSuccess: () =>
-                      queryClient.invalidateQueries({ queryKey: ['inventory'] }),
+                    onSuccess: () => {
+                      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+                      queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+                      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+                    },
                   })
                 }
               >

@@ -135,6 +135,7 @@ export const cashFlowFallback = {
       id: 'exp-1',
       date: '14 Out',
       supplier: 'Ambev S.A.',
+      supplierId: 1,
       category: 'Bebidas',
       categoryId: 'bebidas',
       categoryIcon: 'local_shipping',
@@ -161,6 +162,7 @@ export const cashFlowFallback = {
       id: 'exp-3',
       date: '11 Out',
       supplier: 'Distribuidora de Gelo',
+      supplierId: 2,
       category: 'Suprimentos',
       categoryId: 'suprimentos',
       categoryIcon: 'ac_unit',
@@ -174,6 +176,7 @@ export const cashFlowFallback = {
       id: 'exp-4',
       date: '09 Out',
       supplier: 'Enel Distribuidora',
+      supplierId: 3,
       category: 'Utilidades',
       categoryId: 'utilidades',
       categoryIcon: 'bolt',
@@ -319,4 +322,63 @@ export const freelancersFallback = {
     },
   ],
   summary: { costsToday: 'R$ 430', activeNow: '02' },
+};
+
+export const suppliersFallback = {
+  suppliers: [
+    {
+      id: 1,
+      name: 'Ambev S.A.',
+      contact: '(11) 2186-7000',
+      cnpj: '07.526.557/0001-00',
+      lastPurchase: '14 Out',
+      lastValue: 'R$ 5.400,00',
+      lastAmount: 540000,
+      history: [
+        {
+          id: 'exp-1',
+          date: '14 Out',
+          category: 'Bebidas',
+          value: 'R$ 5.400,00',
+          amount: 540000,
+        },
+      ],
+    },
+    {
+      id: 2,
+      name: 'Distribuidora de Gelo',
+      contact: '(11) 3456-1200',
+      cnpj: '12.345.678/0001-90',
+      lastPurchase: '11 Out',
+      lastValue: 'R$ 180,00',
+      lastAmount: 18000,
+      history: [
+        {
+          id: 'exp-3',
+          date: '11 Out',
+          category: 'Suprimentos',
+          value: 'R$ 180,00',
+          amount: 18000,
+        },
+      ],
+    },
+    {
+      id: 3,
+      name: 'Enel Distribuidora',
+      contact: '0800 727 2106',
+      cnpj: '02.328.280/0001-97',
+      lastPurchase: '09 Out',
+      lastValue: 'R$ 2.100,00',
+      lastAmount: 210000,
+      history: [
+        {
+          id: 'exp-4',
+          date: '09 Out',
+          category: 'Utilidades',
+          value: 'R$ 2.100,00',
+          amount: 210000,
+        },
+      ],
+    },
+  ],
 };

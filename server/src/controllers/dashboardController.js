@@ -3,6 +3,7 @@ const {
   cashFlow,
   inventory,
   freelancers,
+  suppliers,
 } = require('../data/mocks');
 
 function getOverview(_req, res) {
@@ -19,6 +20,10 @@ function getInventory(_req, res) {
 
 function getFreelancers(_req, res) {
   return res.json(freelancers);
+}
+
+function getSuppliers(_req, res) {
+  return res.json(suppliers);
 }
 
 function createDaily(req, res) {
@@ -39,5 +44,6 @@ module.exports = {
   getCashFlow,
   getInventory,
   getFreelancers,
+  getSuppliers,
   createDaily,
 };

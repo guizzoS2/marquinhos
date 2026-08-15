@@ -8,6 +8,7 @@ const placeholders = {
   '/': 'Buscar análises, equipe ou estoque...',
   '/fluxo-caixa': 'Buscar transações, fornecedores...',
   '/estoque': 'Buscar produto...',
+  '/fornecedores': 'Buscar fornecedores...',
   '/freelancers': 'Buscar freelancers...',
   '/perfil': 'Buscar configurações do perfil...',
 };

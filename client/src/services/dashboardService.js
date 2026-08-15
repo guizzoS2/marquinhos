@@ -5,6 +5,9 @@ import {
   getFreelancers,
   registerDaily,
   addFreelancer,
+  addSupplier,
+  getSuppliers,
+  deleteSupplier,
   createExpense,
   deleteExpense,
   createIncome,
@@ -28,6 +31,18 @@ export function fetchInventory() {
 
 export function fetchFreelancers() {
   return getFreelancers();
+}
+
+export function fetchSuppliers() {
+  return getSuppliers();
+}
+
+export function createSupplier(payload) {
+  return addSupplier(payload);
+}
+
+export function removeSupplier(supplierId) {
+  return deleteSupplier(supplierId);
 }
 
 export function createDaily(payload) {

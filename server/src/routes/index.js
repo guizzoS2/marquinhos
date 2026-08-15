@@ -5,6 +5,7 @@ const {
   getCashFlow,
   getInventory,
   getFreelancers,
+  getSuppliers,
   createDaily,
 } = require('../controllers/dashboardController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
@@ -37,6 +38,12 @@ router.get(
   authenticateToken,
   requireRole('admin'),
   getFreelancers
+);
+router.get(
+  '/dashboard/suppliers',
+  authenticateToken,
+  requireRole('admin'),
+  getSuppliers
 );
 router.post(
   '/dashboard/freelancers/daily',
