@@ -84,7 +84,7 @@ function NewFreelancerForm({ onSuccess, onCancel }) {
           Status inicial
         </label>
         <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
           value={form.status}
           onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
         >
@@ -187,7 +187,7 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
           Categoria
         </label>
         <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
           value={form.categoryId}
           onChange={(e) => handleCategoryChange(e.target.value)}
         >
@@ -216,8 +216,8 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
               }}
               className={
                 form.nature === item.id
-                  ? 'flex-1 px-4 py-2 rounded-xl bg-primary text-on-primary font-semibold'
-                  : 'flex-1 px-4 py-2 rounded-xl text-on-surface-variant'
+                  ? 'flex-1 px-4 py-2 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
+                  : 'flex-1 px-4 py-2 min-h-11 rounded-xl text-on-surface-variant'
               }
             >
               {item.label}
@@ -244,7 +244,7 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
           Recorrência
         </label>
         <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
           value={form.recurrence}
           onChange={(e) => setForm((prev) => ({ ...prev, recurrence: e.target.value }))}
         >
@@ -321,7 +321,7 @@ function NewOrderForm({ onSuccess, onCancel }) {
           Categoria
         </label>
         <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
           value={form.category}
           onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
         >
@@ -406,7 +406,7 @@ function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
           Produto
         </label>
         <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
           value={form.itemId}
           onChange={(e) => setForm((prev) => ({ ...prev, itemId: e.target.value }))}
           required
@@ -531,7 +531,7 @@ export function AppModal() {
         className="absolute inset-0 bg-on-surface/40 backdrop-blur-sm"
         onClick={closeModal}
       />
-      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-surface-container-lowest rounded-2xl shadow-2xl shadow-on-surface/10 p-8 space-y-6">
+      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-surface-container-lowest rounded-2xl shadow-2xl shadow-on-surface/10 p-5 md:p-8 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-on-surface">
@@ -542,7 +542,7 @@ export function AppModal() {
           <button
             type="button"
             onClick={closeModal}
-            className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors"
+            className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors"
           >
             <Icon name="close" />
           </button>

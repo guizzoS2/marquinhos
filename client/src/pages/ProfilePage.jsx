@@ -68,7 +68,7 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 md:space-y-8">
       <section className="space-y-2">
         <h1 className="font-headline text-3xl font-extrabold text-on-surface tracking-tight">
           Perfil do Usuário
@@ -78,8 +78,8 @@ export function ProfilePage() {
         </p>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Card className="p-8 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+        <Card className="p-5 md:p-8 space-y-6">
           <div className="flex flex-col items-center text-center space-y-4">
             <img
               alt="Avatar do perfil"
@@ -99,7 +99,7 @@ export function ProfilePage() {
           </div>
         </Card>
 
-        <Card className="p-8 lg:col-span-2">
+        <Card className="p-5 md:p-8 lg:col-span-2">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
@@ -151,7 +151,7 @@ export function ProfilePage() {
             {error ? <p className="text-sm font-medium text-error">{error}</p> : null}
 
             <div className="flex justify-end">
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={saving} className="w-full sm:w-auto">
                 <Icon name="save" />
                 {saving ? 'Salvando...' : 'Salvar alterações'}
               </Button>

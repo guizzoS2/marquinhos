@@ -69,12 +69,12 @@ export function InventoryPage() {
   }
 
   if (isLoading || !data) {
-    return <div className="p-8 text-on-surface-variant">Carregando estoque...</div>;
+    return <div className="p-4 md:p-8 text-on-surface-variant">Carregando estoque...</div>;
   }
 
   return (
     <>
-      <div className="p-8 max-w-7xl mx-auto space-y-8">
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8">
         <section className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
             <h2 className="text-3xl font-extrabold text-on-background tracking-tight">
@@ -101,8 +101,8 @@ export function InventoryPage() {
               onClick={() => setFilter(item)}
               className={
                 filter === item
-                  ? 'px-5 py-2 bg-primary text-on-primary rounded-full text-sm font-semibold transition-all'
-                  : 'px-5 py-2 bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high rounded-full text-sm font-medium transition-all'
+                  ? 'px-5 py-2 min-h-11 bg-primary text-on-primary rounded-full text-sm font-semibold transition-all'
+                  : 'px-5 py-2 min-h-11 bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high rounded-full text-sm font-medium transition-all'
               }
             >
               {item}
@@ -176,7 +176,7 @@ export function InventoryPage() {
                     <td className="px-6 py-5 text-right">
                       <button
                         type="button"
-                        className="p-2 rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors"
+                        className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors"
                         onClick={() => confirmDeleteItem(item)}
                         aria-label={`Excluir ${item.name}`}
                       >
@@ -222,16 +222,16 @@ export function InventoryPage() {
         </section>
       </div>
 
-      <footer className="mt-12 px-8 py-6 border-t border-surface-variant/30 flex justify-between items-center text-on-surface-variant text-sm font-body">
-        <div className="flex gap-6">
+      <footer className="mt-12 px-4 md:px-8 py-6 border-t border-surface-variant/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-on-surface-variant text-sm font-body">
+        <div className="flex flex-wrap gap-4 md:gap-6">
           <span className="font-semibold text-on-surface">Marquinho's</span>
           <span>Bar e Petiscos</span>
         </div>
-        <div className="flex gap-4">
-          <a className="hover:text-on-surface transition-colors" href="#">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <a className="hover:text-on-surface transition-colors min-h-11 inline-flex items-center" href="#">
             Política de Privacidade
           </a>
-          <a className="hover:text-on-surface transition-colors" href="#">
+          <a className="hover:text-on-surface transition-colors min-h-11 inline-flex items-center" href="#">
             Termos de Uso
           </a>
         </div>
@@ -240,7 +240,7 @@ export function InventoryPage() {
       <button
         type="button"
         onClick={openStockEntry}
-        className="fixed bottom-8 right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all md:hidden z-50"
+        className="fixed bottom-6 right-4 w-14 h-14 min-h-14 min-w-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all md:hidden z-50"
         aria-label="Registrar entrada"
       >
         <Icon name="add" />

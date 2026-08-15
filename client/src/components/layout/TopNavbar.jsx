@@ -4,33 +4,42 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export function TopNavbar({
   searchPlaceholder = 'Buscar análises, equipe ou estoque...',
+  onMenuClick,
 }) {
   const { user } = useAuth();
 
   return (
-    <header className="w-full sticky top-0 z-40 bg-white border-b border-outline-variant font-headline antialiased tracking-tight flex justify-between items-center px-8 h-16">
-      <div className="flex items-center gap-6">
-        <div className="relative w-96 group">
+    <header className="w-full sticky top-0 z-40 bg-white border-b border-outline-variant font-headline antialiased tracking-tight flex justify-between items-center gap-3 px-4 md:px-8 h-16">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={onMenuClick}
+          aria-label="Abrir menu"
+          className="md:hidden min-h-11 min-w-11 flex items-center justify-center text-on-surface-variant hover:bg-surface-container rounded-full transition-colors active:scale-95"
+        >
+          <Icon name="menu" />
+        </button>
+        <div className="relative w-full max-w-md md:w-96 group min-w-0">
           <Icon
             name="search"
             className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-xl"
           />
           <input
-            className="w-full pl-11 pr-4 py-2 bg-surface-container-low border-none rounded-full focus:ring-2 focus:ring-primary-container/30 transition-all text-sm font-body"
+            className="w-full pl-11 pr-4 py-2 min-h-11 bg-surface-container-low border-none rounded-full focus:ring-2 focus:ring-primary-container/30 transition-all text-sm font-body"
             placeholder={searchPlaceholder}
             type="text"
           />
         </div>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4 shrink-0">
         <button
           type="button"
-          className="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:bg-surface-container rounded-full transition-colors active:scale-95"
+          className="min-h-11 min-w-11 flex items-center justify-center text-on-surface-variant hover:bg-surface-container rounded-full transition-colors active:scale-95"
         >
           <Icon name="notifications" />
         </button>
-        <div className="h-8 w-px bg-outline-variant/30 mx-1" />
-        <Link to="/perfil" className="flex items-center gap-3 pl-2">
+        <div className="h-8 w-px bg-outline-variant/30 mx-1 hidden sm:block" />
+        <Link to="/perfil" className="flex items-center gap-3 pl-1 md:pl-2 min-h-11">
           <div className="text-right hidden sm:block">
             <p className="text-xs font-bold text-on-surface">
               {user?.name || 'Fábio Santos'}

@@ -32,8 +32,8 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface flex items-center justify-center p-6 font-body">
-      <Card className="w-full max-w-md p-8 space-y-6" as="form" onSubmit={handleSubmit}>
+    <div className="min-h-screen bg-surface flex items-center justify-center p-4 sm:p-6 font-body">
+      <Card className="w-full max-w-md p-5 sm:p-8 space-y-6" as="form" onSubmit={handleSubmit}>
         <div className="flex flex-col items-center gap-4 text-center">
           <BrandLogo variant="full" className="w-44 h-44" />
           <p className="text-sm text-on-surface-variant">Acesso administrativo</p>

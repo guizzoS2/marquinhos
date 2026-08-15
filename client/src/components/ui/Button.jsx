@@ -18,7 +18,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-semibold transition-all active:scale-95 disabled:opacity-60 ${variants[variant]} ${className}`.trim()}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 min-h-11 font-semibold transition-all active:scale-95 disabled:opacity-60 ${variants[variant]} ${className}`.trim()}
       {...props}
     >
       {icon}

@@ -70,14 +70,14 @@ export function CashFlowPage() {
 
   if (isLoading || !data) {
     return (
-      <div className="p-8 text-on-surface-variant font-body">Carregando fluxo de caixa...</div>
+      <div className="p-4 md:p-8 text-on-surface-variant font-body">Carregando fluxo de caixa...</div>
     );
   }
 
   const summary = data.summary;
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-56 font-body">
+    <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 pb-72 md:pb-56 font-body">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-on-surface font-headline">
@@ -96,8 +96,8 @@ export function CashFlowPage() {
                 onClick={() => setPeriod(item)}
                 className={
                   period === item
-                    ? 'px-4 py-1.5 text-xs font-semibold bg-surface-container-lowest shadow-sm rounded-md text-on-surface'
-                    : 'px-4 py-1.5 text-xs font-medium text-on-surface-variant hover:text-on-surface'
+                    ? 'px-4 py-2 min-h-11 text-xs font-semibold bg-surface-container-lowest shadow-sm rounded-md text-on-surface'
+                    : 'px-4 py-2 min-h-11 text-xs font-medium text-on-surface-variant hover:text-on-surface'
                 }
               >
                 {item}
@@ -121,7 +121,7 @@ export function CashFlowPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm border border-outline-variant/20">
-          <div className="px-5 py-4 flex justify-between items-center bg-secondary/5">
+          <div className="px-4 md:px-5 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-secondary/5">
             <div className="flex items-center gap-2">
               <Icon name="trending_up" className="text-secondary" />
               <h3 className="font-headline font-bold text-on-surface">Entradas</h3>
@@ -195,8 +195,8 @@ export function CashFlowPage() {
                   onClick={() => setNatureFilter(item.id)}
                   className={
                     natureFilter === item.id
-                      ? 'px-3 py-1 rounded-full text-xs font-semibold bg-error text-on-error'
-                      : 'px-3 py-1 rounded-full text-xs font-medium bg-surface-container-lowest text-on-surface-variant'
+                      ? 'px-3 py-2 min-h-11 rounded-full text-xs font-semibold bg-error text-on-error'
+                      : 'px-3 py-2 min-h-11 rounded-full text-xs font-medium bg-surface-container-lowest text-on-surface-variant'
                   }
                 >
                   {item.label}
@@ -244,7 +244,7 @@ export function CashFlowPage() {
                     <td className="px-5 py-3 text-right">
                       <button
                         type="button"
-                        className="p-2 rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors"
+                        className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors"
                         onClick={() => confirmDeleteExpense(row)}
                         aria-label="Excluir despesa"
                       >
@@ -269,9 +269,9 @@ export function CashFlowPage() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 right-0 left-0 md:left-64 bg-surface/90 backdrop-blur-xl border-t border-outline-variant/20 p-6 z-40">
-        <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
-          <div className="space-y-1 border-r border-outline-variant/20 pr-4">
+      <div className="fixed bottom-0 right-0 left-0 md:left-64 bg-surface/90 backdrop-blur-xl border-t border-outline-variant/20 p-4 md:p-6 z-40">
+        <div className="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 md:gap-4">
+          <div className="space-y-1 border-b sm:border-b-0 sm:border-r border-outline-variant/20 pb-3 sm:pb-0 pr-0 sm:pr-4">
             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
               Receita total
             </p>
@@ -285,7 +285,7 @@ export function CashFlowPage() {
               </span>
             </div>
           </div>
-          <div className="space-y-1 border-r border-outline-variant/20 pr-4">
+          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
               Despesas totais
             </p>
@@ -293,7 +293,7 @@ export function CashFlowPage() {
               {summary.totalExpenses}
             </span>
           </div>
-          <div className="space-y-1 border-r border-outline-variant/20 pr-4">
+          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
               Despesas fixas
             </p>
@@ -301,7 +301,7 @@ export function CashFlowPage() {
               {summary.fixedExpenses}
             </span>
           </div>
-          <div className="space-y-1 border-r border-outline-variant/20 pr-4">
+          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
               Despesas variáveis
             </p>
@@ -309,7 +309,7 @@ export function CashFlowPage() {
               {summary.variableExpenses}
             </span>
           </div>
-          <div className="space-y-1 border-r border-outline-variant/20 pr-4">
+          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
               % variável / receita
             </p>
@@ -317,7 +317,7 @@ export function CashFlowPage() {
               {summary.variableShare}
             </span>
           </div>
-          <div className="space-y-1 border-r border-outline-variant/20 pr-4">
+          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
               Margem contribuição
             </p>
@@ -325,7 +325,7 @@ export function CashFlowPage() {
               {summary.contributionMargin}
             </span>
           </div>
-          <div className="space-y-1 border-r border-outline-variant/20 pr-4">
+          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
               Lucro estimado
             </p>
@@ -345,7 +345,7 @@ export function CashFlowPage() {
       <button
         type="button"
         onClick={openNewExpense}
-        className="fixed bottom-28 right-8 w-14 h-14 bg-secondary text-on-secondary rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition-transform duration-150 z-50"
+        className="fixed bottom-36 right-4 md:bottom-28 md:right-8 w-14 h-14 min-h-14 min-w-14 bg-secondary text-on-secondary rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition-transform duration-150 z-50"
         aria-label="Nova despesa"
       >
         <Icon name="add" className="text-3xl" />

@@ -33,7 +33,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed bottom-6 right-6 z-[120] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
+      <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 z-[120] flex flex-col gap-3 w-auto md:w-full max-w-sm pointer-events-none">
         {toasts.map((toast) => (
           <div
             key={toast.id}
@@ -67,7 +67,7 @@ export function ToastProvider({ children }) {
             <p className="text-sm font-medium flex-1 pt-1.5">{toast.message}</p>
             <button
               type="button"
-              className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-low"
+              className="p-1 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-surface-container-low flex items-center justify-center"
               onClick={() => dismiss(toast.id)}
             >
               <Icon name="close" className="text-sm" />

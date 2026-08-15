@@ -16,7 +16,7 @@ const timeFilters = ['Hoje', 'Semana', 'Mês'];
 function StatusBadge({ status, label }) {
   if (status === 'on_shift') {
     return (
-      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase tracking-wider">
+      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase tracking-wider shrink-0">
         <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
         {label}
       </span>
@@ -25,14 +25,14 @@ function StatusBadge({ status, label }) {
 
   if (status === 'pending_payment') {
     return (
-      <span className="px-3 py-1 rounded-full bg-error-container/20 text-on-error-container text-[11px] font-bold uppercase tracking-wider">
+      <span className="px-3 py-1 rounded-full bg-error-container/20 text-on-error-container text-[11px] font-bold uppercase tracking-wider shrink-0">
         {label}
       </span>
     );
   }
 
   return (
-    <span className="px-3 py-1 rounded-full bg-tertiary-container/20 text-on-tertiary-container text-[11px] font-bold uppercase tracking-wider">
+    <span className="px-3 py-1 rounded-full bg-tertiary-container/20 text-on-tertiary-container text-[11px] font-bold uppercase tracking-wider shrink-0">
       {label}
     </span>
   );
@@ -108,7 +108,7 @@ export function FreelancersPage() {
   }
 
   if (isLoading || !data) {
-    return <div className="p-8 text-on-surface-variant">Carregando freelancers...</div>;
+    return <div className="p-4 md:p-8 text-on-surface-variant">Carregando freelancers...</div>;
   }
 
   function handleSubmit(event) {
@@ -122,11 +122,11 @@ export function FreelancersPage() {
   }
 
   return (
-    <div className="p-8 lg:p-12 relative">
+    <div className="p-4 md:p-8 lg:p-12 relative">
       <div className="fixed top-0 right-0 w-1/3 h-1/2 bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10" />
       <div className="fixed bottom-0 left-0 w-1/4 h-1/3 bg-secondary/5 blur-[100px] rounded-full pointer-events-none -z-10" />
 
-      <header className="flex justify-between items-center mb-12">
+      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 md:mb-12">
         <div>
           <h2 className="font-headline text-3xl font-extrabold text-on-surface tracking-tight">
             Gestão de Freelancers
@@ -135,10 +135,10 @@ export function FreelancersPage() {
             Coordene turnos, pagamentos e disponibilidade em tempo real.
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 md:gap-4">
           <button
             type="button"
-            className="p-2 rounded-full hover:bg-surface-container-low transition-colors text-on-surface-variant relative"
+            className="p-2 min-h-11 min-w-11 rounded-full hover:bg-surface-container-low transition-colors text-on-surface-variant relative"
           >
             <Icon name="notifications" />
             <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-surface" />
@@ -156,10 +156,10 @@ export function FreelancersPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-12 gap-8">
-        <section className="col-span-12 lg:col-span-8 space-y-8">
-          <div className="flex flex-wrap items-center justify-between gap-6 p-1 bg-surface-container-low rounded-2xl">
-            <div className="flex p-1 gap-1">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+        <section className="col-span-1 lg:col-span-8 space-y-8">
+          <div className="flex flex-col md:flex-row md:flex-wrap md:items-center justify-between gap-4 md:gap-6 p-1 bg-surface-container-low rounded-2xl">
+            <div className="flex p-1 gap-1 overflow-x-auto">
               {timeFilters.map((item) => (
                 <button
                   key={item}
@@ -167,25 +167,25 @@ export function FreelancersPage() {
                   onClick={() => setTimeFilter(item)}
                   className={
                     timeFilter === item
-                      ? 'px-6 py-2 rounded-xl bg-primary text-on-primary font-semibold transition-all'
-                      : 'px-6 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-highest/50 transition-all'
+                      ? 'px-4 md:px-6 py-2 min-h-11 rounded-xl bg-primary text-on-primary font-semibold transition-all shrink-0'
+                      : 'px-4 md:px-6 py-2 min-h-11 rounded-xl text-on-surface-variant hover:bg-surface-container-highest/50 transition-all shrink-0'
                   }
                 >
                   {item}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2 pr-4">
-              <span className="text-xs font-label text-on-surface-variant uppercase tracking-widest mr-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pr-2 md:pr-4">
+              <span className="text-xs font-label text-on-surface-variant uppercase tracking-widest sm:mr-2">
                 Função:
               </span>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {data.roles.map((role) => (
                   <button
                     key={role}
                     type="button"
                     onClick={() => setRoleFilter(roleFilter === role ? null : role)}
-                    className={`px-4 py-1.5 rounded-full border border-outline-variant/20 text-sm font-medium hover:bg-surface-container-lowest transition-colors ${
+                    className={`px-4 py-1.5 min-h-11 rounded-full border border-outline-variant/20 text-sm font-medium hover:bg-surface-container-lowest transition-colors ${
                       roleFilter === role ? 'bg-primary text-on-primary' : ''
                     }`}
                   >
@@ -206,15 +206,15 @@ export function FreelancersPage() {
                     : ''
                 }`}
               >
-                <div className="flex justify-between items-start mb-6">
-                  <div className="flex items-center gap-4">
+                <div className="flex justify-between items-start mb-6 gap-3">
+                  <div className="flex items-center gap-4 min-w-0">
                     <img
                       alt={person.name}
-                      className="w-14 h-14 rounded-2xl object-cover"
+                      className="w-14 h-14 rounded-2xl object-cover shrink-0"
                       src={person.image}
                     />
-                    <div>
-                      <h4 className="font-headline font-bold text-lg text-on-surface">
+                    <div className="min-w-0">
+                      <h4 className="font-headline font-bold text-lg text-on-surface truncate">
                         {person.name}
                       </h4>
                       <p className="text-sm text-on-surface-variant font-label">{person.role}</p>
@@ -222,7 +222,7 @@ export function FreelancersPage() {
                   </div>
                   <StatusBadge status={person.status} label={person.statusLabel} />
                 </div>
-                <div className="flex items-end justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                   <div>
                     <p className="text-xs text-on-surface-variant font-label mb-1">Valor Diária</p>
                     <p className="text-xl font-headline font-extrabold text-on-surface">
@@ -234,7 +234,7 @@ export function FreelancersPage() {
                       <button
                         type="button"
                         onClick={() => settlePayment(person)}
-                        className="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-primary-dim transition-all"
+                        className="bg-primary text-on-primary px-4 py-2 min-h-11 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-primary-dim transition-all"
                       >
                         <Icon name="payments" className="text-sm" />
                         Dar Baixa
@@ -243,7 +243,7 @@ export function FreelancersPage() {
                     <button
                       type="button"
                       onClick={() => confirmDelete(person)}
-                      className="p-3 rounded-xl bg-surface-container-low text-on-surface-variant opacity-0 group-hover:opacity-100 hover:bg-error/10 hover:text-error transition-all"
+                      className="p-3 min-h-11 min-w-11 rounded-xl bg-surface-container-low text-on-surface-variant opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-error/10 hover:text-error transition-all"
                       aria-label={`Excluir ${person.name}`}
                     >
                       <Icon name="delete" />
@@ -255,8 +255,8 @@ export function FreelancersPage() {
           </div>
         </section>
 
-        <section className="col-span-12 lg:col-span-4">
-          <div className="bg-surface-container-lowest rounded-3xl p-8 sticky top-8 shadow-2xl shadow-on-surface/5 border border-white">
+        <section className="col-span-1 lg:col-span-4">
+          <div className="bg-surface-container-lowest rounded-3xl p-5 md:p-8 sticky top-8 shadow-2xl shadow-on-surface/5 border border-white">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-on-surface">
                 <Icon name="assignment_add" />
@@ -270,7 +270,7 @@ export function FreelancersPage() {
                 </label>
                 <div className="relative">
                   <select
-                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
                     value={form.freelancerId}
                     onChange={(e) => setForm((prev) => ({ ...prev, freelancerId: e.target.value }))}
                     required
@@ -295,7 +295,7 @@ export function FreelancersPage() {
                 </label>
                 <div className="relative">
                   <input
-                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all"
+                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all"
                     type="date"
                     value={form.date}
                     onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
@@ -308,14 +308,14 @@ export function FreelancersPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
                     Função
                   </label>
                   <div className="relative">
                     <select
-                      className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-4 pr-10 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+                      className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-4 pr-10 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
                       value={form.role}
                       onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
                     >
@@ -336,7 +336,7 @@ export function FreelancersPage() {
                     Valor (R$)
                   </label>
                   <input
-                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all font-bold"
+                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all font-bold"
                     placeholder="0,00"
                     type="number"
                     value={form.value}
@@ -348,7 +348,7 @@ export function FreelancersPage() {
 
               <div className="pt-4">
                 <button
-                  className="w-full py-4 bg-primary text-on-primary rounded-2xl font-headline font-bold text-lg hover:bg-primary-dim hover:scale-[1.02] active:scale-95 transition-all"
+                  className="w-full py-4 min-h-11 bg-primary text-on-primary rounded-2xl font-headline font-bold text-lg hover:bg-primary-dim hover:scale-[1.02] active:scale-95 transition-all"
                   type="submit"
                   disabled={mutation.isPending}
                 >

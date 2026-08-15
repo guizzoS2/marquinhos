@@ -8,10 +8,10 @@ const rankToneClass = {
 
 export function TopSoldList({ items = [] }) {
   return (
-    <section className="bg-surface-container-lowest p-8 rounded-xl shadow-sm">
-      <div className="flex items-center justify-between mb-8">
+    <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm">
+      <div className="flex items-center justify-between mb-6 md:mb-8">
         <h2 className="text-xl font-extrabold tracking-tight">Top 5 Vendidos</h2>
-        <button type="button" className="text-xs font-bold text-on-surface hover:underline">
+        <button type="button" className="text-xs font-bold text-on-surface hover:underline min-h-11 px-2">
           Ver todos
         </button>
       </div>

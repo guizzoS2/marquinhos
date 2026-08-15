@@ -14,7 +14,7 @@ const iconWrapClasses = {
 
 export function MetricCard({ label, value, badge, badgeTone = 'neutral', icon }) {
   return (
-    <div className="bg-surface-container-lowest p-6 rounded-xl shadow-sm border-none flex flex-col justify-between h-40 group hover:shadow-md transition-shadow">
+    <div className="bg-surface-container-lowest p-5 md:p-6 rounded-xl shadow-sm border-none flex flex-col justify-between min-h-40 group hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start">
         <div
           className={`w-12 h-12 rounded-lg flex items-center justify-center ${iconWrapClasses[icon] || 'bg-primary/20 text-on-surface'}`}

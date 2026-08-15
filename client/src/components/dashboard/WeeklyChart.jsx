@@ -15,8 +15,8 @@ const heightMap = {
 
 export function WeeklyChart({ data = [] }) {
   return (
-    <section className="lg:col-span-2 bg-surface-container-lowest p-8 rounded-xl shadow-sm space-y-6">
-      <div className="flex justify-between items-end">
+    <section className="lg:col-span-2 bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm space-y-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
         <div>
           <h2 className="text-xl font-extrabold tracking-tight">Performance Semanal</h2>
           <p className="text-sm text-on-surface-variant">
@@ -34,7 +34,7 @@ export function WeeklyChart({ data = [] }) {
           </div>
         </div>
       </div>
-      <div className="h-64 flex items-end justify-between gap-4 pt-4 px-2">
+      <div className="h-52 md:h-64 flex items-end justify-between gap-1 sm:gap-2 md:gap-4 pt-4 px-0 md:px-2">
         {data.map((item) => (
           <div key={item.day} className="flex-1 flex flex-col items-center gap-2 group">
             <div className="w-full flex items-end justify-center gap-1 h-full">

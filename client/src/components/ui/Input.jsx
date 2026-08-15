@@ -19,7 +19,7 @@ export function Input({
       ) : null}
       <input
         id={inputId}
-        className={`w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all ${className}`.trim()}
+        className={`w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all ${className}`.trim()}
         {...props}
       />
     </div>
