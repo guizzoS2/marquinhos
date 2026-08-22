@@ -1,0 +1,30 @@
+---
+description: Validar se o pedido faz sentido antes de implementar; se não, explicar e oferecer caminhos
+alwaysApply: true
+---
+
+# Validar o pedido
+
+Não implementar no automático se a lógica quebrar isolamento de tenant, papéis, dinheiro ou o monorepo. Parar, dizer o que está ruim, e dar opções. O user escolhe.
+
+## Checar antes de código
+
+1. **Tenant:** mistura dados de dois bares? Freela vendo caixa/estoque?
+2. **Papel:** dono, freela e admin no mesmo login/fluxo?
+3. **Dinheiro:** PIX/dinheiro por fora no lugar do Stripe split? Assinatura sem Stripe?
+4. **Review:** nota sem serviço/pagamento?
+5. **Git:** fork, branch por produto, copiar o painel?
+6. **White-label:** hardcode de logo/cor do Marquinho's na plataforma?
+7. **Mobile:** feature só desktop?
+
+## Se estiver ruim
+
+Explicar em 2–5 frases: o que quebra, por quê, risco (vazamento, chargeback, merge eterno).
+
+Oferecer 2–3 caminhos concretos, por exemplo:
+
+- Isolar por `tenantId` vs recusar o atalho.
+- Stripe Connect (split) vs marcar “fora de escopo” e registrar só no caixa interno.
+- Extrair módulo para `packages/dashboard` vs feature só em `apps/freelanoleste`.
+
+Não seguir a opção mais rápida se ela violar `docs/regras-negocio-multitenant.md`. Pontos em aberto (preço, %, domínio): perguntar ou listar defaults — não inventar como se fosse regra.

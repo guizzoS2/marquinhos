@@ -57,14 +57,14 @@ export function HomePage() {
               Stripe. A parede da cidade, agora na plataforma.
             </p>
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              <Link to="/login" className="w-full sm:w-auto">
+              <Link to="/login/bar" className="w-full sm:w-auto">
                 <Button variant="dark" className="w-full">
-                  Sou dono de bar
+                  Sou Bar
                 </Button>
               </Link>
-              <Link to="/cadastro-freela" className="w-full sm:w-auto">
+              <Link to="/login/freela" className="w-full sm:w-auto">
                 <Button variant="secondary" className="w-full">
-                  Quero ser freela
+                  Sou Freela
                 </Button>
               </Link>
             </div>
@@ -89,9 +89,9 @@ export function HomePage() {
                 Assinatura Stripe libera o marketplace e um Marquinho&apos;s white-label: caixa,
                 estoque e equipe no painel do seu tenant. Identidade do bar. Dados isolados.
               </p>
-              <Link to="/login" className="mt-6 inline-flex w-full sm:w-auto">
+              <Link to="/login/bar" className="mt-6 inline-flex w-full sm:w-auto">
                 <Button variant="dark" className="w-full">
-                  Organizar o bar
+                  Sou Bar
                 </Button>
               </Link>
             </Flyer>
@@ -133,9 +133,9 @@ export function HomePage() {
                 Cadastro na plataforma, não no caixa de um bar. Diária com split Stripe. Review
                 nos dois sentidos depois do trampo pago.
               </p>
-              <Link to="/cadastro-freela" className="mt-6 inline-flex w-full sm:w-auto">
+              <Link to="/login/freela" className="mt-6 inline-flex w-full sm:w-auto">
                 <Button variant="dark" className="w-full">
-                  Colar meu nome na parede
+                  Sou Freela
                 </Button>
               </Link>
             </Flyer>

@@ -1,0 +1,37 @@
+---
+description: Regras de negócio Marquinho's e FreelaNoLeste (multi-tenant)
+alwaysApply: true
+---
+
+# Produto e multi-tenant
+
+Fonte completa: `docs/regras-negocio-multitenant.md`. Não inventar preço, % de split ou domínio de tenant — estão em aberto (seção 13).
+
+## Dois produtos
+
+- **Marquinho's** (`apps/marquinhos`): painel operacional do bar (caixa, estoque, fornecedores, equipe, perfil). Primeiro tenant; branding amarelo `#FFDB15` travado.
+- **FreelaNoLeste** (`apps/freelanoleste`): plataforma SaaS. Cliente paga (Stripe) e recebe um Marquinho's white-label (logo, cores, nome).
+
+FreelaNoLeste vende. Marquinho's é o painel do tenant.
+
+## Atores (logins separados)
+
+- Admin da plataforma: tenants, assinaturas, branding, splits.
+- Dono do bar: assina, opera o painel do **seu** tenant, contrata/avalia freelas.
+- Freela: cadastra-se na **plataforma**, não no Marquinho's de um bar. Recebe via Stripe. Avalia o bar.
+
+## Multi-tenant
+
+- Um bar = um tenant. Dados não vazam (caixa, estoque, equipe, logo, cores).
+- Cliente não usa o Marquinho's original; usa o painel do tenant.
+- Freela **não** entra em caixa/estoque. Marketplace, diária Stripe, review.
+
+## Dinheiro
+
+- Assinatura do bar: Stripe → plataforma.
+- Diária do freela: Stripe com **split** plataforma + freela. Sem PIX por fora nesse fluxo.
+- Review só depois de serviço/pagamento real; review nos dois sentidos.
+
+## White-label
+
+Módulos iguais. Muda branding e dados. Tema em `packages/ui`, não fork de CSS.

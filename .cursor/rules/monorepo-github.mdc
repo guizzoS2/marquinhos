@@ -1,0 +1,32 @@
+---
+description: Monorepo GitHub — um main, apps separados, núcleo compartilhado
+alwaysApply: true
+---
+
+# GitHub e monorepo
+
+Um repositório, um `main`. Sem fork. Sem branch eterna `marquinhos` / `freela`.
+
+```
+apps/marquinhos          painel do bar (código operacional hoje)
+apps/freelanoleste       plataforma (admin, billing, marketplace)
+apps/api                 API mock
+packages/dashboard       destino do núcleo compartilhado
+packages/ui              tokens (logo, cores)
+```
+
+## Onde o código vai
+
+- Caixa, estoque, fornecedores, equipe do bar → `apps/marquinhos` agora; na primeira feature dos dois apps, extrair para `packages/dashboard`.
+- Stripe, reviews, cadastro de freela, admin MT → só `apps/freelanoleste`.
+- Não copiar `apps/marquinhos` para a plataforma.
+
+## Proibido
+
+- Dois repos clonando o painel.
+- Cherry-pick de fork.
+- Extrair o app inteiro de uma vez para `packages/dashboard`.
+
+Dois repos só se houver times/deploys separados **e** o dashboard já for pacote.
+
+Detalhe: `docs/regras-negocio-multitenant.md` seção 12.

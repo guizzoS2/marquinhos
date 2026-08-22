@@ -10,7 +10,7 @@ import { BarLayout } from './components/bar/BarLayout';
 import { HomePage } from './pages/HomePage';
 import { AuthGatewayPage } from './pages/AuthGatewayPage';
 import { RoleLoginPage } from './pages/LoginPage';
-import { FreelaSignupPage } from './pages/FreelaSignupPage';
+import { RoleSignupPage } from './pages/SignupPage';
 import { PessoalPage } from './pages/PessoalPage';
 import { AdminOverviewPage } from './pages/admin/OverviewPage';
 import { AdminTenantsPage } from './pages/admin/TenantsPage';
@@ -22,6 +22,11 @@ import { FreelaJobsPage } from './pages/freela/JobsPage';
 import { FreelaChatPage } from './pages/freela/ChatPage';
 import { FreelaFinancePage } from './pages/freela/FinancePage';
 import { FreelaConnectCallbackPage } from './pages/freela/ConnectCallbackPage';
+import { OpsOverviewPage } from './pages/bar/OpsOverviewPage';
+import { CashFlowPage } from './pages/bar/CashFlowPage';
+import { InventoryPage } from './pages/bar/InventoryPage';
+import { SuppliersPage } from './pages/bar/SuppliersPage';
+import { TeamPage } from './pages/bar/TeamPage';
 import { BarMarketplacePage } from './pages/bar/MarketplacePage';
 import { BarProfilePage } from './pages/bar/ProfilePage';
 import { BarProposalsPage } from './pages/bar/ProposalsPage';
@@ -39,7 +44,9 @@ export default function App() {
             <Route path="login/bar" element={<RoleLoginPage role="owner" />} />
             <Route path="login/freela" element={<RoleLoginPage role="freela" />} />
             <Route path="login/admin" element={<RoleLoginPage role="admin" />} />
-            <Route path="cadastro-freela" element={<FreelaSignupPage />} />
+            <Route path="cadastro/bar" element={<RoleSignupPage role="owner" />} />
+            <Route path="cadastro/freela" element={<RoleSignupPage role="freela" />} />
+            <Route path="cadastro-freela" element={<Navigate to="/cadastro/freela" replace />} />
             <Route path="pessoal" element={<PessoalPage />} />
             <Route path="freelas" element={<Navigate to="/pessoal" replace />} />
           </Route>
@@ -63,9 +70,14 @@ export default function App() {
           </Route>
           <Route element={<RequireOwner />}>
             <Route path="bar" element={<BarLayout />}>
-              <Route index element={<BarMarketplacePage />} />
-              <Route path="propostas" element={<BarProposalsPage />} />
+              <Route index element={<OpsOverviewPage />} />
+              <Route path="fluxo-caixa" element={<CashFlowPage />} />
+              <Route path="estoque" element={<InventoryPage />} />
+              <Route path="fornecedores" element={<SuppliersPage />} />
+              <Route path="equipe" element={<TeamPage />} />
               <Route path="perfil" element={<BarProfilePage />} />
+              <Route path="freelas" element={<BarMarketplacePage />} />
+              <Route path="propostas" element={<BarProposalsPage />} />
               <Route path="chat/:roomId" element={<BarChatPage />} />
               <Route path="pagamentos" element={<BarPaymentsPage />} />
             </Route>

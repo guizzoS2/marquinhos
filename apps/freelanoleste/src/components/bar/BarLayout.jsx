@@ -1,29 +1,76 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { fetchBarSubscription } from '../../services/ownerApi';
 import { Icon } from '../Icon';
 import { Button } from '../Button';
 
-const navItems = [
-  { to: '/bar', label: 'Vitrine de freelas', icon: 'search', end: true },
+const opsNav = [
+  { to: '/bar', label: 'Visão geral', icon: 'dashboard', end: true },
+  { to: '/bar/fluxo-caixa', label: 'Fluxo de caixa', icon: 'account_balance' },
+  { to: '/bar/estoque', label: 'Estoque', icon: 'inventory_2' },
+  { to: '/bar/fornecedores', label: 'Fornecedores', icon: 'local_shipping' },
+  { to: '/bar/equipe', label: 'Equipe', icon: 'groups' },
+  { to: '/bar/perfil', label: 'Perfil da casa', icon: 'storefront' },
+];
+
+const platformNav = [
+  { to: '/bar/freelas', label: 'Vitrine de freelas', icon: 'search' },
   { to: '/bar/propostas', label: 'Propostas e chat', icon: 'chat' },
-  { to: '/bar/perfil', label: 'Perfil público', icon: 'storefront' },
   { to: '/bar/pagamentos', label: 'Pagamentos', icon: 'payments' },
 ];
 
 const titles = {
-  '/bar': 'Vitrine de freelas',
+  '/bar': 'Visão geral',
+  '/bar/fluxo-caixa': 'Fluxo de caixa',
+  '/bar/estoque': 'Estoque',
+  '/bar/fornecedores': 'Fornecedores',
+  '/bar/equipe': 'Equipe da casa',
+  '/bar/perfil': 'Perfil da casa',
+  '/bar/freelas': 'Vitrine de freelas',
   '/bar/propostas': 'Propostas e chat',
-  '/bar/perfil': 'Perfil público do bar',
   '/bar/pagamentos': 'Portal Stripe',
 };
+
+function NavGroup({ label, items, onNavigate }) {
+  return (
+    <div className="space-y-1">
+      <p className="px-3 pt-3 pb-1 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+        {label}
+      </p>
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            isActive
+              ? 'flex items-center gap-3 px-3 py-2.5 min-h-11 bg-primary text-on-primary rounded-lg'
+              : 'flex items-center gap-3 px-3 py-2.5 min-h-11 text-on-surface-variant hover:bg-surface-container rounded-lg'
+          }
+        >
+          <Icon name={item.icon} />
+          <span className="text-sm font-medium">{item.label}</span>
+        </NavLink>
+      ))}
+    </div>
+  );
+}
 
 export function BarLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
   const isChat = location.pathname.includes('/chat/');
-  const title = titles[location.pathname] || (isChat ? 'Negociação' : 'Painel do bar');
+  const tenantName = useMemo(() => {
+    try {
+      return fetchBarSubscription().tenantName;
+    } catch {
+      return 'Painel do bar';
+    }
+  }, []);
+  const title = titles[location.pathname] || (isChat ? 'Negociação' : tenantName);
 
   return (
     <div
@@ -45,32 +92,15 @@ export function BarLayout() {
           navOpen ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0`}
       >
-        <p className="font-headline font-extrabold text-lg tracking-tight mb-8 px-3">
-          Painel do contratante
+        <p className="font-headline font-extrabold text-lg tracking-tight mb-4 px-3">
+          {tenantName}
         </p>
-        <nav className="flex-1 space-y-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              onClick={() => setNavOpen(false)}
-              className={({ isActive }) =>
-                isActive
-                  ? 'flex items-center gap-3 px-3 py-2.5 min-h-11 bg-primary text-on-primary rounded-lg'
-                  : 'flex items-center gap-3 px-3 py-2.5 min-h-11 text-on-surface-variant hover:bg-surface-container rounded-lg'
-              }
-            >
-              <Icon name={item.icon} />
-              <span className="text-sm font-medium">{item.label}</span>
-            </NavLink>
-          ))}
+        <nav className="flex-1 min-h-0 overflow-y-auto space-y-4">
+          <NavGroup label="Operacional" items={opsNav} onNavigate={() => setNavOpen(false)} />
+          <NavGroup label="Plataforma" items={platformNav} onNavigate={() => setNavOpen(false)} />
         </nav>
         <div className="pt-4 border-t border-outline-variant/20 space-y-2">
           <p className="px-3 text-xs text-on-surface-variant">{user?.email}</p>
-          <p className="px-3 text-xs text-on-surface-variant">
-            Marketplace da plataforma. Caixa e estoque ficam no painel do tenant.
-          </p>
           <Button variant="secondary" className="w-full" onClick={logout}>
             Sair
           </Button>
