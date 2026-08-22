@@ -5,6 +5,7 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Icon } from '../components/ui/Icon';
+import { roleLabel } from '../services/roles';
 import { getUserProfile } from '../services/firestoreService';
 
 export function ProfilePage() {
@@ -74,7 +75,7 @@ export function ProfilePage() {
           Perfil do Usuário
         </h1>
         <p className="text-on-surface-variant font-body">
-          Gerencie seus dados pessoais e preferências administrativas.
+          Dados da sua conta neste bar.
         </p>
       </section>
 
@@ -94,7 +95,7 @@ export function ProfilePage() {
             </div>
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-xs font-bold uppercase tracking-wider">
               <Icon name="verified" className="text-sm" />
-              Administrador
+              {roleLabel(user?.role)}
             </span>
           </div>
         </Card>

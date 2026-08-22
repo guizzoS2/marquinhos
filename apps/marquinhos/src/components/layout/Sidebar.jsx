@@ -5,20 +5,24 @@ import { Button } from '../ui/Button';
 import { BrandLogo } from './BrandLogo';
 import { useAuth } from '../../contexts/AuthContext';
 import { useModal } from '../../contexts/ModalContext';
+import { isStockRole } from '../../services/roles';
 
-const navItems = [
-  { to: '/', label: 'Visão Geral', icon: 'dashboard', end: true },
-  { to: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: 'payments' },
+const allNavItems = [
+  { to: '/', label: 'Visão Geral', icon: 'dashboard', end: true, admin: true },
+  { to: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: 'payments', admin: true },
   { to: '/estoque', label: 'Estoque', icon: 'inventory_2' },
-  { to: '/fornecedores', label: 'Fornecedores', icon: 'local_shipping' },
-  { to: '/freelancers', label: 'Freelancers', icon: 'group' },
+  { to: '/fornecedores', label: 'Fornecedores', icon: 'local_shipping', admin: true },
+  { to: '/freelancers', label: 'Freelancers', icon: 'group', admin: true },
+  { to: '/equipe', label: 'Equipe da casa', icon: 'badge', admin: true },
   { to: '/perfil', label: 'Perfil', icon: 'person' },
 ];
 
 export function Sidebar({ open = false, onNavigate }) {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { openModal } = useModal();
   const queryClient = useQueryClient();
+  const stockOnly = isStockRole(user?.role);
+  const navItems = allNavItems.filter((item) => !item.admin || !stockOnly);
 
   return (
     <aside
@@ -26,11 +30,16 @@ export function Sidebar({ open = false, onNavigate }) {
         open ? 'translate-x-0' : '-translate-x-full'
       } md:translate-x-0`}
     >
-      <NavLink to="/" className="mb-8 block" aria-label="Marquinho's" onClick={onNavigate}>
+      <NavLink
+        to={stockOnly ? '/estoque' : '/'}
+        className="mb-8 block"
+        aria-label="Marquinho's"
+        onClick={onNavigate}
+      >
         <BrandLogo variant="sidebar" />
       </NavLink>
 
-      <nav className="flex-1 space-y-1">
+      <nav className="flex-1 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -54,25 +63,20 @@ export function Sidebar({ open = false, onNavigate }) {
       </nav>
 
       <div className="pt-4 border-t border-outline-variant/20 space-y-1">
-        <Button
-          className="w-full"
-          onClick={() =>
-            openModal('new-order', {
-              onSuccess: () =>
-                queryClient.invalidateQueries({ queryKey: ['cash-flow'] }),
-            })
-          }
-        >
-          <Icon name="add" />
-          Novo Pedido
-        </Button>
-        <a
-          className="mt-2 flex items-center gap-3 px-3 py-2 min-h-11 text-on-surface-variant hover:text-on-surface transition-colors"
-          href="#"
-        >
-          <Icon name="help" className="text-lg" />
-          <span>Central de Ajuda</span>
-        </a>
+        {stockOnly ? null : (
+          <Button
+            className="w-full"
+            onClick={() =>
+              openModal('new-order', {
+                onSuccess: () =>
+                  queryClient.invalidateQueries({ queryKey: ['cash-flow'] }),
+              })
+            }
+          >
+            <Icon name="add" />
+            Novo Pedido
+          </Button>
+        )}
         <button
           type="button"
           onClick={logout}

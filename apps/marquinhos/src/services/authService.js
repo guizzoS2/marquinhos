@@ -6,21 +6,58 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from './firebase';
-import { getUserProfile, upsertUserProfile } from './firestoreService';
+import {
+  findStaffByCredentials,
+  getUserProfile,
+  upsertUserProfile,
+} from './firestoreService';
+import { ROLE_ADMIN, ROLE_STOCK, isAdminRole } from './roles';
 
 const LOCAL_SESSION_KEY = 'speakeasy_local_session';
 
-const DEMO_USER = {
-  uid: 'local-admin-1',
-  email: 'fabio@marquinhos.local',
-  name: 'Fábio Santos',
-  title: 'Gerente Geral',
-  phone: '+55 11 98888-0000',
-  company: "Marquinho's",
-  role: 'admin',
-  photoURL:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuCnAiBdvbFHIU_AojuM_Cn4E75QDQoOBroox5x_mmIuyPtLglF2xWJGOozljzpOGnCppjIVxXHVKxzvLzjMBQDIQzU2T4ZQ0hQbmldgvmx_xCvZ6sH5tSpX1P0eJLMQFfWQFi1FrZuH_Bme_XWdML3-fLQtPDh8iTKJ6xBuCYGqTvbWusWjrl0pJhurURv6caCcWDYKtdzuJ-tzU2NGYfkNcSWFMSBXl_e0hR-l2RSs7YJQzTfKuZlNceLdZlSHJUUGUR0RKgDSGPi_',
-};
+const DEMO_USERS = [
+  {
+    uid: 'local-admin-1',
+    email: 'fabio@marquinhos.local',
+    password: 'admin123',
+    name: 'Fábio Santos',
+    title: 'Gerente Geral',
+    phone: '+55 11 98888-0000',
+    company: "Marquinho's",
+    role: ROLE_ADMIN,
+    photoURL:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuCnAiBdvbFHIU_AojuM_Cn4E75QDQoOBroox5x_mmIuyPtLglF2xWJGOozljzpOGnCppjIVxXHVKxzvLzjMBQDIQzU2T4ZQ0hQbmldgvmx_xCvZ6sH5tSpX1P0eJLMQFfWQFi1FrZuH_Bme_XWdML3-fLQtPDh8iTKJ6xBuCYGqTvbWusWjrl0pJhurURv6caCcWDYKtdzuJ-tzU2NGYfkNcSWFMSBXl_e0hR-l2RSs7YJQzTfKuZlNceLdZlSHJUUGUR0RKgDSGPi_',
+  },
+  {
+    uid: 'local-stock-1',
+    email: 'estoque@marquinhos.local',
+    password: 'estoque123',
+    name: 'João Estoque',
+    title: 'Estoquista',
+    phone: '',
+    company: "Marquinho's",
+    role: ROLE_STOCK,
+    photoURL: '',
+  },
+];
+
+export const DEMO_USER = DEMO_USERS[0];
+
+let currentSession = null;
+
+export function getCurrentUser() {
+  return currentSession || readLocalSession();
+}
+
+export function getCurrentRole() {
+  return getCurrentUser()?.role || ROLE_ADMIN;
+}
+
+function publicUser(user) {
+  if (!user) return user;
+  const { password: _ignored, ...safe } = user;
+  return safe;
+}
 
 function migrateDemoUser(user) {
   if (!user) return user;
@@ -34,6 +71,10 @@ function migrateDemoUser(user) {
     next.email = 'fabio@marquinhos.local';
     changed = true;
   }
+  if (!next.role) {
+    next.role = ROLE_ADMIN;
+    changed = true;
+  }
   return changed ? next : user;
 }
 
@@ -44,6 +85,7 @@ function readLocalSession() {
     if (session !== raw) {
       writeLocalSession(session);
     }
+    currentSession = session;
     return session;
   } catch {
     return null;
@@ -51,6 +93,7 @@ function readLocalSession() {
 }
 
 function writeLocalSession(user) {
+  currentSession = user;
   if (!user) {
     localStorage.removeItem(LOCAL_SESSION_KEY);
     return;
@@ -67,18 +110,29 @@ async function mapFirebaseUser(firebaseUser) {
     title: profile.title || 'Administrador',
     phone: profile.phone || '',
     company: profile.company || "Marquinho's",
-    role: profile.role || 'admin',
+    role: profile.role || ROLE_ADMIN,
     photoURL: profile.photoURL || firebaseUser.photoURL || DEMO_USER.photoURL,
   };
 }
 
+function withoutPassword(user) {
+  return publicUser(user);
+}
+
 export async function loginWithEmail({ email, password }) {
+  const emailNorm = String(email || '').trim().toLowerCase();
+
   if (!isFirebaseConfigured()) {
-    if (email !== DEMO_USER.email || password !== 'admin123') {
+    const demo = DEMO_USERS.find(
+      (item) => item.email === emailNorm && item.password === password
+    );
+    const staff = demo ? null : await findStaffByCredentials(emailNorm, password);
+    const account = demo ? withoutPassword(demo) : staff;
+    if (!account) {
       throw new Error('Credenciais inválidas.');
     }
-    const profile = (await getUserProfile(DEMO_USER.uid)) || DEMO_USER;
-    const user = { ...DEMO_USER, ...profile };
+    const profile = (await getUserProfile(account.uid)) || account;
+    const user = withoutPassword({ ...account, ...profile, role: profile.role || account.role });
     writeLocalSession(user);
     await upsertUserProfile(user.uid, user);
     return user;
@@ -86,6 +140,7 @@ export async function loginWithEmail({ email, password }) {
 
   const credential = await signInWithEmailAndPassword(auth, email, password);
   const user = await mapFirebaseUser(credential.user);
+  currentSession = user;
   await upsertUserProfile(user.uid, user);
   return user;
 }
@@ -105,6 +160,7 @@ export async function registerWithEmail({ email, password, name }) {
 }
 
 export async function logoutUser() {
+  currentSession = null;
   if (!isFirebaseConfigured()) {
     writeLocalSession(null);
     return;
@@ -120,10 +176,12 @@ export function subscribeAuth(callback) {
 
   return onAuthStateChanged(auth, async (firebaseUser) => {
     if (!firebaseUser) {
+      currentSession = null;
       callback(null);
       return;
     }
     const user = await mapFirebaseUser(firebaseUser);
+    currentSession = user;
     callback(user);
   });
 }
@@ -131,7 +189,7 @@ export function subscribeAuth(callback) {
 export async function saveProfile(uid, data) {
   if (!isFirebaseConfigured()) {
     const current = readLocalSession() || DEMO_USER;
-    const next = { ...current, ...data, uid };
+    const next = withoutPassword({ ...current, ...data, uid, role: current.role });
     writeLocalSession(next);
     return upsertUserProfile(uid, next);
   }
@@ -146,4 +204,4 @@ export async function saveProfile(uid, data) {
   return upsertUserProfile(uid, data);
 }
 
-export { DEMO_USER };
+export { isAdminRole };

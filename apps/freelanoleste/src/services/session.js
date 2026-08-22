@@ -21,6 +21,14 @@ const ACCOUNTS = [
     name: 'Freela demo',
     id: 'f-demo',
   },
+  {
+    email: 'estoque@bar.local',
+    password: 'demo123',
+    role: 'employee',
+    name: 'Estoquista do bar',
+    tenantId: 'marquinhos',
+    id: 'e-stock',
+  },
 ];
 
 export function readSession() {
@@ -40,11 +48,12 @@ export function writeSession(session) {
 }
 
 export function authenticate({ email, password, role }) {
+  const allowedRoles = role === 'owner' ? ['owner', 'employee'] : [role];
   const account = ACCOUNTS.find(
     (item) =>
       item.email === email.trim().toLowerCase() &&
       item.password === password &&
-      item.role === role
+      allowedRoles.includes(item.role)
   );
   if (!account) {
     throw new Error('Credenciais inválidas.');
@@ -70,4 +79,18 @@ export function isFreelaSession(session = readSession()) {
 
 export function isOwnerSession(session = readSession()) {
   return Boolean(session && session.role === 'owner' && session.tenantId);
+}
+
+export function isEmployeeSession(session = readSession()) {
+  return Boolean(session && session.role === 'employee' && session.tenantId);
+}
+
+export function isBarStaffSession(session = readSession()) {
+  return isOwnerSession(session) || isEmployeeSession(session);
+}
+
+export function barHomeFor(session) {
+  if (isEmployeeSession(session)) return '/bar/estoque';
+  if (isOwnerSession(session)) return '/bar';
+  return '/';
 }

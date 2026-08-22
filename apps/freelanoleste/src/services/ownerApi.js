@@ -1,4 +1,4 @@
-import { isOwnerSession, readSession } from './session';
+import { isBarStaffSession, isOwnerSession, readSession } from './session';
 import { formatBrl } from './money';
 import {
   getProposalPack,
@@ -18,6 +18,16 @@ function requireOwner() {
   const session = readSession();
   if (!isOwnerSession(session) || !session.tenantId) {
     const error = new Error('Acesso restrito ao dono do bar.');
+    error.code = 'FORBIDDEN';
+    throw error;
+  }
+  return session;
+}
+
+function requireBarStaff() {
+  const session = readSession();
+  if (!isBarStaffSession(session) || !session.tenantId) {
+    const error = new Error('Acesso restrito à equipe do bar.');
     error.code = 'FORBIDDEN';
     throw error;
   }
@@ -59,7 +69,7 @@ export function fetchPublicCatalog() {
 }
 
 export function fetchBarProfile() {
-  const session = requireOwner();
+  const session = requireBarStaff();
   const store = ensureBarProfile(session.tenantId, session.name);
   return store.profiles[session.tenantId];
 }
@@ -81,7 +91,7 @@ export function updateBarProfile(patch) {
 }
 
 export function fetchBarSubscription() {
-  const session = requireOwner();
+  const session = requireBarStaff();
   const tenant = loadPlatformStore().tenants.find((item) => item.id === session.tenantId);
   const local = ensureBarProfile(session.tenantId, session.name).stripe[session.tenantId];
   const invoices = loadPlatformStore().payments.filter(

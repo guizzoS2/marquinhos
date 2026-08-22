@@ -1,0 +1,24 @@
+---
+description: UI sempre responsiva e usável no celular
+alwaysApply: true
+---
+
+# Responsivo e aparelho
+
+Toda tela (Marquinho's e FreelaNoLeste) tem que funcionar no celular, não só no desktop. Entregar sem overflow horizontal, sem toque minúsculo, sem sidebar fixa cobrindo o viewport.
+
+## Obrigatório
+
+- Layout &lt; 768px em coluna quando a row estourar.
+- Padding nas bordas (`p-4` mobile, `p-8` desktop). Não colar conteúdo na tela.
+- Alvo de toque ≥ 44px (`min-h-11` / `min-w-11`) em botão, link, nav, ícone clicável.
+- Sidebar/nav desktop vira drawer ou stack no mobile.
+- Tabelas com `overflow-x-auto`; grids `grid-cols-1` no mobile.
+- Ação só no hover (ex. excluir) precisa de equivalente visível no toque.
+- Sem `zoom` CSS. Escala desktop via `html { font-size: 90% }` ≥768px; mobile 100%.
+- Sem style inline. Sem classe/cor nova fora do sistema (`packages/ui` / tokens existentes).
+- Manter HTML semântico (`main`, `nav`, `section`). Não reduzir texto fundamental abaixo do legível.
+
+## Conferir
+
+Antes de fechar UI: viewport estreito (~375px) e desktop. Sem scroll-x, FAB não tapa CTA, teclado não esconde submit.

@@ -6,16 +6,17 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { BrandLogo } from '../components/layout/BrandLogo';
 import { isFirebaseConfigured } from '../services/firebase';
+import { homeForRole } from '../services/roles';
 
 export function LoginPage() {
-  const { login, isAuthenticated, loading } = useAuth();
+  const { login, isAuthenticated, loading, user } = useAuth();
   const [email, setEmail] = useState('fabio@marquinhos.local');
   const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   if (!loading && isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={homeForRole(user?.role)} replace />;
   }
 
   async function handleSubmit(event) {
@@ -36,7 +37,7 @@ export function LoginPage() {
       <Card className="w-full max-w-md p-5 sm:p-8 space-y-6" as="form" onSubmit={handleSubmit}>
         <div className="flex flex-col items-center gap-4 text-center">
           <BrandLogo variant="full" className="w-44 h-44" />
-          <p className="text-sm text-on-surface-variant">Acesso administrativo</p>
+          <p className="text-sm text-on-surface-variant">Acesso do bar — dono ou estoque</p>
         </div>
 
         <Input
@@ -57,7 +58,8 @@ export function LoginPage() {
 
         {!isFirebaseConfigured() ? (
           <p className="text-xs text-on-surface-variant">
-            Firebase não configurado: modo local ativo com dados espelhados.
+            Demo dono: fabio@marquinhos.local / admin123. Estoque: estoque@marquinhos.local /
+            estoque123.
           </p>
         ) : null}
 
