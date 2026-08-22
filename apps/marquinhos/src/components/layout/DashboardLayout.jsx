@@ -10,6 +10,7 @@ const placeholders = {
   '/estoque': 'Buscar produto...',
   '/fornecedores': 'Buscar fornecedores...',
   '/freelancers': 'Buscar freelancers...',
+  '/equipe': 'Buscar equipe da casa...',
   '/perfil': 'Buscar configurações do perfil...',
 };
 

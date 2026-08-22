@@ -21,5 +21,9 @@ export function RequireAdmin() {
     return <Navigate to="/bar" replace />;
   }
 
+  if (user?.role === 'employee') {
+    return <Navigate to="/bar/estoque" replace />;
+  }
+
   return <Navigate to="/" replace />;
 }

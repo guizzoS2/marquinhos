@@ -63,6 +63,11 @@ export function BarLayout() {
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
   const isChat = location.pathname.includes('/chat/');
+  const isEmployee = user?.role === 'employee';
+  const visibleOps = isEmployee
+    ? opsNav.filter((item) => item.to === '/bar/estoque' || item.to === '/bar/perfil')
+    : opsNav;
+  const visiblePlatform = isEmployee ? [] : platformNav;
   const tenantName = useMemo(() => {
     try {
       return fetchBarSubscription().tenantName;
@@ -96,8 +101,14 @@ export function BarLayout() {
           {tenantName}
         </p>
         <nav className="flex-1 min-h-0 overflow-y-auto space-y-4">
-          <NavGroup label="Operacional" items={opsNav} onNavigate={() => setNavOpen(false)} />
-          <NavGroup label="Plataforma" items={platformNav} onNavigate={() => setNavOpen(false)} />
+          <NavGroup label="Operacional" items={visibleOps} onNavigate={() => setNavOpen(false)} />
+          {visiblePlatform.length ? (
+            <NavGroup
+              label="Plataforma"
+              items={visiblePlatform}
+              onNavigate={() => setNavOpen(false)}
+            />
+          ) : null}
         </nav>
         <div className="pt-4 border-t border-outline-variant/20 space-y-2">
           <p className="px-3 text-xs text-on-surface-variant">{user?.email}</p>

@@ -34,10 +34,10 @@ const marquinhosSeed = {
     },
   ],
   inventory: [
-    { id: 'i1', name: 'Cerveja long neck', qty: 48, unit: 'un' },
-    { id: 'i2', name: 'Gelo 5kg', qty: 6, unit: 'saco' },
-    { id: 'i3', name: 'Limão', qty: 2, unit: 'kg' },
-    { id: 'i4', name: 'Vodka 1L', qty: 4, unit: 'un' },
+    { id: 'i1', name: 'Cerveja long neck', qty: 48, unit: 'un', category: 'Cervejas', minStock: 24 },
+    { id: 'i2', name: 'Gelo 5kg', qty: 6, unit: 'saco', category: 'Insumos', minStock: 5 },
+    { id: 'i3', name: 'Limão', qty: 2, unit: 'kg', category: 'Insumos', minStock: 4 },
+    { id: 'i4', name: 'Vodka 1L', qty: 4, unit: 'un', category: 'Destilados', minStock: 6 },
   ],
   suppliers: [
     { id: 's1', name: 'Distribuidora Leste', contact: 'leste@fornecedor.local' },
@@ -67,13 +67,25 @@ export function loadTenantOps(tenantId) {
   if (!tenantId) return emptyOps();
   try {
     const raw = localStorage.getItem(storageKey(tenantId));
-    if (raw) return JSON.parse(raw);
+    if (raw) return normalizeOps(JSON.parse(raw));
   } catch {
     /* seed */
   }
   const seed = tenantId === 'marquinhos' ? structuredClone(marquinhosSeed) : emptyOps();
   localStorage.setItem(storageKey(tenantId), JSON.stringify(seed));
   return seed;
+}
+
+function normalizeOps(ops) {
+  return {
+    ...ops,
+    inventory: (ops.inventory || []).map((item) => ({
+      category: 'Geral',
+      minStock: 4,
+      unit: 'un',
+      ...item,
+    })),
+  };
 }
 
 export function saveTenantOps(tenantId, store) {

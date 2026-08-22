@@ -7,7 +7,7 @@ const publicLinks = [
 ];
 
 export function Shell() {
-  const { isAdmin, isFreela, isOwner, isAuthenticated } = useAuth();
+  const { isAdmin, isFreela, isOwner, isEmployee, isAuthenticated } = useAuth();
   const location = useLocation();
   const isHome = location.pathname === '/';
   const isPessoal = location.pathname === '/pessoal';
@@ -73,9 +73,9 @@ export function Shell() {
               Painel
             </NavLink>
           ) : null}
-          {isOwner ? (
+          {isOwner || isEmployee ? (
             <NavLink
-              to="/bar"
+              to={isEmployee ? '/bar/estoque' : '/bar'}
               className={`px-3 py-2 min-h-11 rounded-lg text-sm font-semibold ${
                 isDarkChrome ? 'bg-primary text-on-primary' : 'bg-on-surface text-white'
               }`}
@@ -83,7 +83,7 @@ export function Shell() {
               Painel
             </NavLink>
           ) : null}
-          {!isAdmin && !isFreela && !isOwner ? (
+          {!isAdmin && !isFreela && !isOwner && !isEmployee ? (
             <NavLink
               to="/login"
               className={

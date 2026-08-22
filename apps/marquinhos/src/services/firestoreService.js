@@ -21,6 +21,23 @@ const DOCS = {
   inventory: 'dashboard/inventory',
   freelancers: 'dashboard/freelancers',
   suppliers: 'dashboard/suppliers',
+  staff: 'dashboard/staff',
+};
+
+const DEFAULT_PRODUCT_IMAGE =
+  'https://lh3.googleusercontent.com/aida-public/AB6AXuATrb95GgrifNn5ZTFGKBOO3ST2xuzttKMuPO21tPew8Bzeb3UowFhw7W7JPuHD03armjXVgDMfWq79f_IxkS6Ant9g94kkvwghZGZz1tY_d-a1jqeZXTPyjUoEuQj3UzPK_KUKPOtL0yJA_Jqp9HA2EAh3wnjfpNPk8OEGoMmnqpuQ4txI8OKgIIPruQWqYtqLABnNoiIjSvCr1J3TujAb_QMUY71yBS2sQvj2j9OfKsyH2lckNOcmk1Lp6U5MJeVvbUlS7b3z4cVl';
+
+export const staffFallback = {
+  members: [
+    {
+      uid: 'local-stock-1',
+      email: 'estoque@marquinhos.local',
+      password: 'estoque123',
+      name: 'João Estoque',
+      title: 'Estoquista',
+      role: 'stock',
+    },
+  ],
 };
 
 const CATEGORY_NATURE_FALLBACK = {
@@ -146,6 +163,11 @@ export async function ensureDashboardSeed() {
   if (!suppliers) {
     await writeDocument(DOCS.suppliers, suppliersFallback);
   }
+
+  const staff = await readDocument(DOCS.staff);
+  if (!staff) {
+    await writeDocument(DOCS.staff, staffFallback);
+  }
 }
 
 export async function getOverview() {
@@ -204,7 +226,7 @@ export async function createExpense(payload) {
   const nature = payload.nature || category.defaultNature || 'variable';
 
   const expense = {
-    id: `exp-${Date.now()}`,
+    id: payload.id || `exp-${Date.now()}`,
     date: formatExpenseDate(payload.date),
     supplier: payload.supplier.trim(),
     supplierId: payload.supplierId || null,
@@ -216,6 +238,7 @@ export async function createExpense(payload) {
     amount: amountCents,
     recurrence: payload.recurrence || null,
     source: payload.source || 'manual',
+    importKey: payload.importKey || null,
     createdAt: new Date().toISOString(),
   };
 
@@ -278,7 +301,7 @@ export async function createIncome(payload) {
   const amountCents =
     payload.amount ?? parseMoneyToCents(payload.value);
   const income = {
-    id: `inc-${Date.now()}`,
+    id: payload.id || `inc-${Date.now()}`,
     date: formatExpenseDate(payload.date),
     description: payload.description.trim(),
     category: payload.category || 'Varejo',
@@ -286,6 +309,8 @@ export async function createIncome(payload) {
     categoryTone: payload.categoryTone || 'secondary',
     value: formatCents(amountCents),
     amount: amountCents,
+    source: payload.source || 'manual',
+    importKey: payload.importKey || null,
     createdAt: new Date().toISOString(),
   };
   return saveCashFlow(current, {
@@ -346,6 +371,76 @@ function recomputeInventoryMetrics(items) {
   ];
 }
 
+async function saveInventory(current, items) {
+  const next = {
+    ...current,
+    items,
+    metrics: recomputeInventoryMetrics(items),
+  };
+  await writeDocument(DOCS.inventory, next);
+  return next;
+}
+
+export async function createInventoryItem(payload) {
+  const current = await getInventory();
+  const name = String(payload.name || '').trim();
+  if (!name) throw new Error('Informe o nome do produto.');
+
+  const unit = String(payload.unit || 'un').trim() || 'un';
+  const qty = Number(payload.qty);
+  const minQty = Number(payload.minQty);
+  if (!Number.isFinite(qty) || qty < 0) throw new Error('Quantidade inválida.');
+  if (!Number.isFinite(minQty) || minQty < 0) throw new Error('Estoque mínimo inválido.');
+
+  const category = String(payload.category || 'Insumos').trim() || 'Insumos';
+  const costCents = payload.cost ? parseMoneyToCents(payload.cost) : 0;
+  const status = qty < minQty ? 'low' : 'stable';
+  const item = {
+    id: `inv-${Date.now()}`,
+    name,
+    subtitle: String(payload.subtitle || '').trim(),
+    category,
+    stock: formatStockLabel(qty, unit),
+    minStock: formatStockLabel(minQty, unit),
+    cost: formatCents(costCents),
+    status,
+    statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
+    image: payload.image || DEFAULT_PRODUCT_IMAGE,
+  };
+
+  const filters = current.filters?.includes(category)
+    ? current.filters
+    : [...(current.filters || ['Todos']), category];
+  const next = await saveInventory({ ...current, filters }, [...(current.items || []), item]);
+  return { item, inventory: next };
+}
+
+export async function updateInventoryItem(itemId, payload) {
+  const current = await getInventory();
+  const items = [...(current.items || [])];
+  const index = items.findIndex((item) => String(item.id) === String(itemId));
+  if (index < 0) throw new Error('Item não encontrado.');
+
+  const currentItem = items[index];
+  const parsed = parseStockLabel(payload.stock || currentItem.stock);
+  const minParsed = parseStockLabel(payload.minStock || currentItem.minStock);
+  const status = parsed.qty < minParsed.qty ? 'low' : 'stable';
+  items[index] = {
+    ...currentItem,
+    name: String(payload.name || currentItem.name).trim(),
+    subtitle: String(payload.subtitle ?? currentItem.subtitle).trim(),
+    category: String(payload.category || currentItem.category).trim(),
+    stock: formatStockLabel(parsed.qty, parsed.unit),
+    minStock: formatStockLabel(minParsed.qty, minParsed.unit || parsed.unit),
+    cost: payload.cost ? formatCents(parseMoneyToCents(payload.cost)) : currentItem.cost,
+    status,
+    statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
+    image: payload.image || currentItem.image,
+  };
+  const next = await saveInventory(current, items);
+  return { item: items[index], inventory: next };
+}
+
 export async function registerStockEntry(payload) {
   const current = await getInventory();
   const items = [...(current.items || [])];
@@ -362,15 +457,18 @@ export async function registerStockEntry(payload) {
     throw new Error('Quantidade inválida.');
   }
 
-  const amountCents =
-    payload.amount ?? parseMoneyToCents(payload.value);
-  if (!Number.isFinite(amountCents) || amountCents <= 0) {
-    throw new Error('Informe o valor da compra.');
-  }
+  const linkCash = payload.linkCash !== false;
+  let amountCents = 0;
+  let supplierName = String(payload.supplier || '').trim();
 
-  const supplierName = String(payload.supplier || '').trim();
-  if (!supplierName) {
-    throw new Error('Informe o fornecedor.');
+  if (linkCash) {
+    amountCents = payload.amount ?? parseMoneyToCents(payload.value);
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      throw new Error('Informe o valor da compra.');
+    }
+    if (!supplierName) {
+      throw new Error('Informe o fornecedor.');
+    }
   }
 
   const nextQty = parsed.qty + addQty;
@@ -384,24 +482,79 @@ export async function registerStockEntry(payload) {
     statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
   };
 
-  const next = {
-    ...current,
-    items,
-    metrics: recomputeInventoryMetrics(items),
-  };
-  await writeDocument(DOCS.inventory, next);
+  await saveInventory(current, items);
 
-  await createExpense({
-    date: payload.date || new Date().toISOString().slice(0, 10),
-    supplier: supplierName,
-    supplierId: payload.supplierId || null,
-    categoryId: stockCategoryToExpense(item.category),
-    nature: 'variable',
-    amount: amountCents,
-    source: 'stock_entry',
-  });
+  if (linkCash) {
+    await createExpense({
+      date: payload.date || new Date().toISOString().slice(0, 10),
+      supplier: supplierName,
+      supplierId: payload.supplierId || null,
+      categoryId: stockCategoryToExpense(item.category),
+      nature: 'variable',
+      amount: amountCents,
+      source: 'stock_entry',
+    });
+  }
 
   return items[index];
+}
+
+export async function importStatementRows(rows) {
+  const current = await getCashFlow();
+  const existingKeys = new Set(
+    [...(current.incomes || []), ...(current.expenses || [])].map(
+      (row) =>
+        row.importKey ||
+        `${row.amount}|${String(row.description || row.supplier || '')
+          .trim()
+          .toLowerCase()}`
+    )
+  );
+
+  let created = 0;
+  let skipped = 0;
+  let next = current;
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    if (!row?.selected) continue;
+    const importKey = row.id || statementKey(row);
+    if (existingKeys.has(importKey)) {
+      skipped += 1;
+      continue;
+    }
+    existingKeys.add(importKey);
+    if (row.kind === 'entrada') {
+      await createIncome({
+        id: `inc-imp-${Date.now()}-${index}`,
+        date: row.date,
+        description: row.description,
+        category: 'Extrato',
+        amount: row.amountCents,
+        source: 'statement_import',
+        importKey,
+      });
+    } else {
+      await createExpense({
+        id: `exp-imp-${Date.now()}-${index}`,
+        date: row.date,
+        supplier: row.description,
+        categoryId: 'suprimentos',
+        nature: 'variable',
+        amount: row.amountCents,
+        source: 'statement_import',
+        importKey,
+      });
+    }
+    created += 1;
+  }
+
+  next = await getCashFlow();
+  return { created, skipped, cashFlow: next };
+}
+
+function statementKey(row) {
+  return `${row.date}|${row.amountCents}|${String(row.description || '').trim().toLowerCase()}`;
 }
 
 function stockCategoryToExpense(category) {
@@ -567,6 +720,66 @@ export async function deleteSupplier(supplierId) {
   const next = { ...current, suppliers };
   await writeDocument(DOCS.suppliers, next);
   return next;
+}
+
+export async function getStaff() {
+  await ensureDashboardSeed();
+  return (await readDocument(DOCS.staff)) || staffFallback;
+}
+
+export async function findStaffByCredentials(email, password) {
+  const staff = await getStaff();
+  const member = (staff.members || []).find(
+    (item) =>
+      item.email === String(email || '').trim().toLowerCase() &&
+      item.password === password
+  );
+  if (!member) return null;
+  const { password: _password, ...safe } = member;
+  return safe;
+}
+
+export async function createStaffMember(payload) {
+  const name = String(payload.name || '').trim();
+  const email = String(payload.email || '').trim().toLowerCase();
+  const password = String(payload.password || '');
+  const role = payload.role === 'admin' ? 'admin' : 'stock';
+  if (!name || !email || !password) {
+    throw new Error('Informe nome, e-mail e senha.');
+  }
+  if (password.length < 6) {
+    throw new Error('Senha mínima de 6 caracteres.');
+  }
+
+  const staff = await getStaff();
+  if ((staff.members || []).some((item) => item.email === email)) {
+    throw new Error('Já existe um usuário com este e-mail.');
+  }
+
+  const member = {
+    uid: `staff-${Date.now()}`,
+    email,
+    password,
+    name,
+    title: String(payload.title || (role === 'stock' ? 'Estoquista' : 'Administrador')).trim(),
+    role,
+    createdAt: new Date().toISOString(),
+  };
+  const next = { members: [...(staff.members || []), member] };
+  await writeDocument(DOCS.staff, next);
+  const { password: _password, ...safe } = member;
+  await upsertUserProfile(member.uid, safe);
+  return { member: safe, staff: { members: next.members.map(stripStaffPassword) } };
+}
+
+function stripStaffPassword(member) {
+  const { password: _ignored, ...safe } = member;
+  return safe;
+}
+
+export async function listStaff() {
+  const staff = await getStaff();
+  return (staff.members || []).map(stripStaffPassword);
 }
 
 export async function getUserProfile(uid) {

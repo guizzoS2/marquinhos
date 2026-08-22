@@ -17,6 +17,10 @@ export function RequireFreela() {
     return <Navigate to="/bar" replace />;
   }
 
+  if (user?.role === 'employee') {
+    return <Navigate to="/bar/estoque" replace />;
+  }
+
   if (!isFreela) {
     return <Navigate to="/" replace />;
   }

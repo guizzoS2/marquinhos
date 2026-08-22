@@ -1,8 +1,10 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
+const EMPLOYEE_PATHS = ['/bar/estoque', '/bar/perfil'];
+
 export function RequireOwner() {
-  const { user, isOwner, isAdmin, isFreela } = useAuth();
+  const { user, isOwner, isEmployee, isAdmin, isFreela } = useAuth();
   const location = useLocation();
 
   if (!user) {
@@ -15,6 +17,16 @@ export function RequireOwner() {
 
   if (isFreela) {
     return <Navigate to="/freela" replace />;
+  }
+
+  if (isEmployee) {
+    const allowed = EMPLOYEE_PATHS.some(
+      (path) => location.pathname === path || location.pathname.startsWith(`${path}/`)
+    );
+    if (!allowed) {
+      return <Navigate to="/bar/estoque" replace />;
+    }
+    return <Outlet />;
   }
 
   if (!isOwner) {

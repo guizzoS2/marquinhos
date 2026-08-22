@@ -11,6 +11,7 @@ import { CashFlowPage } from './pages/CashFlowPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { FreelancersPage } from './pages/FreelancersPage';
 import { SuppliersPage } from './pages/SuppliersPage';
+import { StaffPage } from './pages/StaffPage';
 import { ProfilePage } from './pages/ProfilePage';
 
 const queryClient = new QueryClient({
@@ -38,6 +39,7 @@ function App() {
                     <Route path="estoque" element={<InventoryPage />} />
                     <Route path="fornecedores" element={<SuppliersPage />} />
                     <Route path="freelancers" element={<FreelancersPage />} />
+                    <Route path="equipe" element={<StaffPage />} />
                     <Route path="perfil" element={<ProfilePage />} />
                   </Route>
                 </Route>

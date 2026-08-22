@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 function homeFor(user) {
   if (user?.role === 'admin') return '/admin';
   if (user?.role === 'freela') return '/freela';
+  if (user?.role === 'employee') return '/bar/estoque';
   if (user?.role === 'owner') return '/bar';
   return '/';
 }

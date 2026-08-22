@@ -5,6 +5,7 @@ import { Button } from './Button';
 import { Input } from './Input';
 import { useModal } from '../../contexts/ModalContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   createCashExpense,
   createCashIncome,
@@ -16,10 +17,15 @@ import {
   addStockEntry,
 } from '../../services/dashboardService';
 import { expenseCategories } from '../../services/fallbacks';
+import { isStockRole } from '../../services/roles';
+import { ProductForm } from '../inventory/ProductForm';
+import { ImportStatementForm } from '../cashflow/ImportStatementForm';
 
 const titles = {
   'new-order': 'Nova Venda',
   'stock-entry': 'Entrada de Mercadoria',
+  'new-product': 'Novo produto',
+  'edit-product': 'Editar produto',
   'new-daily': 'Nova Diária',
   'new-freelancer': 'Novo Freelancer',
   'new-supplier': 'Novo Fornecedor',
@@ -536,10 +542,13 @@ function NewOrderForm({ onSuccess, onCancel }) {
 
 function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
   const toast = useToast();
+  const { user } = useAuth();
+  const stockOnly = isStockRole(user?.role);
   const [items, setItems] = useState(itemsProp || []);
   const { data: suppliersData } = useQuery({
     queryKey: ['suppliers'],
     queryFn: fetchSuppliers,
+    enabled: !stockOnly,
   });
   const suppliers = suppliersData?.suppliers || [];
   const [form, setForm] = useState({
@@ -580,19 +589,30 @@ function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
     setSaving(true);
     setError('');
     try {
-      const supplier = selectedSupplier();
-      if (!supplier) {
-        throw new Error('Selecione um fornecedor.');
+      if (stockOnly) {
+        await addStockEntry({
+          date: form.date,
+          itemId: form.itemId,
+          quantity: Number(form.quantity),
+          linkCash: false,
+        });
+        toast.success('Entrada lançada no estoque.');
+      } else {
+        const supplier = selectedSupplier();
+        if (!supplier) {
+          throw new Error('Selecione um fornecedor.');
+        }
+        await addStockEntry({
+          date: form.date,
+          itemId: form.itemId,
+          quantity: Number(form.quantity),
+          supplierId: form.supplierId,
+          supplier: supplier.name,
+          amount: Math.round(Number(form.value) * 100),
+          linkCash: true,
+        });
+        toast.success('Entrada lançada no estoque e em Saídas.');
       }
-      await addStockEntry({
-        date: form.date,
-        itemId: form.itemId,
-        quantity: Number(form.quantity),
-        supplierId: form.supplierId,
-        supplier: supplier.name,
-        amount: Math.round(Number(form.value) * 100),
-      });
-      toast.success('Entrada lançada no estoque e em Saídas.');
       onSuccess?.();
       onCancel();
     } catch (err) {
@@ -639,37 +659,41 @@ function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
         onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
         required
       />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-          Fornecedor
-        </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-          value={form.supplierId}
-          onChange={(e) => setForm((prev) => ({ ...prev, supplierId: e.target.value }))}
-          required
-        >
-          <option value="">Selecione o fornecedor</option>
-          {suppliers.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <Input
-        label="Valor da compra (R$)"
-        type="number"
-        min="0"
-        step="0.01"
-        value={form.value}
-        onChange={(e) => setForm((prev) => ({ ...prev, value: e.target.value }))}
-        required
-      />
-      <p className="text-[11px] text-on-surface-variant pl-1">
-        A compra entra como saída variável no fluxo de caixa e atualiza a última compra do
-        fornecedor.
-      </p>
+      {stockOnly ? null : (
+        <>
+          <div className="space-y-2">
+            <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+              Fornecedor
+            </label>
+            <select
+              className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+              value={form.supplierId}
+              onChange={(e) => setForm((prev) => ({ ...prev, supplierId: e.target.value }))}
+              required
+            >
+              <option value="">Selecione o fornecedor</option>
+              {suppliers.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Input
+            label="Valor da compra (R$)"
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.value}
+            onChange={(e) => setForm((prev) => ({ ...prev, value: e.target.value }))}
+            required
+          />
+          <p className="text-[11px] text-on-surface-variant pl-1">
+            A compra entra como saída variável no fluxo de caixa e atualiza a última compra do
+            fornecedor.
+          </p>
+        </>
+      )}
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
@@ -717,20 +741,6 @@ function ConfirmForm({ payload, onCancel }) {
   );
 }
 
-function ImportStatementInfo({ onCancel }) {
-  return (
-    <div className="space-y-6">
-      <p className="text-on-surface-variant font-body leading-relaxed">
-        A importação automática de extrato/PDF estará disponível na próxima etapa. Por enquanto,
-        registre vendas e despesas manualmente pelos botões do fluxo de caixa.
-      </p>
-      <div className="flex justify-end">
-        <Button onClick={onCancel}>Entendi</Button>
-      </div>
-    </div>
-  );
-}
-
 export function AppModal() {
   const { modal, isOpen, closeModal } = useModal();
   const [categories, setCategories] = useState(expenseCategories);
@@ -770,6 +780,11 @@ export function AppModal() {
                   ? 'warning'
                   : 'info';
 
+  const wide =
+    modal.type === 'import-statement' ||
+    modal.type === 'new-product' ||
+    modal.type === 'edit-product';
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <button
@@ -778,7 +793,11 @@ export function AppModal() {
         className="absolute inset-0 bg-on-surface/40 backdrop-blur-sm"
         onClick={closeModal}
       />
-      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-surface-container-lowest rounded-2xl shadow-2xl shadow-on-surface/10 p-5 md:p-8 space-y-6">
+      <div
+        className={`relative w-full ${
+          wide ? 'max-w-2xl' : 'max-w-lg'
+        } max-h-[90vh] overflow-y-auto bg-surface-container-lowest rounded-2xl shadow-2xl shadow-on-surface/10 p-5 md:p-8 space-y-6`}
+      >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-on-surface">
@@ -819,10 +838,19 @@ export function AppModal() {
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
+        ) : modal.type === 'new-product' || modal.type === 'edit-product' ? (
+          <ProductForm
+            item={modal.payload?.item}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
         ) : modal.type === 'confirm' ? (
           <ConfirmForm payload={modal.payload} onCancel={closeModal} />
         ) : modal.type === 'import-statement' ? (
-          <ImportStatementInfo onCancel={closeModal} />
+          <ImportStatementForm
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
         ) : (
           <div className="space-y-6">
             <p className="text-on-surface-variant font-body leading-relaxed">

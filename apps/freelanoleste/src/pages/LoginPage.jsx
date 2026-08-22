@@ -12,7 +12,7 @@ const demoAccounts = {
 const copy = {
   owner: {
     title: 'Bar',
-    hint: 'Painel do seu bar: operacional e marketplace.',
+    hint: 'Painel do bar: dono vê tudo; estoque só cadastra produto.',
     signupTo: '/cadastro/bar',
   },
   freela: {
@@ -30,6 +30,7 @@ const copy = {
 function homeFor(role) {
   if (role === 'admin') return '/admin';
   if (role === 'freela') return '/freela';
+  if (role === 'employee') return '/bar/estoque';
   if (role === 'owner') return '/bar';
   return '/';
 }

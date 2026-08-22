@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { addCashFlow, fetchCashFlow, formatBrl } from '../../services/tenantOpsApi';
+import { addCashFlow, fetchCashFlow, formatBrl, importCashStatement } from '../../services/tenantOpsApi';
+import { parseStatementFile } from '../../services/statementImport';
 import { DataTable } from '../../components/admin/DataTable';
 import { Button } from '../../components/Button';
 import { SubscriptionBanner, isOpsWritable } from '../../components/bar/SubscriptionBanner';
@@ -11,6 +12,34 @@ export function CashFlowPage() {
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
+  const [importRows, setImportRows] = useState([]);
+
+  async function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError('');
+    try {
+      setImportRows(await parseStatementFile(file));
+    } catch (err) {
+      setImportRows([]);
+      setError(err.message || 'Não foi possível ler o arquivo.');
+    }
+  }
+
+  function patchImport(id, patch) {
+    setImportRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }
+
+  function confirmImport() {
+    setError('');
+    try {
+      const result = importCashStatement(importRows);
+      setRows(result.rows);
+      setImportRows([]);
+    } catch (err) {
+      setError(err.message || 'Falha ao lançar o extrato.');
+    }
+  }
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -36,6 +65,60 @@ export function CashFlowPage() {
       </section>
 
       <SubscriptionBanner />
+
+      <section className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 space-y-3">
+        <p className="font-headline font-bold">Importar extrato</p>
+        <p className="text-sm text-on-surface-variant">
+          PDF ou CSV do banco. Revise antes de gravar. Sem PIX de freela.
+        </p>
+        <label className="block">
+          <input
+            type="file"
+            accept=".pdf,.csv,.txt,.ofx,application/pdf,text/csv"
+            disabled={!writable}
+            className="block w-full text-sm min-h-11"
+            onChange={handleImportFile}
+          />
+        </label>
+        {importRows.length ? (
+          <ul className="space-y-3 max-h-80 overflow-y-auto">
+            {importRows.map((row) => (
+              <li key={row.id} className="bg-surface-container-low rounded-2xl p-3 space-y-2">
+                <label className="flex items-center gap-3 min-h-11">
+                  <input
+                    type="checkbox"
+                    checked={row.selected}
+                    onChange={(event) =>
+                      patchImport(row.id, { selected: event.target.checked })
+                    }
+                    className="h-5 w-5"
+                  />
+                  <span className="text-xs">{row.date}</span>
+                  <span className="font-semibold">{formatBrl(row.amountCents / 100)}</span>
+                </label>
+                <input
+                  value={row.description}
+                  onChange={(event) => patchImport(row.id, { description: event.target.value })}
+                  className="w-full bg-surface-container-lowest rounded-xl py-2 px-3 min-h-11 text-sm"
+                />
+                <select
+                  value={row.kind}
+                  onChange={(event) => patchImport(row.id, { kind: event.target.value })}
+                  className="w-full bg-surface-container-lowest rounded-xl py-2 px-3 min-h-11 text-sm"
+                >
+                  <option value="entrada">Entrada</option>
+                  <option value="saida">Saída</option>
+                </select>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {importRows.length ? (
+          <Button type="button" disabled={!writable} onClick={confirmImport}>
+            Confirmar lançamentos
+          </Button>
+        ) : null}
+      </section>
 
       <form
         className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end"

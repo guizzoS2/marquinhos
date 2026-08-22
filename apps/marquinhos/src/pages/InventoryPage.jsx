@@ -4,6 +4,8 @@ import { fetchInventory, removeInventoryItem } from '../services/dashboardServic
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { useModal } from '../contexts/ModalContext';
+import { useAuth } from '../contexts/AuthContext';
+import { isAdminRole } from '../services/roles';
 
 const progressWidth = {
   45: 'w-[45%]',
@@ -32,6 +34,8 @@ const metricTone = {
 export function InventoryPage() {
   const [filter, setFilter] = useState('Todos');
   const { openModal } = useModal();
+  const { user } = useAuth();
+  const canAdmin = isAdminRole(user?.role);
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['inventory'],
@@ -55,6 +59,14 @@ export function InventoryPage() {
       items: data?.items,
       onSuccess: refreshInventory,
     });
+  }
+
+  function openNewProduct() {
+    openModal('new-product', { onSuccess: refreshInventory });
+  }
+
+  function openEditProduct(item) {
+    openModal('edit-product', { item, onSuccess: refreshInventory });
   }
 
   function confirmDeleteItem(item) {
@@ -87,10 +99,14 @@ export function InventoryPage() {
               com precisão editorial.
             </p>
           </div>
-          <div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button variant="secondary" onClick={openNewProduct}>
+              <Icon name="add" />
+              Novo produto
+            </Button>
             <Button onClick={openStockEntry}>
               <Icon name="add_circle" />
-              Registrar entrada de mercadoria
+              Registrar entrada
             </Button>
           </div>
         </section>
@@ -176,14 +192,26 @@ export function InventoryPage() {
                       )}
                     </td>
                     <td className="px-6 py-5 text-right">
-                      <button
-                        type="button"
-                        className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors"
-                        onClick={() => confirmDeleteItem(item)}
-                        aria-label={`Excluir ${item.name}`}
-                      >
-                        <Icon name="delete" />
-                      </button>
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-surface-container"
+                          onClick={() => openEditProduct(item)}
+                          aria-label={`Editar ${item.name}`}
+                        >
+                          <Icon name="edit" />
+                        </button>
+                        {canAdmin ? (
+                          <button
+                            type="button"
+                            className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors"
+                            onClick={() => confirmDeleteItem(item)}
+                            aria-label={`Excluir ${item.name}`}
+                          >
+                            <Icon name="delete" />
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}

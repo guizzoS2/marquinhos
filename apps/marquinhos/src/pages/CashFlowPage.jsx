@@ -112,7 +112,7 @@ export function CashFlowPage() {
           <Button
             variant="dark"
             className="rounded-lg py-2"
-            onClick={() => openModal('import-statement')}
+            onClick={() => openModal('import-statement', { onSuccess: refreshCashFlow })}
           >
             <Icon name="file_upload" className="text-lg" />
             Importar extrato/PDF
