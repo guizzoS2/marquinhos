@@ -22,7 +22,7 @@ export function BarOpsProviders() {
       ...base,
       async createStaff(payload) {
         await assertEmailAvailable(payload.email);
-        await registerStaffAccount({
+        const account = await registerStaffAccount({
           email: payload.email,
           password: payload.password,
           name: payload.name,
@@ -30,7 +30,7 @@ export function BarOpsProviders() {
           permissions: payload.permissions,
           title: payload.title,
         });
-        return base.createStaff(payload);
+        return base.createStaff({ ...payload, uid: account.uid });
       },
     };
   }, [access.tenantId]);

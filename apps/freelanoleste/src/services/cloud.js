@@ -18,6 +18,12 @@ function toRef(path) {
   return doc(db, ...path.split('/').filter(Boolean));
 }
 
+function requireDb() {
+  if (!isFirebaseConfigured() || !db) {
+    throw new Error('Firebase não configurado.');
+  }
+}
+
 function readLocal(path) {
   try {
     const raw = localStorage.getItem(cacheKey(path));
@@ -46,60 +52,93 @@ export function peekDoc(path, fallback) {
   return fallback;
 }
 
-export async function hydrateDoc(path, fallback) {
-  const local = readLocal(path);
-  if (isFirebaseConfigured() && db) {
-    try {
-      const snap = await getDoc(toRef(path));
-      if (snap.exists()) {
-        const data = snap.data();
-        memory.set(path, data);
-        writeLocal(path, data);
-        return data;
-      }
-      const initial = local != null ? local : fallback;
-      if (initial != null) {
-        memory.set(path, initial);
-        writeLocal(path, initial);
-        await setDoc(toRef(path), initial);
-        return initial;
-      }
-    } catch (error) {
-      console.warn(`Firestore hydrate ${path}`, error);
+export async function hydrateDoc(path, fallback, { force = false } = {}) {
+  requireDb();
+  const local = force ? null : readLocal(path);
+  try {
+    const snap = await getDoc(toRef(path));
+    if (snap.exists()) {
+      const data = snap.data();
+      memory.set(path, data);
+      writeLocal(path, data);
+      return data;
     }
+    const initial = local != null ? local : fallback;
+    if (initial != null) {
+      memory.set(path, initial);
+      writeLocal(path, initial);
+      await setDoc(toRef(path), initial);
+      return initial;
+    }
+  } catch (error) {
+    console.warn(`Firestore hydrate ${path}`, error);
+    if (force) throw error;
   }
   const initial = local != null ? local : fallback;
   memory.set(path, initial);
   return initial;
 }
 
+const pendingWrites = [];
+
 export function writeCloudDoc(path, data) {
+  requireDb();
   memory.set(path, data);
   writeLocal(path, data);
-  if (isFirebaseConfigured() && db) {
-    setDoc(toRef(path), data).catch((error) => {
-      console.error(`Firestore write ${path}`, error);
-    });
-  }
+  const task = setDoc(toRef(path), data).catch((error) => {
+    console.error(`Firestore write ${path}`, error);
+  });
+  pendingWrites.push(task);
   return data;
+}
+
+export async function flushCloudWrites() {
+  if (!pendingWrites.length) return;
+  await Promise.all(pendingWrites.splice(0));
 }
 
 export function tenantOpsPath(tenantId) {
   return `tenants/${tenantId}/data/ops`;
 }
 
+const USER_FIELDS = [
+  'email',
+  'name',
+  'roles',
+  'role',
+  'tenantId',
+  'freelaId',
+  'barRole',
+  'title',
+  'phone',
+  'company',
+  'photoURL',
+  'permissions',
+  'createdAt',
+  'updatedAt',
+  'uid',
+];
+
+export function pickUserFields(data) {
+  const next = {};
+  USER_FIELDS.forEach((key) => {
+    if (data[key] !== undefined) next[key] = data[key];
+  });
+  return next;
+}
+
 export async function readUserDoc(uid) {
-  if (!isFirebaseConfigured() || !db || !uid) return null;
+  requireDb();
+  if (!uid) return null;
   const snap = await getDoc(doc(db, 'users', uid));
   return snap.exists() ? snap.data() : null;
 }
 
-export async function writeUserDoc(uid, data) {
-  if (!isFirebaseConfigured() || !db) {
-    throw new Error('Firebase não configurado.');
-  }
-  await setDoc(doc(db, 'users', uid), data);
-  return data;
+export async function writeUserDoc(uid, data, { merge = false } = {}) {
+  requireDb();
+  const payload = pickUserFields({ ...data, uid });
+  await setDoc(doc(db, 'users', uid), payload, { merge });
+  return payload;
 }
 
 export function emailDocId(email) {
@@ -107,13 +146,13 @@ export function emailDocId(email) {
 }
 
 export async function emailTaken(email) {
-  if (!isFirebaseConfigured() || !db) return false;
+  requireDb();
   const snap = await getDoc(doc(db, 'emails', emailDocId(email)));
   return snap.exists();
 }
 
 export async function writeEmailLock(email, uid) {
-  if (!isFirebaseConfigured() || !db) return;
+  requireDb();
   const id = emailDocId(email);
   await setDoc(doc(db, 'emails', id), { uid, email: id });
 }

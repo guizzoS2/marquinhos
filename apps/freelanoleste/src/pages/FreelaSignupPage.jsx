@@ -15,7 +15,7 @@ function homeFor(role) {
 }
 
 export function FreelaSignupPage() {
-  const { registerFreela, isAuthenticated, user, isFreela } = useAuth();
+  const { registerFreela, isAuthenticated, user, isFreela, loading } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: '',
@@ -30,6 +30,10 @@ export function FreelaSignupPage() {
     photoDataUrl: '',
   });
   const [error, setError] = useState('');
+
+  if (loading) {
+    return <div className="min-h-dvh" />;
+  }
 
   if (isAuthenticated) {
     return <Navigate to={isFreela ? '/freela' : homeFor(user.role)} replace />;

@@ -519,16 +519,24 @@ export function createTenantOpsApi(tenantId) {
   }
 
   async function fetchStaff() {
-    return state().staff || { people: [] };
+    const staff = state().staff || { people: [] };
+    return {
+      people: (staff.people || []).map((person) => {
+        const { password: _ignored, ...safe } = person;
+        return safe;
+      }),
+    };
   }
 
   async function createStaff(payload) {
     const email = String(payload.email || '').trim().toLowerCase();
     const name = String(payload.name || '').trim();
-    const password = String(payload.password || '');
     const title = String(payload.title || 'Equipe').trim();
-    if (!email || !name || !password) {
-      throw new Error('Preencha nome, e-mail e senha.');
+    if (!email || !name) {
+      throw new Error('Preencha nome e e-mail.');
+    }
+    if (!payload.uid && !payload.password) {
+      throw new Error('Conta da equipe precisa ser criada no Firebase Auth.');
     }
     if (listStaffAccounts().some((item) => item.email === email)) {
       throw new Error('E-mail já cadastrado.');
@@ -538,9 +546,9 @@ export function createTenantOpsApi(tenantId) {
       (current.people || []).reduce((max, person) => Math.max(max, Number(person.id) || 0), 0) + 1;
     const person = {
       id: nextId,
+      uid: payload.uid || null,
       name,
       email,
-      password,
       title,
       permissions: Array.isArray(payload.permissions)
         ? payload.permissions
@@ -564,7 +572,7 @@ export function createTenantOpsApi(tenantId) {
         ...person,
         name: payload.name != null ? String(payload.name).trim() : person.name,
         email: email || person.email,
-        password: payload.password ? String(payload.password) : person.password,
+        uid: payload.uid || person.uid || null,
         title: payload.title != null ? String(payload.title).trim() : person.title,
         permissions: Array.isArray(payload.permissions) ? payload.permissions : person.permissions,
       };

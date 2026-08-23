@@ -14,7 +14,7 @@ function homeFor(role) {
 }
 
 export function BarSignupPage() {
-  const { registerOwner, isAuthenticated, user, isOwner } = useAuth();
+  const { registerOwner, isAuthenticated, user, isOwner, loading } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     barName: '',
@@ -25,6 +25,10 @@ export function BarSignupPage() {
   });
   const [slugTouched, setSlugTouched] = useState(false);
   const [error, setError] = useState('');
+
+  if (loading) {
+    return <div className="min-h-dvh" />;
+  }
 
   if (isAuthenticated) {
     return <Navigate to={isOwner ? '/bar' : homeFor(user.role)} replace />;

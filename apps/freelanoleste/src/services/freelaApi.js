@@ -1,3 +1,4 @@
+import { writeUserDoc } from './cloud';
 import { isFreelaSession, readSession } from './session';
 import { formatBrl } from './money';
 import { getTenantById } from './platformStore';
@@ -101,8 +102,18 @@ export function createFreelaProfile(input) {
 }
 
 export function updateFreelaProfile(patch) {
-  const { profile } = requireFreelaProfile();
-  return upsertFreelaProfile(buildFreelaProfile(patch, profile));
+  const { session, profile } = requireFreelaProfile();
+  const next = upsertFreelaProfile(buildFreelaProfile(patch, profile));
+  if (session.uid) {
+    writeUserDoc(
+      session.uid,
+      { name: next.name, updatedAt: new Date().toISOString() },
+      { merge: true }
+    ).catch((error) => {
+      console.warn('Firebase user profile', error);
+    });
+  }
+  return next;
 }
 
 export function fetchHistory({ page = 1, pageSize = 5 } = {}) {

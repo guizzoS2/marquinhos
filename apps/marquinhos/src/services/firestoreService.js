@@ -1,7 +1,6 @@
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase';
 import { createAuthUserRest } from './identity';
-import { localStore } from './localStore';
 import {
   overviewFallback,
   cashFlowFallback,
@@ -15,6 +14,27 @@ import {
   formatCents,
   parseMoneyToCents,
 } from './cashFlowUtils';
+
+const TENANT_ID = 'marquinhos';
+const OPS_COLLECTION = ['tenants', TENANT_ID, 'data', 'ops'];
+const SECTION_KEYS = ['overview', 'cashFlow', 'inventory', 'freelancers', 'suppliers', 'staff'];
+const USER_FIELDS = [
+  'email',
+  'name',
+  'roles',
+  'role',
+  'tenantId',
+  'freelaId',
+  'barRole',
+  'title',
+  'phone',
+  'company',
+  'photoURL',
+  'permissions',
+  'createdAt',
+  'updatedAt',
+  'uid',
+];
 
 const DOCS = {
   overview: 'dashboard/overview',
@@ -43,33 +63,177 @@ const CATEGORY_NATURE_FALLBACK = {
   Manutenção: 'variable',
 };
 
+let opsCache = null;
+
+function requireDb() {
+  if (!isFirebaseConfigured() || !db) {
+    throw new Error('Firebase não configurado.');
+  }
+}
+
 function toDocRef(path) {
   const segments = path.split('/').filter(Boolean);
   return doc(db, ...segments);
 }
 
+function pickUserFields(data) {
+  const next = {};
+  USER_FIELDS.forEach((key) => {
+    if (data[key] !== undefined) next[key] = data[key];
+  });
+  return next;
+}
+
+function staffAsPeople(staff) {
+  const source = staff?.people || staff?.members || [];
+  return {
+    people: source.map((item, index) => {
+      const { password: _ignored, ...safe } = item;
+      return {
+        id: safe.id || index + 1,
+        uid: safe.uid || null,
+        name: safe.name,
+        email: safe.email,
+        title: safe.title || 'Equipe',
+        permissions: Array.isArray(safe.permissions)
+          ? safe.permissions
+          : safe.role === 'admin' || safe.barRole === 'admin'
+            ? ['overview', 'caixa', 'estoque', 'fornecedores', 'equipe']
+            : ['estoque'],
+        barRole: safe.barRole || safe.role || 'stock',
+        createdAt: safe.createdAt || new Date().toISOString(),
+      };
+    }),
+  };
+}
+
+function staffAsMembers(staff) {
+  return {
+    members: staffAsPeople(staff).people.map((item) => ({
+      uid: item.uid,
+      email: item.email,
+      name: item.name,
+      title: item.title,
+      role: item.barRole === 'admin' ? 'admin' : 'stock',
+      createdAt: item.createdAt,
+    })),
+  };
+}
+
+function emptyOps() {
+  return {
+    overview: overviewFallback,
+    cashFlow: cashFlowFallback,
+    inventory: inventoryFallback,
+    freelancers: freelancersFallback,
+    suppliers: suppliersFallback,
+    staff: { people: [] },
+  };
+}
+
+function sectionKey(path) {
+  if (path.startsWith('dashboard/')) return path.slice('dashboard/'.length);
+  return null;
+}
+
+async function readOps() {
+  requireDb();
+  if (opsCache) return opsCache;
+  const snap = await getDoc(doc(db, ...OPS_COLLECTION));
+  if (snap.exists()) {
+    opsCache = snap.data();
+    return opsCache;
+  }
+
+  const migrated = emptyOps();
+  await Promise.all(
+    SECTION_KEYS.map(async (key) => {
+      const legacy = await getDoc(doc(db, 'dashboard', key));
+      if (legacy.exists()) {
+        migrated[key] = key === 'staff' ? staffAsPeople(legacy.data()) : legacy.data();
+      }
+    })
+  );
+  if (migrated.staff?.members && !migrated.staff.people) {
+    migrated.staff = staffAsPeople(migrated.staff);
+  }
+  await setDoc(doc(db, ...OPS_COLLECTION), migrated);
+  opsCache = migrated;
+  return opsCache;
+}
+
+async function writeOps(next) {
+  requireDb();
+  opsCache = next;
+  await setDoc(doc(db, ...OPS_COLLECTION), next);
+  return next;
+}
+
+async function writeEmailLock(email, uid) {
+  requireDb();
+  const id = String(email || '').trim().toLowerCase();
+  if (!id) return;
+  await setDoc(doc(db, 'emails', id), { uid, email: id });
+}
+
+async function emailTaken(email) {
+  requireDb();
+  const id = String(email || '').trim().toLowerCase();
+  const snap = await getDoc(doc(db, 'emails', id));
+  return snap.exists();
+}
+
 async function readDocument(path) {
-  if (isFirebaseConfigured() && db) {
+  requireDb();
+  if (path.startsWith('users/')) {
     const snap = await getDoc(toDocRef(path));
     return snap.exists() ? snap.data() : null;
   }
-  return localStore.getDoc(path);
+  const key = sectionKey(path);
+  if (key) {
+    const ops = await readOps();
+    if (key === 'staff') return staffAsMembers(ops.staff);
+    return ops[key] || null;
+  }
+  const snap = await getDoc(toDocRef(path));
+  return snap.exists() ? snap.data() : null;
 }
 
 async function writeDocument(path, data, merge = false) {
-  if (isFirebaseConfigured() && db) {
-    await setDoc(toDocRef(path), data, { merge });
-    return data;
+  requireDb();
+  if (path.startsWith('users/')) {
+    const payload = pickUserFields(merge ? { ...(await readDocument(path)), ...data } : data);
+    await setDoc(toDocRef(path), payload);
+    return payload;
   }
-  return localStore.setDoc(path, data, { merge });
+  const key = sectionKey(path);
+  if (key) {
+    const ops = await readOps();
+    const current = ops[key] || {};
+    const nextSection =
+      key === 'staff'
+        ? staffAsPeople(merge ? { ...current, ...data } : data)
+        : merge
+          ? { ...current, ...data }
+          : data;
+    await writeOps({ ...ops, [key]: nextSection });
+    return key === 'staff' ? staffAsMembers(nextSection) : nextSection;
+  }
+  await setDoc(toDocRef(path), data, { merge });
+  return data;
 }
 
 async function patchDocument(path, data) {
-  if (isFirebaseConfigured() && db) {
-    await updateDoc(toDocRef(path), data);
-    return data;
+  requireDb();
+  if (path.startsWith('users/')) {
+    return writeDocument(path, data, true);
   }
-  return localStore.updateDoc(path, data);
+  const key = sectionKey(path);
+  if (key) {
+    return writeDocument(path, data, true);
+  }
+  await updateDoc(toDocRef(path), data);
+  return data;
 }
 
 function migrateCashFlow(raw) {
@@ -123,42 +287,15 @@ function migrateCashFlow(raw) {
 }
 
 export async function ensureDashboardSeed() {
-  const overview = await readDocument(DOCS.overview);
-  if (!overview) {
-    await writeDocument(DOCS.overview, overviewFallback);
-  }
-
-  const cashFlow = await readDocument(DOCS.cashFlow);
-  if (!cashFlow) {
-    await writeDocument(DOCS.cashFlow, cashFlowFallback);
-  } else {
-    const migrated = migrateCashFlow(cashFlow);
-    const needsWrite =
-      !cashFlow.categories?.length ||
-      (cashFlow.expenses || []).some((row) => !row.nature || row.amount == null);
-    if (needsWrite) {
-      await writeDocument(DOCS.cashFlow, migrated);
-    }
-  }
-
-  const inventory = await readDocument(DOCS.inventory);
-  if (!inventory) {
-    await writeDocument(DOCS.inventory, inventoryFallback);
-  }
-
-  const freelancers = await readDocument(DOCS.freelancers);
-  if (!freelancers) {
-    await writeDocument(DOCS.freelancers, freelancersFallback);
-  }
-
-  const suppliers = await readDocument(DOCS.suppliers);
-  if (!suppliers) {
-    await writeDocument(DOCS.suppliers, suppliersFallback);
-  }
-
-  const staff = await readDocument(DOCS.staff);
-  if (!staff) {
-    await writeDocument(DOCS.staff, staffFallback);
+  const ops = await readOps();
+  const cashFlow = ops.cashFlow;
+  if (!cashFlow) return;
+  const migrated = migrateCashFlow(cashFlow);
+  const needsWrite =
+    !cashFlow.categories?.length ||
+    (cashFlow.expenses || []).some((row) => !row.nature || row.amount == null);
+  if (needsWrite) {
+    await writeDocument(DOCS.cashFlow, migrated);
   }
 }
 
@@ -719,18 +856,6 @@ export async function getStaff() {
   return (await readDocument(DOCS.staff)) || staffFallback;
 }
 
-export async function findStaffByCredentials(email, password) {
-  const staff = await getStaff();
-  const member = (staff.members || []).find(
-    (item) =>
-      item.email === String(email || '').trim().toLowerCase() &&
-      item.password === password
-  );
-  if (!member) return null;
-  const { password: _password, ...safe } = member;
-  return safe;
-}
-
 export async function createStaffMember(payload) {
   const name = String(payload.name || '').trim();
   const email = String(payload.email || '').trim().toLowerCase();
@@ -742,22 +867,19 @@ export async function createStaffMember(payload) {
   if (password.length < 6) {
     throw new Error('Senha mínima de 6 caracteres.');
   }
+  if (await emailTaken(email)) {
+    throw new Error('Já existe um usuário com este e-mail.');
+  }
 
   const staff = await getStaff();
   if ((staff.members || []).some((item) => item.email === email)) {
     throw new Error('Já existe um usuário com este e-mail.');
   }
 
-  let uid = `staff-${Date.now()}`;
-  if (isFirebaseConfigured()) {
-    const created = await createAuthUserRest({ email, password });
-    uid = created.uid;
-  }
-
+  const created = await createAuthUserRest({ email, password });
   const member = {
-    uid,
+    uid: created.uid,
     email,
-    password,
     name,
     title: String(payload.title || (role === 'stock' ? 'Estoquista' : 'Administrador')).trim(),
     role,
@@ -765,14 +887,13 @@ export async function createStaffMember(payload) {
   };
   const next = { members: [...(staff.members || []), member] };
   await writeDocument(DOCS.staff, next);
-  const { password: _password, ...safe } = member;
   await upsertUserProfile(member.uid, {
-    ...safe,
+    ...member,
     roles: ['staff'],
-    tenantId: 'marquinhos',
+    tenantId: TENANT_ID,
     barRole: role,
   });
-  return { member: safe, staff: { members: next.members.map(stripStaffPassword) } };
+  return { member, staff: { members: next.members } };
 }
 
 function stripStaffPassword(member) {
@@ -805,19 +926,28 @@ export async function getUserProfile(uid) {
 export async function upsertUserProfile(uid, data) {
   const path = `users/${uid}`;
   const existing = (await readDocument(path)) || {};
-  const { role, roles, ...rest } = data;
-  const next = {
+  const { role, roles } = data;
+  const barRole = data.barRole || role || existing.barRole || existing.role || 'admin';
+  const inferredRoles =
+    existing.roles ||
+    roles ||
+    (role === 'stock' || barRole === 'stock' ? ['staff'] : ['owner']);
+  const next = pickUserFields({
     ...existing,
-    ...rest,
+    ...data,
     uid,
-    barRole: data.barRole || role || existing.barRole || existing.role,
-    roles: existing.roles || roles || (role ? [role === 'admin' || role === 'stock' ? 'staff' : role] : ['owner']),
+    email: existing.email || data.email,
+    name: data.name || existing.name || 'Usuário',
+    barRole,
+    roles: inferredRoles,
+    tenantId: existing.tenantId || data.tenantId || TENANT_ID,
+    createdAt: existing.createdAt || data.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-  };
-  if (!existing.roles && role === 'admin' && !roles) {
-    next.roles = ['owner'];
+  });
+  await writeDocument(path, next);
+  if (next.email) {
+    await writeEmailLock(next.email, uid);
   }
-  await writeDocument(path, next, true);
   return next;
 }
 

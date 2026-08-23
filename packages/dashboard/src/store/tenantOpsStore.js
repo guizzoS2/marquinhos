@@ -181,10 +181,13 @@ export function patchTenantOpsSection(tenantId, section, data) {
 export function listStaffAccounts() {
   const root = loadRoot();
   return Object.entries(root).flatMap(([tenantId, data]) =>
-    (data?.staff?.people || []).map((person) => ({
-      ...person,
-      tenantId,
-      role: 'staff',
-    }))
+    (data?.staff?.people || []).map((person) => {
+      const { password: _ignored, ...safe } = person;
+      return {
+        ...safe,
+        tenantId,
+        role: 'staff',
+      };
+    })
   );
 }

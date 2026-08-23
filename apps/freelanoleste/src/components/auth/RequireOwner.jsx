@@ -2,8 +2,12 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function RequireOwner() {
-  const { user, isBar, isAdmin, isFreela } = useAuth();
+  const { user, loading, isBar, isAdmin, isFreela } = useAuth();
   const location = useLocation();
+
+  if (loading) {
+    return <div className="min-h-dvh" />;
+  }
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;

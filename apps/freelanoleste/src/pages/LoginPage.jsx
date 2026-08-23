@@ -31,12 +31,16 @@ function homeFor(role) {
 }
 
 export function RoleLoginPage({ role }) {
-  const { login, isAuthenticated, user } = useAuth();
+  const { login, isAuthenticated, user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+
+  if (loading) {
+    return <div className="min-h-dvh" />;
+  }
 
   if (isAuthenticated) {
     return <Navigate to={location.state?.from || homeFor(user.role)} replace />;

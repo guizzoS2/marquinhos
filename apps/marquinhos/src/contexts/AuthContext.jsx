@@ -21,7 +21,11 @@ export function AuthProvider({ children }) {
       if (nextUser) {
         await ensureDashboardSeed();
         const profile = (await getUserProfile(nextUser.uid)) || nextUser;
-        setUser({ ...nextUser, ...profile });
+        setUser({
+          ...nextUser,
+          ...profile,
+          role: profile.barRole || profile.role || nextUser.role,
+        });
       } else {
         setUser(null);
       }
