@@ -19,7 +19,6 @@ import {
 import { expenseCategories } from '../../services/fallbacks';
 import { isStockRole } from '../../services/roles';
 import { ProductForm } from '../inventory/ProductForm';
-import { ImportStatementForm } from '../cashflow/ImportStatementForm';
 
 const titles = {
   'new-order': 'Nova Venda',
@@ -846,11 +845,6 @@ export function AppModal() {
           />
         ) : modal.type === 'confirm' ? (
           <ConfirmForm payload={modal.payload} onCancel={closeModal} />
-        ) : modal.type === 'import-statement' ? (
-          <ImportStatementForm
-            onCancel={closeModal}
-            onSuccess={modal.payload?.onSuccess}
-          />
         ) : (
           <div className="space-y-6">
             <p className="text-on-surface-variant font-body leading-relaxed">

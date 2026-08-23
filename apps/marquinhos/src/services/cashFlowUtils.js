@@ -32,6 +32,76 @@ export function natureLabel(nature) {
   return nature === 'fixed' ? 'Fixa' : 'Variável';
 }
 
+const MONTH_INDEX = {
+  jan: 0,
+  fev: 1,
+  mar: 2,
+  abr: 3,
+  mai: 4,
+  jun: 5,
+  jul: 6,
+  ago: 7,
+  set: 8,
+  out: 9,
+  nov: 10,
+  dez: 11,
+};
+
+export function toIsoDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function startOfMonthIso(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  return toIsoDate(new Date(date.getFullYear(), date.getMonth(), 1));
+}
+
+export function parseCashFlowDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const short = raw
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  const match = short.match(/^(\d{1,2})\s*(?:de\s+)?([a-z]{3})/);
+  if (!match) return '';
+  const month = MONTH_INDEX[match[2]];
+  if (month == null) return '';
+  return `${new Date().getFullYear()}-${String(month + 1).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`;
+}
+
+export function inDateRange(value, from, to) {
+  const iso = parseCashFlowDate(value);
+  if (!iso) return true;
+  const start = from && to && from > to ? to : from;
+  const end = from && to && from > to ? from : to;
+  if (start && iso < start) return false;
+  if (end && iso > end) return false;
+  return true;
+}
+
+export function formatIsoRange(from, to) {
+  const start = from && to && from > to ? to : from;
+  const end = from && to && from > to ? from : to;
+  const fmt = (iso) => {
+    if (!iso) return '—';
+    const [year, month, day] = iso.split('-');
+    return `${day}/${month}/${year}`;
+  };
+  if (!start && !end) return 'Período';
+  if (start && end) return `${fmt(start)} — ${fmt(end)}`;
+  if (start) return `A partir de ${fmt(start)}`;
+  return `Até ${fmt(end)}`;
+}
+
 export function buildCashFlowSummary(incomes = [], expenses = [], deltas = {}) {
   const revenueCents = incomes.reduce(
     (sum, row) => sum + (row.amount ?? parseMoneyToCents(row.value)),

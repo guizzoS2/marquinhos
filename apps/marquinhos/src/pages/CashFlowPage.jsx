@@ -7,11 +7,15 @@ import { useModal } from '../contexts/ModalContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   buildCashFlowCsv,
+  buildCashFlowSummary,
   downloadCsv,
+  formatIsoRange,
+  inDateRange,
   natureLabel,
+  startOfMonthIso,
+  toIsoDate,
 } from '../services/cashFlowUtils';
 
-const periods = ['Mensal', 'Trimestral', 'Anual'];
 const natureFilters = [
   { id: 'all', label: 'Todas' },
   { id: 'fixed', label: 'Fixas' },
@@ -19,7 +23,8 @@ const natureFilters = [
 ];
 
 export function CashFlowPage() {
-  const [period, setPeriod] = useState('Mensal');
+  const [fromDate, setFromDate] = useState(startOfMonthIso);
+  const [toDate, setToDate] = useState(toIsoDate);
   const [natureFilter, setNatureFilter] = useState('all');
   const { openModal } = useModal();
   const toast = useToast();
@@ -30,11 +35,25 @@ export function CashFlowPage() {
     queryFn: fetchCashFlow,
   });
 
+  const filteredIncomes = useMemo(() => {
+    return (data?.incomes || []).filter((row) => inDateRange(row.date, fromDate, toDate));
+  }, [data, fromDate, toDate]);
+
+  const rangedExpenses = useMemo(() => {
+    return (data?.expenses || []).filter((row) => inDateRange(row.date, fromDate, toDate));
+  }, [data, fromDate, toDate]);
+
   const filteredExpenses = useMemo(() => {
-    if (!data?.expenses) return [];
-    if (natureFilter === 'all') return data.expenses;
-    return data.expenses.filter((row) => row.nature === natureFilter);
-  }, [data, natureFilter]);
+    if (natureFilter === 'all') return rangedExpenses;
+    return rangedExpenses.filter((row) => row.nature === natureFilter);
+  }, [rangedExpenses, natureFilter]);
+
+  const summary = useMemo(
+    () => buildCashFlowSummary(filteredIncomes, rangedExpenses),
+    [filteredIncomes, rangedExpenses]
+  );
+
+  const periodLabel = formatIsoRange(fromDate, toDate);
 
   function refreshCashFlow() {
     queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
@@ -43,7 +62,10 @@ export function CashFlowPage() {
 
   function handleExport() {
     if (!data) return;
-    const csv = buildCashFlowCsv(data, { natureFilter });
+    const csv = buildCashFlowCsv(
+      { ...data, incomes: filteredIncomes, expenses: rangedExpenses, summary },
+      { natureFilter }
+    );
     const stamp = new Date().toISOString().slice(0, 10);
     downloadCsv(`fluxo-caixa-${stamp}.csv`, csv);
     toast.success('Relatório CSV exportado.');
@@ -75,8 +97,6 @@ export function CashFlowPage() {
     );
   }
 
-  const summary = data.summary;
-
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 pb-72 md:pb-56 font-body">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -88,22 +108,32 @@ export function CashFlowPage() {
             Visão consolidada da saúde financeira do Artisan Lounge
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center bg-surface-container-low rounded-lg p-1">
-            {periods.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setPeriod(item)}
-                className={
-                  period === item
-                    ? 'px-4 py-2 min-h-11 text-xs font-semibold bg-surface-container-lowest shadow-sm rounded-md text-on-surface'
-                    : 'px-4 py-2 min-h-11 text-xs font-medium text-on-surface-variant hover:text-on-surface'
-                }
-              >
-                {item}
-              </button>
-            ))}
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-end gap-3 w-full md:w-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full sm:w-auto">
+            <label className="block space-y-2 min-w-0">
+              <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+                De
+              </span>
+              <input
+                type="date"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(event) => setFromDate(event.target.value)}
+                className="w-full bg-surface-container-low rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container"
+              />
+            </label>
+            <label className="block space-y-2 min-w-0">
+              <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+                Até
+              </span>
+              <input
+                type="date"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(event) => setToDate(event.target.value)}
+                className="w-full bg-surface-container-low rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container"
+              />
+            </label>
           </div>
           <Button variant="secondary" className="rounded-lg py-2" onClick={handleExport}>
             <Icon name="download" className="text-lg" />
@@ -111,8 +141,10 @@ export function CashFlowPage() {
           </Button>
           <Button
             variant="dark"
-            className="rounded-lg py-2"
-            onClick={() => openModal('import-statement', { onSuccess: refreshCashFlow })}
+            className="rounded-lg py-2 disabled:cursor-not-allowed"
+            disabled
+            aria-disabled="true"
+            title="Importação de extrato desativada"
           >
             <Icon name="file_upload" className="text-lg" />
             Importar extrato/PDF
@@ -150,7 +182,7 @@ export function CashFlowPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/20">
-                {data.incomes.map((row) => (
+                {filteredIncomes.map((row) => (
                   <tr
                     key={row.id || `${row.date}-${row.description}`}
                     className="hover:bg-surface-container-low transition-colors"
@@ -172,6 +204,16 @@ export function CashFlowPage() {
                     <td className="px-5 py-3 text-right font-bold text-secondary">{row.value}</td>
                   </tr>
                 ))}
+                {!filteredIncomes.length ? (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-5 py-8 text-center text-on-surface-variant text-sm"
+                    >
+                      Nenhuma entrada neste período.
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -185,7 +227,7 @@ export function CashFlowPage() {
                 <h3 className="font-headline font-bold text-on-surface">Saídas</h3>
               </div>
               <span className="text-[10px] font-bold text-error bg-error/10 px-2 py-0.5 rounded uppercase tracking-wider">
-                {data.period}
+                {periodLabel}
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
