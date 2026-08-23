@@ -28,6 +28,9 @@ export function HomePage() {
             <RoughButton to="/cadastro-freela" variant="ghost" className="w-full sm:w-auto">
               Sou freela
             </RoughButton>
+            <RoughButton to="/sistema" variant="ink" className="w-full sm:w-auto">
+              O sistema
+            </RoughButton>
           </div>
         </PosterCard>
       </section>

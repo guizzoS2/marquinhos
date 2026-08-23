@@ -86,6 +86,7 @@ Sem seeds de bar/freela/caixa. Cadastro em `/cadastro/bar` e `/cadastro/freela`.
 | Rota | Tela |
 | --- | --- |
 | `/` | Landing |
+| `/sistema` | Como o sistema funciona (Bar \| Freela) |
 | `/login` | Gateway Bar \| Freela |
 | `/login/bar` `/login/freela` `/login/admin` | Login por papel |
 | `/cadastro-bar` `/cadastro-freela` | Cadastro real |

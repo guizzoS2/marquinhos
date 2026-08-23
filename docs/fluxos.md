@@ -37,6 +37,7 @@ Bar novo via `/cadastro-bar` nasce `incomplete`. Admin ativa em `/admin/tenants`
 | Rota | View | Faz |
 | --- | --- | --- |
 | `/` | `HomePage` | Landing. CTA real: `/cadastro-bar`, `/cadastro-freela` |
+| `/sistema` | `SistemaPage` | Como o sistema funciona. Split Bar (amarelo) \| Freela (preto). `?lado=bar` / `?lado=freela` |
 | `/login` | `AuthGatewayPage` | Split Bar \| Freela |
 | `/pessoal` | `PessoalPage` | Showcase público (nome parcial). Clique → `/login` |
 | `/freelas` | redirect | → `/pessoal` |

@@ -142,6 +142,11 @@ h3 {
   background: transparent;
 }
 
+.stamp-ink {
+  border-color: #111111;
+  color: #111111;
+}
+
 .sticker {
   display: inline-flex;
   align-items: center;
@@ -378,6 +383,158 @@ h3 {
 .bar-panel .rounded-md,
 .bar-panel .rounded-full {
   border-radius: 0;
+}
+
+/* Sistema — spine + screen shots (street / Mancha) */
+.system-page {
+  position: relative;
+}
+
+.system-spine {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .system-spine {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 6px;
+    transform: translateX(-50%);
+    background: #ffdb15;
+    box-shadow: -2px 0 0 #000000, 2px 0 0 #000000;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .system-page[data-focus='freela'] .system-spine {
+    background: #ffdb15;
+    box-shadow: none;
+  }
+
+  .system-page[data-focus='bar'] .system-spine {
+    background: #111111;
+    box-shadow: none;
+  }
+}
+
+.system-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 1.25rem;
+  width: 3px;
+  background: #111111;
+  pointer-events: none;
+}
+
+.system-freela .system-rail {
+  background: #ffdb15;
+}
+
+@media (min-width: 768px) {
+  .system-dual .system-rail {
+    display: none;
+  }
+}
+
+.system-node {
+  position: relative;
+  z-index: 3;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 3px solid #111111;
+  background: #ffdb15;
+  flex-shrink: 0;
+}
+
+.system-freela .system-node {
+  border-color: #ffdb15;
+  background: #111111;
+}
+
+.system-arm {
+  height: 3px;
+  background: #111111;
+  flex: 1 1 auto;
+  min-width: 0.75rem;
+}
+
+.system-freela .system-arm {
+  background: #ffdb15;
+}
+
+.system-shot {
+  border: 3px solid #111111;
+  box-shadow: 4px 4px 0 #111111;
+  overflow: hidden;
+  background: #ffffff;
+  color: #111111;
+}
+
+.system-freela .system-shot {
+  border-color: #ffdb15;
+  box-shadow: 4px 4px 0 #000000;
+  background: #111111;
+  color: #ffffff;
+}
+
+.system-shot-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 2px solid #111111;
+  background: #ffdb15;
+  color: #111111;
+}
+
+.system-freela .system-shot-bar {
+  background: #000000;
+  border-bottom-color: #ffdb15;
+  color: #ffdb15;
+}
+
+.system-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  background: #111111;
+}
+
+.system-freela .system-dot {
+  background: #ffdb15;
+}
+
+.system-chip {
+  min-height: 1.25rem;
+  padding: 0.15rem 0.4rem;
+  border: 2px solid #111111;
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+}
+
+.system-freela .system-chip {
+  border-color: #ffdb15;
+  color: #ffdb15;
+}
+
+.system-bar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.35rem;
+  border-bottom: 1px dashed color-mix(in srgb, #111111 28%, transparent);
+  font-size: 0.6rem;
+}
+
+.system-freela .system-bar-row {
+  border-bottom-color: color-mix(in srgb, #ffdb15 35%, transparent);
 }
 
 .bar-row {
