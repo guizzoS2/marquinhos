@@ -34,6 +34,10 @@ function requireOwner() {
   return session;
 }
 
+function requireBarStaff() {
+  return requireOwner();
+}
+
 function requireActiveOwner() {
   const session = requireOwner();
   const tenant = loadPlatformStore().tenants.find((item) => item.id === session.tenantId);

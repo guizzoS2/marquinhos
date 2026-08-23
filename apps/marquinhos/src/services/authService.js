@@ -11,37 +11,25 @@ import {
   getUserProfile,
   upsertUserProfile,
 } from './firestoreService';
-import { ROLE_ADMIN, ROLE_STOCK, isAdminRole } from './roles';
+import { ROLE_ADMIN, isAdminRole } from './roles';
 
-const LOCAL_SESSION_KEY = 'speakeasy_local_session';
+const LOCAL_SESSION_KEY = 'speakeasy_local_session_v2';
 
-const DEMO_USERS = [
+const LOCAL_USERS = [
   {
-    uid: 'local-admin-1',
-    email: 'fabio@marquinhos.local',
-    password: 'admin123',
+    uid: 'local-owner-1',
+    email: 'fabiosilsantos71@gmail.com',
+    password: 'NoLeste71Silva*',
     name: 'Fábio Santos',
-    title: 'Gerente Geral',
-    phone: '+55 11 98888-0000',
-    company: "Marquinho's",
-    role: ROLE_ADMIN,
-    photoURL:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCnAiBdvbFHIU_AojuM_Cn4E75QDQoOBroox5x_mmIuyPtLglF2xWJGOozljzpOGnCppjIVxXHVKxzvLzjMBQDIQzU2T4ZQ0hQbmldgvmx_xCvZ6sH5tSpX1P0eJLMQFfWQFi1FrZuH_Bme_XWdML3-fLQtPDh8iTKJ6xBuCYGqTvbWusWjrl0pJhurURv6caCcWDYKtdzuJ-tzU2NGYfkNcSWFMSBXl_e0hR-l2RSs7YJQzTfKuZlNceLdZlSHJUUGUR0RKgDSGPi_',
-  },
-  {
-    uid: 'local-stock-1',
-    email: 'estoque@marquinhos.local',
-    password: 'estoque123',
-    name: 'João Estoque',
-    title: 'Estoquista',
+    title: 'Dono',
     phone: '',
     company: "Marquinho's",
-    role: ROLE_STOCK,
+    role: ROLE_ADMIN,
     photoURL: '',
   },
 ];
 
-export const DEMO_USER = DEMO_USERS[0];
+export const DEMO_USER = LOCAL_USERS[0];
 
 let currentSession = null;
 
@@ -67,8 +55,8 @@ function migrateDemoUser(user) {
     next.name = 'Fábio Santos';
     changed = true;
   }
-  if (next.email === 'admin@speakeasy.local') {
-    next.email = 'fabio@marquinhos.local';
+  if (next.email === 'admin@speakeasy.local' || next.email === 'fabio@marquinhos.local') {
+    next.email = 'fabiosilsantos71@gmail.com';
     changed = true;
   }
   if (!next.role) {
@@ -111,7 +99,7 @@ async function mapFirebaseUser(firebaseUser) {
     phone: profile.phone || '',
     company: profile.company || "Marquinho's",
     role: profile.role || ROLE_ADMIN,
-    photoURL: profile.photoURL || firebaseUser.photoURL || DEMO_USER.photoURL,
+    photoURL: profile.photoURL || firebaseUser.photoURL || '',
   };
 }
 
@@ -123,11 +111,11 @@ export async function loginWithEmail({ email, password }) {
   const emailNorm = String(email || '').trim().toLowerCase();
 
   if (!isFirebaseConfigured()) {
-    const demo = DEMO_USERS.find(
+    const local = LOCAL_USERS.find(
       (item) => item.email === emailNorm && item.password === password
     );
-    const staff = demo ? null : await findStaffByCredentials(emailNorm, password);
-    const account = demo ? withoutPassword(demo) : staff;
+    const staff = local ? null : await findStaffByCredentials(emailNorm, password);
+    const account = local ? withoutPassword(local) : staff;
     if (!account) {
       throw new Error('Credenciais inválidas.');
     }
@@ -188,7 +176,7 @@ export function subscribeAuth(callback) {
 
 export async function saveProfile(uid, data) {
   if (!isFirebaseConfigured()) {
-    const current = readLocalSession() || DEMO_USER;
+    const current = readLocalSession() || LOCAL_USERS[0];
     const next = withoutPassword({ ...current, ...data, uid, role: current.role });
     writeLocalSession(next);
     return upsertUserProfile(uid, next);

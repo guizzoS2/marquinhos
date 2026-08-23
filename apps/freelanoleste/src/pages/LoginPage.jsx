@@ -5,12 +5,6 @@ import { PosterCard } from '../components/street/PosterCard';
 import { RoughButton } from '../components/street/RoughButton';
 import { StatusStamp } from '../components/street/StatusStamp';
 
-const demoAccounts = {
-  admin: { email: 'admin@freelanoleste.local', password: 'admin123' },
-  owner: { email: 'dono@bar.local', password: 'demo123' },
-  freela: { email: 'freela@freelanoleste.local', password: 'demo123' },
-};
-
 const copy = {
   owner: {
     title: 'Login do bar',
@@ -40,9 +34,8 @@ export function RoleLoginPage({ role }) {
   const { login, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const demo = demoAccounts[role];
-  const [email, setEmail] = useState(demo.email);
-  const [password, setPassword] = useState(demo.password);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   if (isAuthenticated) {

@@ -2,7 +2,7 @@
 
 Produto básico compartilhado: visão geral, fluxo de caixa, estoque, fornecedores, equipe.
 
-Hoje o código operacional ainda vive em `apps/marquinhos`. Na primeira feature usada pelos dois apps, o módulo sai para cá. Não copiar a pasta inteira.
+Núcleo operacional: visão, caixa, estoque, fornecedores, equipe. A plataforma já monta estas páginas em `/bar/*`. Não copiar o app.
 
-- Marquinho's consome este pacote com branding fixo.
-- FreelaNoLeste (tenant) consome o mesmo pacote com logo/cores do cliente.
+- Marquinho's: branding fixo (`#FFDB15`).
+- FreelaNoLeste: logo/cores do tenant (`--tenant-primary`).

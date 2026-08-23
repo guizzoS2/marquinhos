@@ -5,13 +5,12 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { BrandLogo } from '../components/layout/BrandLogo';
-import { isFirebaseConfigured } from '../services/firebase';
 import { homeForRole } from '../services/roles';
 
 export function LoginPage() {
   const { login, isAuthenticated, loading, user } = useAuth();
-  const [email, setEmail] = useState('fabio@marquinhos.local');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -55,13 +54,6 @@ export function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-
-        {!isFirebaseConfigured() ? (
-          <p className="text-xs text-on-surface-variant">
-            Demo dono: fabio@marquinhos.local / admin123. Estoque: estoque@marquinhos.local /
-            estoque123.
-          </p>
-        ) : null}
 
         {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
 

@@ -267,21 +267,9 @@ export async function completeStripeConnect(code) {
       return store.stripe;
     }
   } catch {
-    /* fallback local até existir API */
+    /* sem API Stripe */
   }
-  const store = loadFreelaStore();
-  store.stripe = {
-    connected: true,
-    accountId: 'acct_express_demo',
-    chargesEnabled: true,
-    balance: {
-      available: 124000,
-      pending: 18000,
-      currency: 'brl',
-    },
-  };
-  saveFreelaStore(store);
-  return store.stripe;
+  throw new Error('Não foi possível conectar o Stripe. Tente de novo.');
 }
 
 function centsToBrl(cents) {

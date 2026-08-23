@@ -1,35 +1,27 @@
-const SESSION_KEY = 'fnl_session';
+const SESSION_KEY = 'fnl_session_v3';
 const FREELA_ACCOUNTS_KEY = 'fnl_freela_accounts';
 const OWNER_ACCOUNTS_KEY = 'fnl_owner_accounts';
 
 const ACCOUNTS = [
   {
-    email: 'admin@freelanoleste.local',
-    password: 'admin123',
-    role: 'admin',
-    name: 'Admin FreelaNoLeste',
-  },
-  {
-    email: 'dono@bar.local',
-    password: 'demo123',
+    email: 'fabiosilsantos71@gmail.com',
+    password: 'NoLeste71Silva*',
     role: 'owner',
-    name: 'Dono do bar',
+    name: 'Fábio Santos',
     tenantId: 'marquinhos',
   },
   {
-    email: 'freela@freelanoleste.local',
-    password: 'demo123',
+    email: 'guilvieira409@gmail.com',
+    password: 'GvLeste#409mK7!',
     role: 'freela',
-    name: 'Freela demo',
-    id: 'f-demo',
+    name: 'Guil Vieira',
+    id: 'f-guilvieira',
   },
   {
-    email: 'estoque@bar.local',
-    password: 'demo123',
-    role: 'employee',
-    name: 'Estoquista do bar',
-    tenantId: 'marquinhos',
-    id: 'e-stock',
+    email: 'guilvieira409@gmail.com',
+    password: 'GvLeste#409mK7!',
+    role: 'admin',
+    name: 'Guil Vieira',
   },
 ];
 
@@ -63,7 +55,7 @@ export function listOwnerAccounts() {
 
 function loadStaffAccounts() {
   try {
-    const root = JSON.parse(localStorage.getItem('fnl_tenant_ops_v1') || '{}');
+    const root = JSON.parse(localStorage.getItem('fnl_tenant_ops_v3') || '{}');
     return Object.entries(root).flatMap(([tenantId, data]) =>
       (data?.staff?.people || []).map((person) => ({
         email: person.email,

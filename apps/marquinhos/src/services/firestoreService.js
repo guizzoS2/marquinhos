@@ -28,16 +28,7 @@ const DEFAULT_PRODUCT_IMAGE =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuATrb95GgrifNn5ZTFGKBOO3ST2xuzttKMuPO21tPew8Bzeb3UowFhw7W7JPuHD03armjXVgDMfWq79f_IxkS6Ant9g94kkvwghZGZz1tY_d-a1jqeZXTPyjUoEuQj3UzPK_KUKPOtL0yJA_Jqp9HA2EAh3wnjfpNPk8OEGoMmnqpuQ4txI8OKgIIPruQWqYtqLABnNoiIjSvCr1J3TujAb_QMUY71yBS2sQvj2j9OfKsyH2lckNOcmk1Lp6U5MJeVvbUlS7b3z4cVl';
 
 export const staffFallback = {
-  members: [
-    {
-      uid: 'local-stock-1',
-      email: 'estoque@marquinhos.local',
-      password: 'estoque123',
-      name: 'João Estoque',
-      title: 'Estoquista',
-      role: 'stock',
-    },
-  ],
+  members: [],
 };
 
 const CATEGORY_NATURE_FALLBACK = {
@@ -792,8 +783,8 @@ export async function getUserProfile(uid) {
     next.name = 'Fábio Santos';
     changed = true;
   }
-  if (next.email === 'admin@speakeasy.local') {
-    next.email = 'fabio@marquinhos.local';
+  if (next.email === 'admin@speakeasy.local' || next.email === 'fabio@marquinhos.local') {
+    next.email = 'fabiosilsantos71@gmail.com';
     changed = true;
   }
   return changed ? upsertUserProfile(uid, next) : profile;

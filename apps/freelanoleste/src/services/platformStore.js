@@ -1,12 +1,12 @@
-const STORE_KEY = 'fnl_platform_store';
+const STORE_KEY = 'fnl_platform_store_v2';
 const STORE_EVENT = 'fnl-platform-store';
 
 const seed = {
   kpis: {
-    globalRevenue: 'R$ 48.920',
-    activeSubscriptions: 12,
-    registeredFreelas: 37,
-    pastDue: 2,
+    globalRevenue: 'R$ 0',
+    activeSubscriptions: 1,
+    registeredFreelas: 0,
+    pastDue: 0,
   },
   tenants: [
     {
@@ -14,108 +14,30 @@ const seed = {
       name: "Marquinho's",
       slug: 'marquinhos',
       stripeStatus: 'active',
-      stripeSubscriptionId: 'sub_mq_001',
+      stripeSubscriptionId: null,
       primaryHex: '#FFDB15',
       logoDataUrl: '',
-      ownerEmail: 'fabio@marquinhos.local',
-    },
-    {
-      id: 'bar-leste',
-      name: 'Bar do Leste',
-      slug: 'bar-leste',
-      stripeStatus: 'past_due',
-      stripeSubscriptionId: 'sub_bl_014',
-      primaryHex: '#111111',
-      logoDataUrl: '',
-      ownerEmail: 'contato@bardoleste.local',
-    },
-    {
-      id: 'casa-amarela',
-      name: 'Casa Amarela',
-      slug: 'casa-amarela',
-      stripeStatus: 'canceled',
-      stripeSubscriptionId: 'sub_ca_008',
-      primaryHex: '#E6C400',
-      logoDataUrl: '',
-      ownerEmail: 'ola@casaamarela.local',
+      ownerEmail: 'fabiosilsantos71@gmail.com',
     },
   ],
-  freelas: [
-    { id: 'f1', name: 'Ricardo Alves', role: 'Barman', email: 'ricardo@freela.local', stripeConnect: 'connected' },
-    { id: 'f2', name: 'Marina Santos', role: 'Garçonete', email: 'marina@freela.local', stripeConnect: 'connected' },
-    { id: 'f3', name: 'Lucas Silva', role: 'Cozinha', email: 'lucas@freela.local', stripeConnect: 'pending' },
-  ],
-  tickets: [
-    {
-      id: 't1',
-      from: 'bar',
-      tenantId: 'marquinhos',
-      tenantName: "Marquinho's",
-      freelaId: 'f1',
-      freelaName: 'Ricardo Alves',
-      type: 'review',
-      subject: 'Review do freela após diária Stripe',
-      status: 'open',
-    },
-    {
-      id: 't2',
-      from: 'freela',
-      tenantId: 'bar-leste',
-      tenantName: 'Bar do Leste',
-      freelaId: 'f2',
-      freelaName: 'Marina Santos',
-      type: 'complaint',
-      subject: 'Atraso no split Stripe da diária',
-      status: 'open',
-    },
-    {
-      id: 't3',
-      from: 'freela',
-      tenantId: 'marquinhos',
-      tenantName: "Marquinho's",
-      freelaId: 'f3',
-      freelaName: 'Lucas Silva',
-      type: 'review',
-      subject: 'Review do bar após turno pago',
-      status: 'resolved',
-    },
-  ],
-  payments: [
-    {
-      id: 'pi_sub_01',
-      kind: 'subscription',
-      label: 'Assinatura SaaS',
-      party: "Marquinho's",
-      stripeId: 'in_mq_2201',
-      amount: 'R$ 189,00',
-      status: 'paid',
-    },
-    {
-      id: 'pi_split_01',
-      kind: 'split',
-      label: 'Diária — split plataforma + freela',
-      party: 'Ricardo Alves',
-      stripeId: 'tr_split_441',
-      amount: 'R$ 280,00',
-      status: 'paid',
-    },
-    {
-      id: 'pi_due_01',
-      kind: 'subscription',
-      label: 'Assinatura SaaS',
-      party: 'Bar do Leste',
-      stripeId: 'in_bl_2208',
-      amount: 'R$ 189,00',
-      status: 'past_due',
-    },
-  ],
+  freelas: [],
+  tickets: [],
+  payments: [],
 };
 
 function readStore() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return structuredClone(seed);
-    return { ...structuredClone(seed), ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    return {
+      ...structuredClone(seed),
+      ...parsed,
+      tenants: Array.isArray(parsed.tenants) ? parsed.tenants : seed.tenants,
+      freelas: Array.isArray(parsed.freelas) ? parsed.freelas : [],
+      tickets: Array.isArray(parsed.tickets) ? parsed.tickets : [],
+      payments: Array.isArray(parsed.payments) ? parsed.payments : [],
+    };
   } catch {
     return structuredClone(seed);
   }
@@ -194,7 +116,7 @@ export function setTenantStripeStatus(tenantId, stripeStatus) {
       return {
         ...item,
         stripeStatus: 'active',
-        stripeSubscriptionId: item.stripeSubscriptionId || `sub_mock_${item.id}`,
+        stripeSubscriptionId: item.stripeSubscriptionId || null,
       };
     }
     return {

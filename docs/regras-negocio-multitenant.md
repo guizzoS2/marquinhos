@@ -2,6 +2,8 @@
 
 A partir de agora o projeto se divide em **dois produtos**. Este documento registra as regras de negócio do multi-tenant e os requisitos definidos para a plataforma.
 
+Telas e fluxos: [`fluxos.md`](fluxos.md). Visual: [`design.md`](design.md).
+
 ---
 
 ## 1. Os dois produtos
@@ -60,7 +62,9 @@ Requisitos de identidade:
 - paleta de cores do estabelecimento;
 - nome / marca do bar no lugar da identidade Marquinho's.
 
-O que permanece igual: módulos (visão geral, fluxo de caixa, estoque, fornecedores, gestão de freelas, perfil).
+O que permanece igual: módulos operacionais (visão geral, fluxo de caixa, estoque, fornecedores, equipe do bar, perfil).
+
+Contratação de freela **não** é módulo operacional. Vive na plataforma: vitrine, propostas, chat, pagamentos Stripe. Equipe (`/bar/equipe`) = funcionários com login no painel. Vitrine (`/bar/vitrine`) = marketplace de freelas.
 
 O que muda por tenant: branding e dados.
 
@@ -170,20 +174,20 @@ Escopo mínimo:
 
 Requisitos explícitos desta etapa:
 
-- [ ] O projeto se divide em **dois**: Marquinho's e FreelaNoLeste
-- [ ] FreelaNoLeste é **multi-tenant**
-- [ ] Existe **painel admin** da plataforma
-- [ ] Clientes (donos de bar) **pagam para ter acesso**
-- [ ] Cada cliente recebe um **Marquinho's configurado**
-- [ ] Configuração inclui **logo** do cliente
-- [ ] Configuração inclui **cores** do cliente
-- [ ] Existe **login de usuários freelas**
-- [ ] Freelas **podem se cadastrar** para atuar na plataforma
-- [ ] Donos de bar **têm acesso aos freelas**
-- [ ] Existe **review de freela**
-- [ ] Existe **review de bar**
-- [ ] O dinheiro **passa pelo Stripe**
-- [ ] Há **split** para a plataforma e para o freela
+- [x] O projeto se divide em **dois**: Marquinho's e FreelaNoLeste
+- [x] FreelaNoLeste é **multi-tenant** (cliente; stores por `tenantId`)
+- [x] Existe **painel admin** da plataforma
+- [ ] Clientes (donos de bar) **pagam para ter acesso** — mock: admin ativa
+- [x] Cada cliente recebe um **painel operacional** (`@fnl/dashboard`)
+- [x] Configuração inclui **logo** do cliente
+- [x] Configuração inclui **cores** do cliente (`--tenant-primary`)
+- [x] Existe **login de usuários freelas**
+- [x] Freelas **podem se cadastrar** para atuar na plataforma
+- [x] Donos de bar **têm acesso aos freelas** (vitrine — hoje quebrada, ver §14)
+- [x] Existe **review de freela** (UI; gate errado, ver §8/§14)
+- [x] Existe **review de bar**
+- [ ] O dinheiro **passa pelo Stripe** — mock `tr_mock_*` / Connect demo
+- [ ] Há **split** para a plataforma e para o freela — taxa `null`
 - [ ] O **pagamento** (assinatura e diária) é feito pelo Stripe
 - [x] Um **repo só** (monorepo): sem fork e sem branch eterna por produto
 
@@ -229,7 +233,7 @@ Marquinho's original = tenant especial: mesmo dashboard, branding travado, sem m
 
 ### Extração do núcleo
 
-Não extrair `apps/marquinhos` inteiro de uma vez. Na primeira feature que os dois apps precisarem, o módulo sai para `packages/dashboard`. Até lá, `apps/marquinhos` **é** o produto básico.
+Não extrair `apps/marquinhos` inteiro de uma vez. Os módulos operacionais da plataforma **já saíram** para `packages/dashboard` (visão, caixa, estoque, fornecedores, equipe). Marquinho's original continua o tenant com branding travado. Feature nova de ops nasce no pacote.
 
 ---
 
@@ -238,11 +242,61 @@ Não extrair `apps/marquinhos` inteiro de uma vez. Na primeira feature que os do
 Pontos em aberto, para decisão posterior:
 
 - preço e ciclo da assinatura do bar;
-- percentual do split da plataforma;
+- percentual do split da plataforma (hoje `platformFee` vai `null`; líquido = bruto);
 - se o tenant é subdomínio, path ou domínio próprio;
-- se o freela vê um app próprio ou só o marketplace;
 - regras de cancelamento, reembolso e disputa;
 - obrigatoriedade de review após cada diária;
 - o que acontece com dados do tenant se a assinatura acabar.
 
-Enquanto isso não for definido, vale o que está nas seções 1–12.
+**Fechado no código:** o freela tem app próprio — hub em `/freela` (não só vitrine pública).
+
+Enquanto o resto não for definido, vale o que está nas seções 1–12. O mapa de telas e o que é mock está em [`fluxos.md`](fluxos.md). Visual: [`design.md`](design.md).
+
+---
+
+## 14. Implementação atual (mock local)
+
+A plataforma em `apps/freelanoleste` é **casca + stores em `localStorage`**. Isolamento de tenant existe no cliente (`tenantId` nas chaves). Não é isolamento de produção.
+
+| Peça | Hoje | Regra (1–12) |
+| --- | --- | --- |
+| Login | Portas separadas `/login/bar`, `/login/freela`, `/login/admin` | ✓ §2 |
+| Cadastro real | `/cadastro-bar`, `/cadastro-freela` | ✓ §6 |
+| Cadastro stub | `/cadastro/bar`, `/cadastro/freela` — só “enviado”, não persiste | viola §6 |
+| Assinatura | Admin ativa/bloqueia (`sub_mock_*`). Sem Checkout | intent §5; não Stripe |
+| Diária | Aceitar no chat cria `tr_mock_*`, espelha caixa, destrava review | viola §7–9 (accept ≠ pago) |
+| Split | Linha no admin; taxa `null` | viola §9 até % existir |
+| Connect | Um blob global `freelaStore.stripe` para todos os freelas | viola §9.2 |
+| Review | Formulário após `ACEITA`, sem data de serviço nem PI | viola §8 |
+| White-label | Logo + `--tenant-primary` no painel do bar. Default `#FFDB15` | §4; default ainda Marquinho's |
+| Ops do bar | `@fnl/dashboard` montado em `/bar/*` | extraído; em uso |
+| Staff | Login no `/login/bar`; permissões só escondem nav | UI ≠ API |
+
+Bugs conhecidos da revisão (não corrigidos nesta atualização de docs):
+
+1. `requireBarStaff()` em `ownerApi.js` **não existe** — `/bar/vitrine`, `/bar/propostas`, `/bar/perfil`, `/bar/pagamentos` quebram no load.
+2. `reaisToCents` trata inteiro ≥ 1000 como centavos — diária de R$ 1000 vira R$ 10 no caixa.
+3. Seed `estoque@bar.local` (`employee`) não ganha permissões; login cai em `/`.
+4. APIs de contratar/pagar aceitam qualquer sessão de bar (staff incluso).
+
+---
+
+## 15. Staff e papéis no painel do bar
+
+Além dos três atores da §2, o tenant tem **funcionário**:
+
+| Role | Porta | O que vê |
+| --- | --- | --- |
+| `owner` | `/login/bar` | Tudo do tenant |
+| `staff` | `/login/bar` | Telas em `BAR_PERMISSIONS` (Equipe) |
+| `employee` | seed quebrado | Sem perms; não usar |
+
+Chaves: `overview`, `caixa`, `estoque`, `fornecedores`, `equipe`, `vitrine`, `propostas`, `perfil`, `pagamentos`. Chat herda `propostas`. Default de staff novo: visão + caixa + estoque.
+
+Regra de produto: contratar/pagar/avaliar freela é do **dono**, salvo permissão explícita. Hoje a API não aplica isso.
+
+---
+
+## 16. Extração do dashboard
+
+`packages/dashboard` **já é** o núcleo operacional da plataforma (`/bar`, `/bar/caixa`, `/bar/estoque`, `/bar/fornecedores`, `/bar/equipe`). `apps/marquinhos` continua o primeiro tenant (amarelo travado). Não copiar o app. Feature nova de caixa/estoque nasce no pacote.

@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'speakeasy_firestore_mirror';
+const STORAGE_KEY = 'speakeasy_firestore_mirror_v2';
 
 function readStore() {
   try {

@@ -1,4 +1,5 @@
-export const MAX_PHOTO_BYTES = 400 * 1024;
+export const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
+const MAX_PHOTO_LABEL = '4MB';
 
 export function dataUrlBytes(dataUrl) {
   if (!dataUrl) return 0;
@@ -11,14 +12,14 @@ export function dataUrlBytes(dataUrl) {
 export function assertPhotoDataUrl(dataUrl) {
   if (!dataUrl) return;
   if (dataUrlBytes(dataUrl) > MAX_PHOTO_BYTES) {
-    throw new Error('Foto acima de 400KB. Escolha outra.');
+    throw new Error(`Foto acima de ${MAX_PHOTO_LABEL}. Escolha outra.`);
   }
 }
 
 export function fileToDataUrl(file) {
   if (!file) return Promise.resolve('');
   if (file.size > MAX_PHOTO_BYTES) {
-    return Promise.reject(new Error('Foto acima de 400KB. Escolha outra.'));
+    return Promise.reject(new Error(`Foto acima de ${MAX_PHOTO_LABEL}. Escolha outra.`));
   }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

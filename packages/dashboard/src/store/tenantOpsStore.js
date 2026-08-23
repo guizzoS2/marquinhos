@@ -1,14 +1,7 @@
-import {
-  cashFlowFallback,
-  expenseCategories,
-  freelancersFallback,
-  inventoryFallback,
-  overviewFallback,
-  suppliersFallback,
-} from '../services/fallbacks';
+import { expenseCategories } from '../services/fallbacks';
 import { buildCashFlowSummary } from '../services/cashFlowUtils';
 
-const STORE_KEY = 'fnl_tenant_ops_v1';
+const STORE_KEY = 'fnl_tenant_ops_v3';
 const STORE_EVENT = 'fnl-tenant-ops';
 export const SEEDED_TENANT_ID = 'marquinhos';
 
@@ -21,8 +14,8 @@ function clone(value) {
 function emptyWeek() {
   return ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'].map((day) => ({
     day,
-    revenue: 20,
-    expense: 15,
+    revenue: 0,
+    expense: 0,
     highlight: day === 'SEX',
   }));
 }
@@ -86,17 +79,7 @@ function emptyStaff() {
   return { people: [] };
 }
 
-function seedTenant(tenantId) {
-  if (tenantId === SEEDED_TENANT_ID) {
-    return {
-      overview: clone(overviewFallback),
-      cashFlow: clone(cashFlowFallback),
-      inventory: clone(inventoryFallback),
-      freelancers: clone(freelancersFallback),
-      suppliers: clone(suppliersFallback),
-      staff: emptyStaff(),
-    };
-  }
+function seedTenant(_tenantId) {
   return {
     overview: {
       weeklyPerformance: emptyWeek(),

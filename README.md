@@ -5,14 +5,14 @@ Monorepo dos **dois produtos**, um `main`, sem fork.
 | Pacote | Papel |
 | --- | --- |
 | `apps/marquinhos` | Bar original (tenant com branding fixo). Painel operacional **implementado**. |
-| `apps/freelanoleste` | Plataforma MT: landing, admin, cadastro de freela, marketplace (casca). |
+| `apps/freelanoleste` | Plataforma MT: landing, admin, marketplace, painel do bar (`@fnl/dashboard`), hub freela. |
 | `apps/api` | API mock do painel. |
-| `packages/dashboard` | Núcleo operacional compartilhado (extração módulo a módulo). |
+| `packages/dashboard` | Núcleo operacional **em uso** no `/bar/*` da plataforma. |
 | `packages/ui` | Tokens de tema (logo/cores) para white-label. |
 
 Marquinho's original é o primeiro tenant (amarelo `#FFDB15`). Cliente da plataforma recebe o mesmo painel, com logo e cores dele.
 
-Regras de negócio, MT e GitHub: [`docs/regras-negocio-multitenant.md`](docs/regras-negocio-multitenant.md).
+Docs: [`regras`](docs/regras-negocio-multitenant.md) · [`fluxos`](docs/fluxos.md) · [`design`](docs/design.md).
 
 ```
 apps/marquinhos          produto básico (hoje o código vive aqui)
@@ -38,12 +38,26 @@ npm run dev:plataforma    # :5174
 npm run dev:api           # :3333 mock
 ```
 
-### Marquinho's — login demo (modo local)
+### Marquinho's — login (modo local)
 
-- E-mail: `fabio@marquinhos.local`
-- Senha: `admin123`
+- E-mail: `fabiosilsantos71@gmail.com`
 
-Sem Firebase: `localStore`. Com Firebase: copie `apps/marquinhos/.env.example` → `.env` (**sem** `VITE_`).
+Sem Firebase: conta local. Com Firebase: `apps/marquinhos/.env.example` → `.env` (prefixo `FIREBASE_`, sem `VITE_`) e o mesmo usuário no Auth.
+
+### Vercel — projeto Marquinho's
+
+Root Directory = raiz do repo (vazio / `.`). **Não** apontar para `apps/marquinhos`.
+
+| Campo | Valor |
+| --- | --- |
+| Framework Preset | Vite |
+| Build Command | `npm run build -w @fnl/marquinhos` |
+| Output Directory | `apps/marquinhos/dist` |
+| Install Command | default (`npm install`) |
+
+SPA: `vercel.json` na raiz reescreve rotas para `index.html`.
+
+Firebase no deploy: Settings → Environment Variables com as chaves de `apps/marquinhos/.env.example`. Sem isso o app cai no modo local. Crie o usuário no Firebase Auth (e-mail/senha).
 
 ### Rotas Marquinho's
 
@@ -57,15 +71,30 @@ Sem Firebase: `localStore`. Com Firebase: copie `apps/marquinhos/.env.example` �
 | `/freelancers` | Equipe do bar |
 | `/perfil` | Perfil |
 
+### FreelaNoLeste — contas (`:5174`)
+
+| E-mail | Papel | Login |
+| --- | --- | --- |
+| `fabiosilsantos71@gmail.com` | Dono Marquinho's | `/login/bar` |
+| `guilvieira409@gmail.com` | Freela | `/login/freela` |
+| `guilvieira409@gmail.com` | Admin plataforma | `/login/admin` |
+
+Sem seeds de bar/freela/caixa. Cadastro em `/cadastro/bar` e `/cadastro/freela`.
+
 ### Rotas FreelaNoLeste
 
 | Rota | Tela |
 | --- | --- |
-| `/` | Landing da plataforma |
-| `/login` | Login (dono / freela / admin) |
-| `/cadastro-freela` | Cadastro de freela |
-| `/freelas` | Lista para donos |
-| `/admin` | Painel da plataforma |
+| `/` | Landing |
+| `/login` | Gateway Bar \| Freela |
+| `/login/bar` `/login/freela` `/login/admin` | Login por papel |
+| `/cadastro-bar` `/cadastro-freela` | Cadastro real |
+| `/pessoal` | Showcase público (`/freelas` redireciona) |
+| `/admin` `/admin/noites` `/admin/tenants` `/admin/usuarios` `/admin/financeiro` | Admin |
+| `/bar` `/bar/caixa` `/bar/estoque` `/bar/fornecedores` `/bar/equipe` | Ops (`@fnl/dashboard`) |
+| `/bar/vitrine` `/bar/propostas` `/bar/chat/:id` | Contratar |
+| `/bar/perfil` `/bar/pagamentos` | Conta do bar |
+| `/freela` | Hub (vagas, chat `?chat=`, finance `?finance=open`) |
 
 ---
 

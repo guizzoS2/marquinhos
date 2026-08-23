@@ -1,5 +1,6 @@
 import { listFreelaProfiles } from './freelaStore';
 import { loadOwnerStore } from './ownerStore';
+import { loadPlatformStore } from './platformStore';
 
 function partialName(fullName) {
   const parts = String(fullName)
@@ -22,12 +23,6 @@ function initials(fullName) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-const seedBars = [
-  { id: 'b-mq', tenantId: 'marquinhos', kind: 'bar', name: "Marquinho's", specialty: 'Bar', rating: 4.5 },
-  { id: 'b-bl', tenantId: 'bar-leste', kind: 'bar', name: 'Bar do Leste', specialty: 'Bar', rating: 4.2 },
-  { id: 'b-ca', tenantId: 'casa-amarela', kind: 'bar', name: 'Casa Amarela', specialty: 'Bar', rating: 4.8 },
-];
-
 function barRating(profile, fallback) {
   const reviews = profile?.reviews || [];
   if (!reviews.length) return fallback;
@@ -49,15 +44,20 @@ function toCard(item) {
 
 export function fetchShowcase() {
   const owner = loadOwnerStore();
-  const bars = seedBars.map((bar) => {
-    const profile = owner.profiles[bar.tenantId];
-    return {
-      ...bar,
-      name: profile?.name || bar.name,
-      rating: barRating(profile, bar.rating),
-      photoDataUrl: profile?.photoDataUrl || '',
-    };
-  });
+  const bars = loadPlatformStore()
+    .tenants.filter((tenant) => tenant.stripeStatus === 'active')
+    .map((tenant) => {
+      const profile = owner.profiles[tenant.id];
+      return {
+        id: `b-${tenant.id}`,
+        tenantId: tenant.id,
+        kind: 'bar',
+        name: profile?.name || tenant.name,
+        specialty: 'Bar',
+        rating: barRating(profile, 0),
+        photoDataUrl: profile?.photoDataUrl || '',
+      };
+    });
   const freelas = listFreelaProfiles().map((person) => ({
     id: person.id,
     kind: 'freela',
