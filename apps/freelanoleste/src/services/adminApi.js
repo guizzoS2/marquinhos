@@ -159,9 +159,9 @@ export function blockTenant(tenantId) {
   return fetchTenants();
 }
 
-export function createTenantAsAdmin({ barName, slug, ownerName, ownerEmail, password }) {
+export async function createTenantAsAdmin({ barName, slug, ownerName, ownerEmail, password }) {
   requireAdmin();
-  assertEmailAvailable(ownerEmail);
+  await assertEmailAvailable(ownerEmail);
   if (!String(ownerName || '').trim() || !password) {
     throw new Error('Preencha nome do dono, e-mail e senha.');
   }
@@ -170,12 +170,15 @@ export function createTenantAsAdmin({ barName, slug, ownerName, ownerEmail, pass
     slug,
     ownerEmail,
   });
-  registerOwnerAccount({
-    email: ownerEmail,
-    password,
-    name: ownerName,
-    tenantId: tenant.id,
-  });
+  await registerOwnerAccount(
+    {
+      email: ownerEmail,
+      password,
+      name: ownerName,
+      tenantId: tenant.id,
+    },
+    { keepCurrentUser: true }
+  );
   ensureBarProfile(tenant.id, tenant.name);
   return tenant;
 }

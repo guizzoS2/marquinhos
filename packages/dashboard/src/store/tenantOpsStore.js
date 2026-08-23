@@ -7,6 +7,22 @@ export const SEEDED_TENANT_ID = 'marquinhos';
 
 const listeners = new Set();
 
+let memoryRoot = null;
+let persistCloud = null;
+
+export function bindTenantOpsCloud(persist) {
+  persistCloud = persist;
+}
+
+export function replaceTenantOpsRoot(root) {
+  memoryRoot = root && typeof root === 'object' ? root : {};
+  localStorage.setItem(STORE_KEY, JSON.stringify(memoryRoot));
+}
+
+export function createEmptyTenantOps(tenantId) {
+  return seedTenant(tenantId);
+}
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -95,18 +111,30 @@ function seedTenant(_tenantId) {
 }
 
 function loadRoot() {
+  if (memoryRoot && typeof memoryRoot === 'object') {
+    return memoryRoot;
+  }
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return {};
+    if (!raw) {
+      memoryRoot = {};
+      return memoryRoot;
+    }
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    memoryRoot = parsed && typeof parsed === 'object' ? parsed : {};
+    return memoryRoot;
   } catch {
-    return {};
+    memoryRoot = {};
+    return memoryRoot;
   }
 }
 
 function saveRoot(root) {
+  memoryRoot = root;
   localStorage.setItem(STORE_KEY, JSON.stringify(root));
+  if (persistCloud) {
+    persistCloud(root);
+  }
   listeners.forEach((fn) => fn());
   window.dispatchEvent(new Event(STORE_EVENT));
 }

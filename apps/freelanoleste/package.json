@@ -11,6 +11,7 @@
   "dependencies": {
     "@fnl/dashboard": "*",
     "@fnl/ui": "*",
+    "firebase": "^12.17.1",
     "@tanstack/react-query": "^5.101.4",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.8",

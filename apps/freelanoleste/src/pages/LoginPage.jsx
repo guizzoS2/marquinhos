@@ -42,11 +42,11 @@ export function RoleLoginPage({ role }) {
     return <Navigate to={location.state?.from || homeFor(user.role)} replace />;
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError('');
     try {
-      const session = login({ email, password, role });
+      const session = await login({ email, password, role });
       navigate(location.state?.from || homeFor(session.role), { replace: true });
     } catch (err) {
       setError(err.message || 'Falha no login.');

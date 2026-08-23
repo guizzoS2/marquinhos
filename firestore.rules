@@ -1,0 +1,290 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: Firebase Auth uid
+    // Fields:
+    //   - email: string (required, email format, immutable)
+    //   - name: string (required, 1-80)
+    //   - roles: list (required, values admin|owner|freela|staff, immutable except admin/bootstrap)
+    //   - tenantId: string|null (optional, <=40)
+    //   - freelaId: string|null (optional, <=40)
+    //   - barRole: string optional (<=20)
+    //   - title, phone, company, photoURL: string optional
+    //   - permissions: list optional (<=20)
+    //   - createdAt, updatedAt: string optional
+    //   - uid: string optional (immutable, must match doc id)
+    //
+    // Collection: emails
+    // Document ID: normalized email
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //
+    // Collection: fnl / Document: platform
+    //   - kpis: map, tenants/freelas/tickets/payments: lists
+    //
+    // Collection: fnl / Document: freela
+    //   - profiles, jobs, proposals, rooms, history: lists; messages, stripe: maps
+    //
+    // Collection: fnl / Document: owner
+    //   - catalog: list; profiles, stripe: maps
+    //
+    // Collection: fnl / Document: accounts
+    //   - owners, freelas, admins: lists (no passwords)
+    //
+    // Collection: fnl / Document: showcase
+    //   - cards: list (public vitrine, no emails)
+    //
+    // Collection: tenants/{tenantId}/data / Document: ops
+    //   - overview, cashFlow, inventory, freelancers, suppliers, staff: maps
+    //
+    // Collection: dashboard / Document: overview|cashFlow|inventory|freelancers|suppliers|staff
+    //   - map blobs (legacy Marquinho's)
+    //
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userExists() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isValidEmail(email) {
+      return email is string
+        && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function isBootstrapAdmin() {
+      return isAuthenticated()
+        && request.auth.token.email == 'guilvieira409@gmail.com';
+    }
+
+    function isPlatformAdmin() {
+      return userExists() && userDoc().roles.hasAny(['admin']);
+    }
+
+    function isFreelaUser() {
+      return userExists() && userDoc().roles.hasAny(['freela']);
+    }
+
+    function isBarUser() {
+      return userExists() && userDoc().roles.hasAny(['owner', 'staff']);
+    }
+
+    function isOwnerOf(tenantId) {
+      return isBarUser() && userDoc().tenantId == tenantId;
+    }
+
+    function isMarquinhosOperator() {
+      return isOwnerOf('marquinhos')
+        || (userExists() && userDoc().barRole in ['admin', 'stock']);
+    }
+
+    function optionalString(data, field, maxLen) {
+      return !(field in data)
+        || data[field] == null
+        || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function optionalId(data, field) {
+      return !(field in data)
+        || data[field] == null
+        || (data[field] is string && data[field].size() > 0 && data[field].size() <= 40);
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasOnly([
+          'email', 'name', 'roles', 'role', 'tenantId', 'freelaId', 'barRole',
+          'title', 'phone', 'company', 'photoURL', 'permissions',
+          'createdAt', 'updatedAt', 'uid'
+        ])
+        && isValidEmail(data.email)
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 80
+        && data.roles is list
+        && data.roles.size() > 0
+        && data.roles.size() <= 4
+        && data.roles.hasOnly(['admin', 'owner', 'freela', 'staff'])
+        && optionalId(data, 'tenantId')
+        && optionalId(data, 'freelaId')
+        && optionalString(data, 'barRole', 20)
+        && optionalString(data, 'title', 80)
+        && optionalString(data, 'phone', 40)
+        && optionalString(data, 'company', 80)
+        && optionalString(data, 'photoURL', 2000)
+        && optionalString(data, 'createdAt', 40)
+        && optionalString(data, 'updatedAt', 40)
+        && optionalString(data, 'uid', 128)
+        && (!('permissions' in data)
+          || data.permissions == null
+          || (data.permissions is list && data.permissions.size() <= 20))
+        && (!('uid' in data) || data.uid == null || data.uid == request.auth.uid
+          || isPlatformAdmin() || isBootstrapAdmin());
+    }
+
+    function isSelfRoleCreate(data) {
+      return data.roles.hasOnly(['owner'])
+        || data.roles.hasOnly(['freela'])
+        || data.roles.hasOnly(['staff']);
+    }
+
+    function isValidEmailDoc(data) {
+      return data.keys().hasOnly(['uid', 'email'])
+        && data.uid is string
+        && data.uid.size() > 0
+        && data.uid.size() <= 128
+        && isValidEmail(data.email);
+    }
+
+    function isValidPlatform(data) {
+      return data.keys().hasAll(['kpis', 'tenants', 'tickets', 'payments'])
+        && data.kpis is map
+        && data.tenants is list && data.tenants.size() <= 200
+        && data.tickets is list && data.tickets.size() <= 500
+        && data.payments is list && data.payments.size() <= 2000;
+    }
+
+    function isValidFreelaStore(data) {
+      return data.keys().hasAll(['profiles', 'jobs', 'proposals', 'rooms', 'messages', 'history'])
+        && data.profiles is list && data.profiles.size() <= 500
+        && data.jobs is list && data.jobs.size() <= 1000
+        && data.proposals is list && data.proposals.size() <= 2000
+        && data.rooms is list && data.rooms.size() <= 2000
+        && data.messages is map
+        && data.history is list && data.history.size() <= 2000;
+    }
+
+    function isValidOwnerStore(data) {
+      return data.keys().hasAll(['catalog', 'profiles', 'stripe'])
+        && data.catalog is list && data.catalog.size() <= 500
+        && data.profiles is map
+        && data.stripe is map;
+    }
+
+    function isValidAccounts(data) {
+      return data.keys().hasAll(['owners', 'freelas', 'admins'])
+        && data.owners is list && data.owners.size() <= 500
+        && data.freelas is list && data.freelas.size() <= 500
+        && data.admins is list && data.admins.size() <= 20;
+    }
+
+    function isValidShowcase(data) {
+      return data.keys().hasOnly(['cards', 'updatedAt'])
+        && data.cards is list
+        && data.cards.size() <= 500
+        && optionalString(data, 'updatedAt', 40);
+    }
+
+    function isValidOps(data) {
+      return data.keys().hasAll(['overview', 'cashFlow', 'inventory', 'freelancers', 'suppliers', 'staff'])
+        && data.overview is map
+        && data.cashFlow is map
+        && data.inventory is map
+        && data.freelancers is map
+        && data.suppliers is map
+        && data.staff is map;
+    }
+
+    function isValidDashboardDoc() {
+      return request.resource.data is map
+        && request.resource.data.keys().size() <= 40;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isPlatformAdmin() || isBootstrapAdmin();
+
+      allow create: if isValidUser(request.resource.data)
+        && (
+          (isOwner(userId) && isSelfRoleCreate(request.resource.data))
+          || isPlatformAdmin()
+          || (isBootstrapAdmin() && isOwner(userId)
+            && request.resource.data.roles.hasOnly(['admin', 'freela']))
+          || (isBarUser()
+            && request.resource.data.roles.hasOnly(['staff'])
+            && request.resource.data.tenantId == userDoc().tenantId)
+        );
+
+      allow update: if isValidUser(request.resource.data)
+        && (
+          (isOwner(userId)
+            && areImmutableFieldsUnchanged(['roles', 'email', 'tenantId', 'freelaId', 'uid']))
+          || isPlatformAdmin()
+          || (isBootstrapAdmin() && isOwner(userId))
+        );
+
+      allow delete: if isPlatformAdmin();
+    }
+
+    match /emails/{emailId} {
+      allow get: if isAuthenticated();
+      allow create: if isValidEmailDoc(request.resource.data)
+        && (
+          request.resource.data.uid == request.auth.uid
+          || isPlatformAdmin()
+          || isBootstrapAdmin()
+          || isBarUser()
+        );
+      allow update, delete: if isPlatformAdmin();
+      allow list: if isPlatformAdmin();
+    }
+
+    match /fnl/{docId} {
+      allow read: if docId == 'showcase'
+        || (isAuthenticated() && docId in ['platform', 'freela', 'owner'])
+        || (isPlatformAdmin() && docId == 'accounts');
+
+      allow create, update: if isAuthenticated()
+        && (
+          (docId == 'platform' && (isPlatformAdmin() || isBarUser())
+            && isValidPlatform(request.resource.data))
+          || (docId == 'freela' && (isFreelaUser() || isPlatformAdmin() || isBarUser())
+            && isValidFreelaStore(request.resource.data))
+          || (docId == 'owner' && (isBarUser() || isPlatformAdmin())
+            && isValidOwnerStore(request.resource.data))
+          || (docId == 'accounts' && (isPlatformAdmin() || isBootstrapAdmin())
+            && isValidAccounts(request.resource.data))
+          || (docId == 'showcase' && isValidShowcase(request.resource.data))
+        );
+
+      allow delete: if isPlatformAdmin();
+    }
+
+    match /tenants/{tenantId}/data/{docId} {
+      allow read, delete: if isPlatformAdmin() || isOwnerOf(tenantId);
+
+      allow create, update: if (isPlatformAdmin() || isOwnerOf(tenantId))
+        && (
+          (docId == 'ops' && isValidOps(request.resource.data))
+          || (docId != 'ops' && request.resource.data is map)
+        );
+    }
+
+    match /dashboard/{docId} {
+      allow read: if isPlatformAdmin() || isMarquinhosOperator();
+      allow create, update: if (isPlatformAdmin() || isMarquinhosOperator())
+        && isValidDashboardDoc();
+      allow delete: if isPlatformAdmin();
+    }
+  }
+}

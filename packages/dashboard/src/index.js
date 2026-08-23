@@ -1,7 +1,13 @@
 export const DASHBOARD_PACKAGE = '@fnl/dashboard';
 
 export { createTenantOpsApi, mirrorPlatformDailyToCashFlow } from './services/tenantOpsService';
-export { subscribeTenantOpsStore, listStaffAccounts } from './store/tenantOpsStore';
+export {
+  subscribeTenantOpsStore,
+  listStaffAccounts,
+  bindTenantOpsCloud,
+  replaceTenantOpsRoot,
+  createEmptyTenantOps,
+} from './store/tenantOpsStore';
 export {
   BAR_PERMISSIONS,
   DEFAULT_STAFF_PERMISSIONS,

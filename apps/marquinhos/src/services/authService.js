@@ -98,7 +98,7 @@ async function mapFirebaseUser(firebaseUser) {
     title: profile.title || 'Administrador',
     phone: profile.phone || '',
     company: profile.company || "Marquinho's",
-    role: profile.role || ROLE_ADMIN,
+    role: profile.barRole || profile.role || ROLE_ADMIN,
     photoURL: profile.photoURL || firebaseUser.photoURL || '',
   };
 }

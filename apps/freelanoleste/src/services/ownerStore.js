@@ -1,8 +1,8 @@
-const STORE_KEY = 'fnl_owner_store_v2';
+import { PATHS, peekDoc, writeCloudDoc } from './cloud';
 
 export const FREELA_TAGS = ['barman', 'garçom', 'cozinha', 'drinks', 'eventos'];
 
-const seed = {
+export const OWNER_SEED = {
   catalog: [],
   profiles: {
     marquinhos: {
@@ -34,25 +34,16 @@ function defaultProfile(tenantId, name) {
 }
 
 export function loadOwnerStore() {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        catalog: Array.isArray(parsed.catalog) ? parsed.catalog : [],
-        profiles: { ...seed.profiles, ...parsed.profiles },
-        stripe: { ...seed.stripe, ...parsed.stripe },
-      };
-    }
-  } catch {
-    /* seed */
-  }
-  localStorage.setItem(STORE_KEY, JSON.stringify(seed));
-  return structuredClone(seed);
+  const parsed = peekDoc(PATHS.owner, structuredClone(OWNER_SEED));
+  return {
+    catalog: Array.isArray(parsed.catalog) ? parsed.catalog : [],
+    profiles: { ...OWNER_SEED.profiles, ...parsed.profiles },
+    stripe: { ...OWNER_SEED.stripe, ...parsed.stripe },
+  };
 }
 
 export function saveOwnerStore(store) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  writeCloudDoc(PATHS.owner, store);
   return store;
 }
 

@@ -1,7 +1,8 @@
-const STORE_KEY = 'fnl_platform_store_v2';
+import { PATHS, peekDoc, writeCloudDoc } from './cloud';
+
 const STORE_EVENT = 'fnl-platform-store';
 
-const seed = {
+export const PLATFORM_SEED = {
   kpis: {
     globalRevenue: 'R$ 0',
     activeSubscriptions: 1,
@@ -26,25 +27,19 @@ const seed = {
 };
 
 function readStore() {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return structuredClone(seed);
-    const parsed = JSON.parse(raw);
-    return {
-      ...structuredClone(seed),
-      ...parsed,
-      tenants: Array.isArray(parsed.tenants) ? parsed.tenants : seed.tenants,
-      freelas: Array.isArray(parsed.freelas) ? parsed.freelas : [],
-      tickets: Array.isArray(parsed.tickets) ? parsed.tickets : [],
-      payments: Array.isArray(parsed.payments) ? parsed.payments : [],
-    };
-  } catch {
-    return structuredClone(seed);
-  }
+  const parsed = peekDoc(PATHS.platform, structuredClone(PLATFORM_SEED));
+  return {
+    ...structuredClone(PLATFORM_SEED),
+    ...parsed,
+    tenants: Array.isArray(parsed.tenants) ? parsed.tenants : PLATFORM_SEED.tenants,
+    freelas: Array.isArray(parsed.freelas) ? parsed.freelas : [],
+    tickets: Array.isArray(parsed.tickets) ? parsed.tickets : [],
+    payments: Array.isArray(parsed.payments) ? parsed.payments : [],
+  };
 }
 
 function writeStore(next) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(next));
+  writeCloudDoc(PATHS.platform, next);
   window.dispatchEvent(new Event(STORE_EVENT));
 }
 

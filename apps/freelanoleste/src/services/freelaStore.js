@@ -1,6 +1,5 @@
-import { loadRegisteredFreelaAccounts } from './session';
+import { PATHS, peekDoc, writeCloudDoc } from './cloud';
 
-const STORE_KEY = 'fnl_freela_store_v2';
 const STORE_EVENT = 'fnl-freela-store';
 
 export const PROPOSAL_STATUS = {
@@ -21,7 +20,7 @@ function uid(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-const seed = {
+export const FREELA_SEED = {
   profiles: [
     {
       id: 'f-guilvieira',
@@ -90,25 +89,9 @@ function normalizeProfile(item = {}, fallback = {}) {
   };
 }
 
-function hydrateRegisteredProfiles(profiles) {
-  const accounts = loadRegisteredFreelaAccounts();
-  return accounts.reduce((list, account) => {
-    const exists = list.some((item) => item.id === account.id || item.email === account.email);
-    if (exists) return list;
-    return [
-      ...list,
-      normalizeProfile({
-        id: account.id,
-        name: account.name,
-        email: account.email,
-      }),
-    ];
-  }, profiles);
-}
-
 function migrateProfiles(store) {
   const fromList = Array.isArray(store.profiles) ? store.profiles : [];
-  const merged = mergeById(fromList, seed.profiles);
+  const merged = mergeById(fromList, FREELA_SEED.profiles);
   if (store.profile?.id) {
     const idx = merged.findIndex((item) => item.id === store.profile.id);
     if (idx >= 0) {
@@ -117,12 +100,10 @@ function migrateProfiles(store) {
       merged.push(store.profile);
     }
   }
-  return hydrateRegisteredProfiles(
-    merged.map((item) => {
-      const fallback = seed.profiles.find((seedItem) => seedItem.id === item.id) || {};
-      return normalizeProfile(item, fallback);
-    })
-  );
+  return merged.map((item) => {
+    const fallback = FREELA_SEED.profiles.find((seedItem) => seedItem.id === item.id) || {};
+    return normalizeProfile(item, fallback);
+  });
 }
 
 function inferTenantId(barName) {
@@ -143,17 +124,17 @@ export function hasReview(review) {
 }
 
 function migrate(store) {
-  const jobs = mergeById(store.jobs, seed.jobs).map((job) => ({
+  const jobs = mergeById(store.jobs, FREELA_SEED.jobs).map((job) => ({
     ...job,
     visibility: job.visibility === 'invite' ? 'invite' : 'open',
     invitedFreelaIds: Array.isArray(job.invitedFreelaIds) ? job.invitedFreelaIds : [],
   }));
-  const proposals = mergeById(store.proposals, seed.proposals).map((proposal) => ({
+  const proposals = mergeById(store.proposals, FREELA_SEED.proposals).map((proposal) => ({
     ...proposal,
     freelaId: proposal.freelaId || '',
     freelaName: proposal.freelaName || 'Freela',
   }));
-  const rooms = mergeById(store.rooms, seed.rooms).map((room) => {
+  const rooms = mergeById(store.rooms, FREELA_SEED.rooms).map((room) => {
     const job = jobs.find((item) => item.id === room.jobId);
     const proposal = proposals.find((item) => item.id === room.proposalId);
     return {
@@ -162,8 +143,8 @@ function migrate(store) {
       freelaName: room.freelaName || proposal?.freelaName || 'Freela',
     };
   });
-  const messages = { ...seed.messages, ...store.messages };
-  const history = mergeById(store.history, seed.history).map((item) => ({
+  const messages = { ...FREELA_SEED.messages, ...store.messages };
+  const history = mergeById(store.history, FREELA_SEED.history).map((item) => ({
     ...item,
     freelaId: item.freelaId || '',
     tenantId: item.tenantId || inferTenantId(item.barName),
@@ -177,23 +158,11 @@ function migrate(store) {
 }
 
 export function loadFreelaStore() {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (raw) {
-      const migrated = migrate(JSON.parse(raw));
-      localStorage.setItem(STORE_KEY, JSON.stringify(migrated));
-      return migrated;
-    }
-  } catch {
-    /* seed */
-  }
-  const initial = migrate(structuredClone(seed));
-  localStorage.setItem(STORE_KEY, JSON.stringify(initial));
-  return initial;
+  return migrate(peekDoc(PATHS.freela, structuredClone(FREELA_SEED)));
 }
 
 export function saveFreelaStore(store) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  writeCloudDoc(PATHS.freela, store);
   emitChange();
   return store;
 }

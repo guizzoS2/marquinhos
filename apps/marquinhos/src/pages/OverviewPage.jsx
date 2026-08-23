@@ -33,7 +33,7 @@ export function OverviewPage() {
           <TopSoldList items={data.topSold} />
         </div>
 
-        <section className="bg-primary/5 rounded-2xl p-4 md:p-8 border border-primary/10 flex flex-col md:flex-row items-center gap-6 md:gap-8">
+        {data.suggestion ? <section className="bg-primary/5 rounded-2xl p-4 md:p-8 border border-primary/10 flex flex-col md:flex-row items-center gap-6 md:gap-8">
           <div className="md:w-1/4">
             <img
               alt="Stock Promotion"
@@ -65,7 +65,7 @@ export function OverviewPage() {
               <Button variant="secondary">Ignorar</Button>
             </div>
           </div>
-        </section>
+        </section> : null}
       </div>
 
       <footer className="mt-auto p-4 md:p-8 text-center text-xs text-on-surface-variant/60 font-medium">

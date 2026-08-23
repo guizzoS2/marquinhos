@@ -65,11 +65,11 @@ export function FreelaSignupPage() {
     }
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError('');
     try {
-      registerFreela(form);
+      await registerFreela(form);
       navigate('/freela', { replace: true });
     } catch (err) {
       setError(err.message || 'Não foi possível criar o perfil.');

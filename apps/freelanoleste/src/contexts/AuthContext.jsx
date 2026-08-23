@@ -2,10 +2,11 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import { buildFreelaProfile, createFreelaProfile } from '../services/freelaApi';
 import { nextId } from '../services/freelaStore';
 import { ensureBarProfile } from '../services/ownerStore';
-import { createTenant } from '../services/platformStore';
+import { createTenant, loadPlatformStore, slugifyTenant } from '../services/platformStore';
 import {
   assertEmailAvailable,
   authenticate,
+  logoutSession,
   readSession,
   registerFreelaAccount,
   registerOwnerAccount,
@@ -17,21 +18,21 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => readSession());
 
-  const login = useCallback(({ email, password, role }) => {
-    const session = authenticate({ email, password, role });
+  const login = useCallback(async ({ email, password, role }) => {
+    const session = await authenticate({ email, password, role });
     setUser(session);
     return session;
   }, []);
 
-  const logout = useCallback(() => {
-    writeSession(null);
+  const logout = useCallback(async () => {
     setUser(null);
+    await logoutSession();
   }, []);
 
-  const registerFreela = useCallback((payload) => {
+  const registerFreela = useCallback(async (payload) => {
     const id = payload.id || nextId('f');
     const profile = buildFreelaProfile({ ...payload, id });
-    const account = registerFreelaAccount({
+    const account = await registerFreelaAccount({
       email: profile.email,
       password: payload.password,
       name: profile.name,
@@ -39,6 +40,7 @@ export function AuthProvider({ children }) {
     });
     createFreelaProfile({ ...profile, id: account.id, email: account.email });
     const session = {
+      uid: account.uid,
       id: account.id,
       email: account.email,
       role: 'freela',
@@ -50,24 +52,32 @@ export function AuthProvider({ children }) {
     return session;
   }, []);
 
-  const registerOwner = useCallback((payload) => {
-    assertEmailAvailable(payload.email);
+  const registerOwner = useCallback(async (payload) => {
+    await assertEmailAvailable(payload.email);
     if (!String(payload.ownerName || '').trim() || !payload.password) {
       throw new Error('Preencha nome do dono, e-mail e senha.');
     }
-    const tenant = createTenant({
-      name: payload.barName,
-      slug: payload.slug,
-      ownerEmail: payload.email,
-    });
-    const account = registerOwnerAccount({
+    const slug = slugifyTenant(payload.slug || payload.barName);
+    if (!slug) {
+      throw new Error('Informe um slug.');
+    }
+    if (loadPlatformStore().tenants.some((item) => item.id === slug || item.slug === slug)) {
+      throw new Error('Slug já em uso.');
+    }
+    const account = await registerOwnerAccount({
       email: payload.email,
       password: payload.password,
       name: payload.ownerName,
-      tenantId: tenant.id,
+      tenantId: slug,
+    });
+    const tenant = createTenant({
+      name: payload.barName,
+      slug,
+      ownerEmail: payload.email,
     });
     ensureBarProfile(tenant.id, tenant.name);
     const session = {
+      uid: account.uid,
       id: null,
       email: account.email,
       role: 'owner',

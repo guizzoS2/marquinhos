@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase';
+import { createAuthUserRest } from './identity';
 import { localStore } from './localStore';
 import {
   overviewFallback,
@@ -747,8 +748,14 @@ export async function createStaffMember(payload) {
     throw new Error('Já existe um usuário com este e-mail.');
   }
 
+  let uid = `staff-${Date.now()}`;
+  if (isFirebaseConfigured()) {
+    const created = await createAuthUserRest({ email, password });
+    uid = created.uid;
+  }
+
   const member = {
-    uid: `staff-${Date.now()}`,
+    uid,
     email,
     password,
     name,
@@ -759,7 +766,12 @@ export async function createStaffMember(payload) {
   const next = { members: [...(staff.members || []), member] };
   await writeDocument(DOCS.staff, next);
   const { password: _password, ...safe } = member;
-  await upsertUserProfile(member.uid, safe);
+  await upsertUserProfile(member.uid, {
+    ...safe,
+    roles: ['staff'],
+    tenantId: 'marquinhos',
+    barRole: role,
+  });
   return { member: safe, staff: { members: next.members.map(stripStaffPassword) } };
 }
 
@@ -793,11 +805,18 @@ export async function getUserProfile(uid) {
 export async function upsertUserProfile(uid, data) {
   const path = `users/${uid}`;
   const existing = (await readDocument(path)) || {};
+  const { role, roles, ...rest } = data;
   const next = {
     ...existing,
-    ...data,
+    ...rest,
+    uid,
+    barRole: data.barRole || role || existing.barRole || existing.role,
+    roles: existing.roles || roles || (role ? [role === 'admin' || role === 'stock' ? 'staff' : role] : ['owner']),
     updatedAt: new Date().toISOString(),
   };
+  if (!existing.roles && role === 'admin' && !roles) {
+    next.roles = ['owner'];
+  }
   await writeDocument(path, next, true);
   return next;
 }

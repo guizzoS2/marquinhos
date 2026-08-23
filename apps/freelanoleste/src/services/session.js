@@ -1,124 +1,127 @@
-const SESSION_KEY = 'fnl_session_v3';
-const FREELA_ACCOUNTS_KEY = 'fnl_freela_accounts';
-const OWNER_ACCOUNTS_KEY = 'fnl_owner_accounts';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
+import { listStaffAccounts } from '@fnl/dashboard';
+import { auth, isFirebaseConfigured } from './firebase';
+import {
+  emailTaken,
+  peekDoc,
+  readUserDoc,
+  writeEmailLock,
+  writeUserDoc,
+} from './cloud';
+import { createAuthUserRest, mapAuthError } from './identity';
+import { listFreelaProfiles } from './freelaStore';
+import { loadOwnerStore } from './ownerStore';
+import { loadPlatformStore } from './platformStore';
 
-const ACCOUNTS = [
-  {
-    email: 'fabiosilsantos71@gmail.com',
-    password: 'NoLeste71Silva*',
-    role: 'owner',
-    name: 'Fábio Santos',
-    tenantId: 'marquinhos',
-  },
-  {
-    email: 'guilvieira409@gmail.com',
-    password: 'GvLeste#409mK7!',
-    role: 'freela',
-    name: 'Guil Vieira',
-    id: 'f-guilvieira',
-  },
-  {
-    email: 'guilvieira409@gmail.com',
-    password: 'GvLeste#409mK7!',
-    role: 'admin',
-    name: 'Guil Vieira',
-  },
-];
+const SESSION_KEY = 'fnl_session_v3';
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
-function readAccountList(key) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
 export function loadRegisteredFreelaAccounts() {
-  return readAccountList(FREELA_ACCOUNTS_KEY);
+  return listFreelaProfiles().map((item) => ({
+    email: item.email,
+    name: item.name,
+    id: item.id,
+    role: 'freela',
+  }));
 }
 
 export function loadRegisteredOwnerAccounts() {
-  return readAccountList(OWNER_ACCOUNTS_KEY);
+  return listOwnerAccounts();
 }
 
 export function listOwnerAccounts() {
+  const owner = loadOwnerStore();
+  return loadPlatformStore().tenants.map((tenant) => ({
+    email: tenant.ownerEmail,
+    name: owner.profiles[tenant.id]?.name || '',
+    tenantId: tenant.id,
+    role: 'owner',
+  }));
+}
+
+function knownEmails() {
   return [
-    ...ACCOUNTS.filter((item) => item.role === 'owner'),
-    ...loadRegisteredOwnerAccounts(),
+    ...listOwnerAccounts().map((item) => item.email),
+    ...loadRegisteredFreelaAccounts().map((item) => item.email),
+    ...listStaffAccounts().map((item) => item.email),
   ];
 }
 
-function loadStaffAccounts() {
-  try {
-    const root = JSON.parse(localStorage.getItem('fnl_tenant_ops_v3') || '{}');
-    return Object.entries(root).flatMap(([tenantId, data]) =>
-      (data?.staff?.people || []).map((person) => ({
-        email: person.email,
-        password: person.password,
-        role: 'staff',
-        name: person.name,
-        tenantId,
-        id: person.id,
-        permissions: person.permissions || [],
-        title: person.title,
-      }))
-    );
-  } catch {
-    return [];
-  }
-}
-
-function allAccounts() {
-  return [
-    ...ACCOUNTS,
-    ...loadRegisteredFreelaAccounts(),
-    ...loadRegisteredOwnerAccounts(),
-    ...loadStaffAccounts(),
-  ];
-}
-
-export function assertEmailAvailable(email) {
+export async function assertEmailAvailable(email) {
   const normalized = normalizeEmail(email);
   if (!normalized) {
     throw new Error('Informe o e-mail.');
   }
-  if (allAccounts().some((item) => item.email === normalized)) {
+  if (knownEmails().includes(normalized)) {
+    throw new Error('E-mail já cadastrado.');
+  }
+  if (await emailTaken(normalized)) {
     throw new Error('E-mail já cadastrado.');
   }
 }
 
-export function registerFreelaAccount({ email, password, name, id }) {
+function profileToSession(profile, role) {
+  return {
+    uid: profile.uid || null,
+    id: profile.freelaId || null,
+    email: profile.email,
+    role,
+    name: profile.name,
+    tenantId: profile.tenantId || null,
+    permissions: role === 'staff' ? profile.permissions || [] : undefined,
+  };
+}
+
+async function persistUser(uid, profile) {
+  await writeUserDoc(uid, {
+    ...profile,
+    uid,
+    updatedAt: new Date().toISOString(),
+  });
+  await writeEmailLock(profile.email, uid);
+}
+
+export async function registerFreelaAccount({ email, password, name, id }) {
   const normalized = normalizeEmail(email);
   const trimmedName = String(name || '').trim();
   if (!normalized || !password || !trimmedName) {
     throw new Error('Preencha nome, e-mail e senha.');
   }
-  if (allAccounts().some((item) => item.email === normalized)) {
-    throw new Error('E-mail já cadastrado.');
-  }
-  const account = {
-    email: normalized,
-    password: String(password),
-    role: 'freela',
-    name: trimmedName,
-    id: id || null,
-  };
-  if (!account.id) {
+  if (!id) {
     throw new Error('Conta de freela sem id.');
   }
-  localStorage.setItem(
-    FREELA_ACCOUNTS_KEY,
-    JSON.stringify([...loadRegisteredFreelaAccounts(), account])
-  );
-  return account;
+  await assertEmailAvailable(normalized);
+  if (!isFirebaseConfigured()) {
+    throw new Error('Firebase não configurado.');
+  }
+  try {
+    const credential = await createUserWithEmailAndPassword(auth, normalized, password);
+    const profile = {
+      email: normalized,
+      name: trimmedName,
+      roles: ['freela'],
+      freelaId: id,
+      tenantId: null,
+      createdAt: new Date().toISOString(),
+    };
+    await persistUser(credential.user.uid, profile);
+    return { ...profile, uid: credential.user.uid, id, role: 'freela' };
+  } catch (error) {
+    throw mapAuthError(error);
+  }
 }
 
-export function registerOwnerAccount({ email, password, name, tenantId }) {
+export async function registerOwnerAccount(
+  { email, password, name, tenantId },
+  { keepCurrentUser } = {}
+) {
   const normalized = normalizeEmail(email);
   const trimmedName = String(name || '').trim();
   const id = String(tenantId || '').trim();
@@ -128,21 +131,56 @@ export function registerOwnerAccount({ email, password, name, tenantId }) {
   if (!id) {
     throw new Error('Conta de dono sem tenant.');
   }
-  if (allAccounts().some((item) => item.email === normalized)) {
-    throw new Error('E-mail já cadastrado.');
+  await assertEmailAvailable(normalized);
+  if (!isFirebaseConfigured()) {
+    throw new Error('Firebase não configurado.');
   }
-  const account = {
+  try {
+    const created = keepCurrentUser
+      ? await createAuthUserRest({ email: normalized, password })
+      : {
+          uid: (await createUserWithEmailAndPassword(auth, normalized, password)).user.uid,
+        };
+    const profile = {
+      email: normalized,
+      name: trimmedName,
+      roles: ['owner'],
+      tenantId: id,
+      barRole: 'admin',
+      createdAt: new Date().toISOString(),
+    };
+    await persistUser(created.uid, profile);
+    return { ...profile, uid: created.uid, role: 'owner' };
+  } catch (error) {
+    throw mapAuthError(error);
+  }
+}
+
+export async function registerStaffAccount({
+  email,
+  password,
+  name,
+  tenantId,
+  permissions,
+  title,
+}) {
+  const normalized = normalizeEmail(email);
+  await assertEmailAvailable(normalized);
+  if (!isFirebaseConfigured()) {
+    throw new Error('Firebase não configurado.');
+  }
+  const created = await createAuthUserRest({ email: normalized, password });
+  const profile = {
     email: normalized,
-    password: String(password),
-    role: 'owner',
-    name: trimmedName,
-    tenantId: id,
+    name: String(name || '').trim(),
+    roles: ['staff'],
+    tenantId,
+    title: title || 'Equipe',
+    permissions: permissions || [],
+    createdAt: new Date().toISOString(),
   };
-  localStorage.setItem(
-    OWNER_ACCOUNTS_KEY,
-    JSON.stringify([...loadRegisteredOwnerAccounts(), account])
-  );
-  return account;
+  await persistUser(created.uid, profile);
+  return { ...profile, uid: created.uid, role: 'staff' };
 }
 
 export function readSession() {
@@ -161,28 +199,64 @@ export function writeSession(session) {
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
-export function authenticate({ email, password, role }) {
+export async function authenticate({ email, password, role }) {
   const normalized = normalizeEmail(email);
   const acceptedRoles = role === 'owner' ? ['owner', 'staff', 'employee'] : [role];
-  const account = allAccounts().find(
-    (item) =>
-      item.email === normalized &&
-      item.password === password &&
-      acceptedRoles.includes(item.role)
-  );
-  if (!account) {
-    throw new Error('Credenciais inválidas.');
+
+  if (!isFirebaseConfigured()) {
+    throw new Error('Firebase não configurado.');
   }
-  const session = {
-    id: account.id || null,
-    email: account.email,
-    role: account.role,
-    name: account.name,
-    tenantId: account.tenantId || null,
-    permissions: account.role === 'staff' ? account.permissions || [] : undefined,
-  };
-  writeSession(session);
-  return session;
+
+  try {
+    const credential = await signInWithEmailAndPassword(auth, normalized, password);
+    const profile = await readUserDoc(credential.user.uid);
+    if (!profile) {
+      throw new Error('Conta sem perfil.');
+    }
+    const roles = profile.roles || [];
+    const hit = acceptedRoles.find((item) => roles.includes(item));
+    if (!hit) {
+      await signOut(auth);
+      throw new Error('Este login não tem acesso a esta área.');
+    }
+    const session = profileToSession(
+      { ...profile, uid: credential.user.uid },
+      hit
+    );
+    writeSession(session);
+    return session;
+  } catch (error) {
+    if (error.message === 'Este login não tem acesso a esta área.') {
+      throw error;
+    }
+    const staff = listStaffAccounts().find(
+      (item) =>
+        item.email === normalized &&
+        item.password === password &&
+        acceptedRoles.includes('staff')
+    );
+    if (staff) {
+      const session = {
+        uid: null,
+        id: staff.id || null,
+        email: staff.email,
+        role: 'staff',
+        name: staff.name,
+        tenantId: staff.tenantId,
+        permissions: staff.permissions || [],
+      };
+      writeSession(session);
+      return session;
+    }
+    throw mapAuthError(error);
+  }
+}
+
+export async function logoutSession() {
+  writeSession(null);
+  if (isFirebaseConfigured() && auth) {
+    await signOut(auth);
+  }
 }
 
 export function isAdminSession(session = readSession()) {

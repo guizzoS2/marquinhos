@@ -94,11 +94,11 @@ export function AdminTenantsPage() {
     }
   }
 
-  function handleCreate(event) {
+  async function handleCreate(event) {
     event.preventDefault();
     setError('');
     try {
-      createTenantAsAdmin(createForm);
+      await createTenantAsAdmin(createForm);
       setTenants(fetchTenants());
       setCreateForm(emptyCreate);
       setSlugTouched(false);

@@ -41,11 +41,11 @@ export function BarSignupPage() {
     });
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError('');
     try {
-      registerOwner(form);
+      await registerOwner(form);
       navigate('/bar', { replace: true });
     } catch (err) {
       setError(err.message || 'Não foi possível cadastrar o bar.');
