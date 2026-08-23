@@ -1,17 +1,24 @@
 import { isFreelaSession, readSession } from './session';
 import { formatBrl } from './money';
+import { getTenantById } from './platformStore';
 import {
   appendMessage,
   getProposalPack,
   postNegotiationMessage,
   resolveNegotiation,
   sendNegotiationCounter,
+  submitReview,
 } from './negotiation';
+import { FREELA_TAGS } from './ownerStore';
+import { assertPhotoDataUrl } from './photo';
 import {
+  getFreelaProfileById,
+  jobVisibleToFreela,
   loadFreelaStore,
   nextId,
   PROPOSAL_STATUS,
   saveFreelaStore,
+  upsertFreelaProfile,
 } from './freelaStore';
 
 export { formatBrl };
@@ -30,40 +37,79 @@ function requireFreela() {
   return session;
 }
 
-export function fetchFreelaProfile() {
-  requireFreela();
-  return loadFreelaStore().profile;
+function sanitizeTags(tags) {
+  const allowed = new Set(FREELA_TAGS);
+  return (Array.isArray(tags) ? tags : []).filter((tag) => allowed.has(tag));
 }
 
-export function updateFreelaProfile(patch) {
-  requireFreela();
-  const store = loadFreelaStore();
-  const age = Number(patch.age);
-  const minBaseRate = Number(patch.minBaseRate);
+export function buildFreelaProfile(input, current = {}) {
+  const age = Number(input.age);
+  const minBaseRate = Number(input.minBaseRate);
   if (!Number.isFinite(age) || age < 18) {
     throw new Error('Idade mínima: 18 anos.');
   }
   if (!Number.isFinite(minBaseRate) || minBaseRate < 0) {
     throw new Error('Informe um valor mínimo base válido.');
   }
-  store.profile = {
-    ...store.profile,
-    name: String(patch.name || store.profile.name).trim(),
-    role: String(patch.role || store.profile.role).trim(),
-    bio: String(patch.bio || '').trim(),
+  const photoDataUrl =
+    input.photoDataUrl !== undefined ? input.photoDataUrl : current.photoDataUrl || '';
+  assertPhotoDataUrl(photoDataUrl);
+  const name = String(input.name || current.name || '').trim();
+  const email = String(input.email || current.email || '')
+    .trim()
+    .toLowerCase();
+  const role = String(input.role || current.role || '').trim();
+  if (!input.id && !current.id) {
+    throw new Error('Perfil sem id.');
+  }
+  if (!name || !email || !role) {
+    throw new Error('Preencha nome, e-mail e função.');
+  }
+  return {
+    ...current,
+    id: input.id || current.id,
+    name,
+    email,
+    role,
+    photoDataUrl,
+    bio: String(input.bio ?? current.bio ?? '').trim(),
+    experience: String(input.experience ?? current.experience ?? '').trim(),
+    tags: sanitizeTags(input.tags !== undefined ? input.tags : current.tags),
     age,
     minBaseRate,
-    photoDataUrl:
-      patch.photoDataUrl !== undefined ? patch.photoDataUrl : store.profile.photoDataUrl,
+    rating: current.rating ?? 0,
+    reviewCount: current.reviewCount ?? 0,
+    available: current.available !== undefined ? current.available : true,
   };
-  return saveFreelaStore(store).profile;
+}
+
+function requireFreelaProfile() {
+  const session = requireFreela();
+  const profile = getFreelaProfileById(session.id);
+  if (!profile) {
+    throw new Error('Perfil não encontrado.');
+  }
+  return { session, profile };
+}
+
+export function fetchFreelaProfile() {
+  return requireFreelaProfile().profile;
+}
+
+export function createFreelaProfile(input) {
+  return upsertFreelaProfile(buildFreelaProfile(input));
+}
+
+export function updateFreelaProfile(patch) {
+  const { profile } = requireFreelaProfile();
+  return upsertFreelaProfile(buildFreelaProfile(patch, profile));
 }
 
 export function fetchHistory({ page = 1, pageSize = 5 } = {}) {
-  requireFreela();
-  const items = [...loadFreelaStore().history].sort(
-    (a, b) => new Date(b.date) - new Date(a.date)
-  );
+  const session = requireFreela();
+  const items = [...loadFreelaStore().history]
+    .filter((item) => item.freelaId === session.id)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
   const total = items.length;
   const start = (page - 1) * pageSize;
   return {
@@ -76,12 +122,19 @@ export function fetchHistory({ page = 1, pageSize = 5 } = {}) {
 }
 
 export function fetchJobs() {
-  requireFreela();
+  const session = requireFreela();
   const store = loadFreelaStore();
-  return store.jobs.map((job) => {
-    const proposal = store.proposals.find((item) => item.jobId === job.id);
-    return { ...job, proposal: proposal || null };
-  });
+  return store.jobs
+    .filter((job) => {
+      if (!jobVisibleToFreela(job, session.id)) return false;
+      return getTenantById(job.tenantId)?.stripeStatus === 'active';
+    })
+    .map((job) => {
+      const proposal = store.proposals.find(
+        (item) => item.jobId === job.id && item.freelaId === session.id
+      );
+      return { ...job, proposal: proposal || null };
+    });
 }
 
 export function fetchProposalByRoom(roomId) {
@@ -90,17 +143,22 @@ export function fetchProposalByRoom(roomId) {
 }
 
 export function applyToJob({ jobId, amount, isNegotiable }) {
-  requireFreela();
+  const session = requireFreela();
   const store = loadFreelaStore();
   const job = store.jobs.find((item) => item.id === jobId);
-  if (!job) {
+  if (!job || !jobVisibleToFreela(job, session.id)) {
     throw new Error('Vaga não encontrada.');
   }
-  const existing = store.proposals.find((item) => item.jobId === jobId);
+  if (job.visibility === 'invite' && !(job.invitedFreelaIds || []).includes(session.id)) {
+    throw new Error('Convite não é para você.');
+  }
+  const existing = store.proposals.find(
+    (item) => item.jobId === jobId && item.freelaId === session.id
+  );
   if (existing) {
     return { roomId: existing.roomId, proposal: existing, created: false };
   }
-  const profile = store.profile;
+  const profile = requireFreelaProfile().profile;
   const value = Number(amount);
   if (!Number.isFinite(value) || value < profile.minBaseRate) {
     throw new Error(
@@ -157,7 +215,7 @@ export function postChatMessage(roomId, text) {
 
 export function sendCounterProposal(roomId, amount) {
   requireFreela();
-  const minAmount = loadFreelaStore().profile.minBaseRate;
+  const minAmount = requireFreelaProfile().profile.minBaseRate;
   return sendNegotiationCounter(roomId, amount, 'freela', { minAmount });
 }
 
@@ -166,10 +224,15 @@ export function resolveProposal(roomId, decision) {
   return resolveNegotiation(roomId, decision, 'freela');
 }
 
+export function submitFreelaReview({ proposalId, rating, comment }) {
+  requireFreela();
+  return submitReview({ proposalId, rating, comment });
+}
+
 export function getConnectOAuthUrl() {
   requireFreela();
   const clientId = import.meta.env.VITE_STRIPE_CONNECT_CLIENT_ID || '';
-  const redirectUri = `${window.location.origin}/freela/financeiro/connect`;
+  const redirectUri = `${window.location.origin}/freela/connect`;
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,

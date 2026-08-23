@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   applyToJob,
@@ -6,7 +6,7 @@ import {
   fetchFreelaProfile,
   formatBrl,
 } from '../../services/freelaApi';
-import { proposalStatusLabel } from '../../services/freelaStore';
+import { proposalStatusLabel, subscribeFreelaStore } from '../../services/freelaStore';
 import { Button } from '../../components/Button';
 
 export function FreelaJobsPage() {
@@ -15,6 +15,10 @@ export function FreelaJobsPage() {
   const [jobs, setJobs] = useState(() => fetchJobs());
   const [drafts, setDrafts] = useState({});
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    return subscribeFreelaStore(() => setJobs(fetchJobs()));
+  }, []);
 
   function patchDraft(jobId, patch) {
     setDrafts((current) => ({
@@ -53,6 +57,10 @@ export function FreelaJobsPage() {
 
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
 
+      {jobs.length === 0 ? (
+        <p className="text-sm text-on-surface-variant">Nenhuma vaga aberta ou convite para você.</p>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4">
         {jobs.map((job) => {
           const draft = drafts[job.id] || {
@@ -70,6 +78,7 @@ export function FreelaJobsPage() {
                 <p className="font-headline font-bold text-lg">{job.barName}</p>
                 <p className="text-sm">{job.title}</p>
                 <p className="text-xs text-on-surface-variant">
+                  {job.visibility === 'invite' ? 'Convite' : 'Vaga aberta'} ·{' '}
                   {new Date(`${job.date}T12:00:00`).toLocaleDateString('pt-BR')} · sugestão{' '}
                   {formatBrl(job.suggestedRate)}
                 </p>

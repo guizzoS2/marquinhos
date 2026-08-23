@@ -9,7 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fnl/dashboard": "*",
     "@fnl/ui": "*",
+    "@tanstack/react-query": "^5.101.4",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

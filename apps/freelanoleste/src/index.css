@@ -32,3 +32,366 @@ h3 {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   vertical-align: middle;
 }
+
+/* Street atmosphere — public Shell only. Do not paint body. */
+.street {
+  --ink: #111111;
+  --card: #000000;
+  --paper: #ffffff;
+  --muted: #5c5c5c;
+  --hot: #ffdb15;
+  --spray: #ffdb15;
+  background-color: var(--ink);
+  color: var(--paper);
+  font-family: 'Space Mono', ui-monospace, monospace;
+}
+
+.street h1,
+.street h2,
+.street h3 {
+  font-family: 'Bebas Neue', sans-serif;
+}
+
+.street .font-display {
+  font-family: 'Bebas Neue', sans-serif;
+}
+
+.street .font-spray {
+  font-family: 'Rubik Spray Paint', cursive;
+}
+
+.street-wash {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 50% at 10% 0%, rgba(255, 219, 21, 0.16), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(255, 255, 255, 0.06), transparent 50%);
+}
+
+.scanline {
+  position: fixed;
+  inset: 0;
+  z-index: 41;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2px,
+    rgba(255, 255, 255, 0.03) 2px,
+    rgba(255, 255, 255, 0.03) 4px
+  );
+}
+
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.poster {
+  position: relative;
+  border: 3px solid #000000;
+  box-shadow: 6px 6px 0 #000000;
+  background: #111111;
+  color: #ffffff;
+}
+
+.poster::before {
+  content: '';
+  position: absolute;
+  top: -0.7rem;
+  left: 50%;
+  width: 5rem;
+  height: 1rem;
+  background: #ffdb15;
+  transform: translateX(-50%) rotate(-2deg);
+  pointer-events: none;
+}
+
+.poster-paper {
+  background: #ffffff;
+  color: #111111;
+}
+
+.poster-yellow {
+  background: #ffdb15;
+  color: #111111;
+}
+
+.poster-yellow::before {
+  background: #000000;
+}
+
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.25rem 0.75rem;
+  border: 3px solid #ffdb15;
+  color: #ffdb15;
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  background: transparent;
+}
+
+.sticker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.875rem;
+  border: 2px solid #000000;
+  background: #ffdb15;
+  color: #111111;
+  box-shadow: 3px 3px 0 #000000;
+  font-family: 'Bebas Neue', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sticker-ink {
+  background: #111111;
+  color: #ffffff;
+  border-color: #ffdb15;
+}
+
+.rough-btn {
+  border: 3px solid #000000;
+  box-shadow: 4px 4px 0 #000000;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.rough-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 #000000;
+}
+
+.rough-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #000000;
+}
+
+.street-input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid #ffffff;
+  background: #000000;
+  color: #ffffff;
+  border-radius: 0;
+}
+
+.street-input::placeholder {
+  color: #5c5c5c;
+}
+
+.street-input:focus {
+  outline: none;
+  border-color: #ffdb15;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rough-btn,
+  .rough-btn:hover,
+  .rough-btn:active {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* MANCHA-lite — painel do bar only. Volume ~40%. Canvas branco. */
+.bar-panel {
+  --ink: #111111;
+  --paper: #ffffff;
+  --sheet: #f7f4ee;
+  --muted: #5c5c5c;
+  --spray: var(--color-primary, #ffdb15);
+  --color-primary: var(--tenant-primary, #ffdb15);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Space Mono', ui-monospace, monospace;
+}
+
+.bar-panel h1,
+.bar-panel h2,
+.bar-panel h3,
+.bar-panel .font-display {
+  font-family: 'Bebas Neue', Impact, sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.bar-panel .font-spray {
+  font-family: 'Rubik Spray Paint', Impact, cursive;
+}
+
+.bar-panel .font-mono {
+  font-family: 'Space Mono', ui-monospace, monospace;
+}
+
+.bar-tape {
+  height: 6px;
+  background: var(--spray);
+}
+
+.bar-grain {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.04;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.bar-sticker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 2px dashed currentColor;
+  background: transparent;
+  color: var(--ink);
+  font-family: 'Bebas Neue', Impact, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bar-sticker-on {
+  background: var(--spray);
+  color: var(--ink);
+  border-style: solid;
+  border-color: var(--ink);
+}
+
+.bar-cta {
+  border: 2px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.bar-field {
+  background: var(--paper);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  font-family: 'Space Mono', ui-monospace, monospace;
+}
+
+.bar-field:focus {
+  outline: 2px solid var(--spray);
+  border-color: var(--spray);
+}
+
+.bar-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.bar-table th,
+.bar-table td {
+  border-bottom: 1px dashed color-mix(in srgb, var(--ink) 18%, transparent);
+  padding: 0.7rem 0.5rem;
+  text-align: left;
+}
+
+.bar-table th {
+  color: var(--muted);
+  font-family: 'Bebas Neue', Impact, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 400;
+}
+
+.bar-pos {
+  color: #1a7a3a;
+}
+
+.bar-neg {
+  color: #fb5151;
+}
+
+.bar-strip {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+@media (min-width: 768px) {
+  .bar-strip {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.bar-strip-cell {
+  padding: 1rem 0;
+}
+
+@media (min-width: 768px) {
+  .bar-strip-cell + .bar-strip-cell {
+    padding-left: 1.25rem;
+    border-left: 1px dashed color-mix(in srgb, var(--ink) 18%, transparent);
+  }
+}
+
+.bar-block {
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.bar-stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.25rem 0.75rem;
+  border: 3px solid var(--spray);
+  color: var(--spray);
+  font-family: 'Bebas Neue', Impact, sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.bar-stamp-alert {
+  border-color: #fb5151;
+  color: #fb5151;
+}
+
+.bar-stamp-muted {
+  border-color: var(--muted);
+  color: var(--muted);
+}
+
+.bar-panel .rounded-xl,
+.bar-panel .rounded-2xl,
+.bar-panel .rounded-lg,
+.bar-panel .rounded-md,
+.bar-panel .rounded-full {
+  border-radius: 0;
+}
+
+.bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+@media (min-width: 768px) {
+  .bar-row {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+}

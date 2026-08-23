@@ -25,35 +25,28 @@ export function FreelaConnectCallbackPage() {
   }, [code, oauthError]);
 
   if (oauthError) {
-    return (
-      <div className="p-4 md:p-8 space-y-2">
-        <p className="text-sm text-error font-medium">Stripe Connect recusou a autorização.</p>
-        <a href="/freela/financeiro" className="text-sm font-semibold min-h-11 inline-flex items-center">
-          Voltar
-        </a>
-      </div>
-    );
+    return <Navigate to="/freela?finance=open" replace />;
   }
 
   if (!code) {
-    return <Navigate to="/freela/financeiro" replace />;
+    return <Navigate to="/freela" replace />;
   }
 
   if (error) {
     return (
-      <div className="p-4 md:p-8">
+      <div className="street min-h-dvh p-4 md:p-8">
         <p className="text-sm text-error font-medium">{error}</p>
       </div>
     );
   }
 
   if (done) {
-    return <Navigate to="/freela/financeiro" replace />;
+    return <Navigate to="/freela?finance=open" replace />;
   }
 
   return (
-    <div className="p-4 md:p-8">
-      <p className="text-sm text-on-surface-variant">Conectando conta Stripe Express…</p>
+    <div className="street min-h-dvh p-4 md:p-8">
+      <p className="text-sm text-outline">Conectando conta Stripe Express…</p>
     </div>
   );
 }

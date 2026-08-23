@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { AuthField, AuthScreen, AuthSubmit, AuthSwitchLink } from '../components/auth/AuthScreen';
+import { PosterCard } from '../components/street/PosterCard';
+import { RoughButton } from '../components/street/RoughButton';
+import { StatusStamp } from '../components/street/StatusStamp';
 
 const demoAccounts = {
   admin: { email: 'admin@freelanoleste.local', password: 'admin123' },
@@ -11,27 +13,26 @@ const demoAccounts = {
 
 const copy = {
   owner: {
-    title: 'Bar',
-    hint: 'Painel do bar: dono vê tudo; estoque só cadastra produto.',
-    signupTo: '/cadastro/bar',
+    title: 'Login do bar',
+    hint: 'Dono e funcionários entram aqui. Permissões vêm da Equipe.',
+    stamp: 'SOU BAR',
   },
   freela: {
-    title: 'Freela',
+    title: 'Login do freela',
     hint: 'Painel do profissional. Sem acesso ao operacional do bar.',
-    signupTo: '/cadastro/freela',
+    stamp: 'SOU FREELA',
   },
   admin: {
-    title: 'Admin',
+    title: 'Login admin',
     hint: 'Somente a plataforma. Tenants e splits Stripe.',
-    signupTo: null,
+    stamp: 'ADMIN',
   },
 };
 
 function homeFor(role) {
   if (role === 'admin') return '/admin';
   if (role === 'freela') return '/freela';
-  if (role === 'employee') return '/bar/estoque';
-  if (role === 'owner') return '/bar';
+  if (role === 'owner' || role === 'staff') return '/bar';
   return '/';
 }
 
@@ -60,35 +61,57 @@ export function RoleLoginPage({ role }) {
   }
 
   const text = copy[role];
-  const tone = role === 'owner' ? 'bar' : 'freela';
 
   return (
-    <AuthScreen title={text.title} hint={text.hint} tone={tone}>
-      <form className="space-y-5" onSubmit={handleSubmit}>
-        <AuthField
-          id={`${role}-email`}
-          label="E-mail"
-          type="email"
-          required
-          autoComplete="username"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-        <AuthField
-          id={`${role}-password`}
-          label="Senha"
-          type="password"
-          required
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-        {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
-        <AuthSubmit>Entrar</AuthSubmit>
-      </form>
-      {text.signupTo ? (
-        <AuthSwitchLink to={text.signupTo} prompt="Não tem conta?" action="Criar" />
-      ) : null}
-    </AuthScreen>
+    <div className="min-h-dvh px-4 md:px-8 py-12 overflow-x-hidden">
+      <div className="max-w-md mx-auto space-y-6">
+        <RoughButton to="/login" variant="ink" className="w-fit">
+          Voltar
+        </RoughButton>
+        <PosterCard variant="ink" rotate="-rotate-1">
+          <StatusStamp rotate="rotate-1">{text.stamp}</StatusStamp>
+          <h1 className="font-display text-3xl md:text-4xl tracking-tight mt-4 mb-2">
+            {text.title}
+          </h1>
+          <p className="text-outline text-sm mb-6">{text.hint}</p>
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            <label className="block space-y-2">
+              <span className="font-display text-sm tracking-widest uppercase">E-mail</span>
+              <input
+                required
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="street-input"
+              />
+            </label>
+            <label className="block space-y-2">
+              <span className="font-display text-sm tracking-widest uppercase">Senha</span>
+              <input
+                required
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="street-input"
+              />
+            </label>
+            {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
+            <RoughButton type="submit" className="w-full">
+              Continuar
+            </RoughButton>
+            {role === 'owner' ? (
+              <RoughButton to="/cadastro-bar" variant="ghost" className="w-full">
+                Cadastrar bar
+              </RoughButton>
+            ) : null}
+            {role === 'freela' ? (
+              <RoughButton to="/cadastro-freela" variant="ghost" className="w-full">
+                Cadastrar freela
+              </RoughButton>
+            ) : null}
+          </form>
+        </PosterCard>
+      </div>
+    </div>
   );
 }

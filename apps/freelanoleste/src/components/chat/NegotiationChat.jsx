@@ -1,21 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
 import { formatBrl } from '../../services/money';
-import { PROPOSAL_STATUS, proposalStatusLabel, subscribeFreelaStore } from '../../services/freelaStore';
+import {
+  hasReview,
+  PROPOSAL_STATUS,
+  proposalStatusLabel,
+  subscribeFreelaStore,
+} from '../../services/freelaStore';
 import { connectChatRoom } from '../../services/chatSocket';
+import { ReviewForm } from '../freela/ReviewForm';
+import { ReviewStars } from '../freela/ReviewStars';
 import { Button } from '../Button';
 import { Icon } from '../Icon';
 
 export function NegotiationChat({
   actor,
-  backTo,
+  roomId,
+  onClose,
   loadPack,
   postMessage,
   sendCounter,
   resolve,
+  submitReview,
 }) {
-  const { roomId } = useParams();
-  const [pack, setPack] = useState(() => loadPack(roomId));
+  const [pack, setPack] = useState(() => (roomId ? loadPack(roomId) : null));
   const [text, setText] = useState('');
   const [counter, setCounter] = useState('');
   const [error, setError] = useState('');
@@ -24,6 +31,7 @@ export function NegotiationChat({
   const socketRef = useRef(null);
 
   useEffect(() => {
+    if (!roomId) return undefined;
     setPack(loadPack(roomId));
     const unsub = subscribeFreelaStore(() => {
       setPack(loadPack(roomId));
@@ -45,13 +53,19 @@ export function NegotiationChat({
     }
   }, [pack?.messages?.length]);
 
-  if (!pack || !pack.proposal) {
+  if (!roomId || !pack || !pack.proposal) {
     return (
       <div className="p-4 md:p-8">
-        <p className="text-sm text-on-surface-variant">Sala não encontrada neste tenant.</p>
-        <Link to={backTo} className="text-sm font-semibold min-h-11 inline-flex items-center">
-          Voltar
-        </Link>
+        <p className="text-sm text-on-surface-variant">Sala não encontrada.</p>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm font-semibold min-h-11 inline-flex items-center"
+          >
+            Voltar
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -99,13 +113,14 @@ export function NegotiationChat({
   return (
     <div className="flex flex-col flex-1 min-h-0 h-full bg-surface">
       <div className="shrink-0 border-b border-outline-variant px-4 py-3 flex items-center gap-3">
-        <Link
-          to={backTo}
+        <button
+          type="button"
+          onClick={onClose}
           aria-label="Voltar"
           className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-full hover:bg-surface-container"
         >
           <Icon name="arrow_back" />
-        </Link>
+        </button>
         <div className="min-w-0">
           <p className="font-headline font-bold truncate">{peerName}</p>
           <p className="text-xs text-on-surface-variant truncate">
@@ -144,7 +159,44 @@ export function NegotiationChat({
         ) : null}
 
         {closed ? (
-          <p className="text-sm text-on-surface-variant">Negociação encerrada.</p>
+          <div className="space-y-3">
+            <p className="text-sm text-on-surface-variant">Negociação encerrada.</p>
+            {proposal.status === PROPOSAL_STATUS.ACEITA && pack.history && submitReview ? (
+              actor === 'freela' ? (
+                hasReview(pack.history.reviewGiven) ? (
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                      Seu review
+                    </p>
+                    <ReviewStars value={pack.history.reviewGiven.rating} />
+                    <p className="text-sm">{pack.history.reviewGiven.comment}</p>
+                  </div>
+                ) : (
+                  <ReviewForm
+                    title="Avalie o bar"
+                    onSubmit={({ rating, comment }) =>
+                      submitReview({ proposalId: proposal.id, rating, comment })
+                    }
+                  />
+                )
+              ) : hasReview(pack.history.reviewReceived) ? (
+                <div className="space-y-1">
+                  <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                    Seu review
+                  </p>
+                  <ReviewStars value={pack.history.reviewReceived.rating} />
+                  <p className="text-sm">{pack.history.reviewReceived.comment}</p>
+                </div>
+              ) : (
+                <ReviewForm
+                  title="Avalie o freela"
+                  onSubmit={({ rating, comment }) =>
+                    submitReview({ proposalId: proposal.id, rating, comment })
+                  }
+                />
+              )
+            ) : null}
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Button className="w-full" onClick={() => handleDecision('accept')}>

@@ -1,84 +1,72 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { subscribeFreelaStore } from '../services/freelaStore';
 import { fetchShowcase } from '../services/showcase';
 import { ReviewStars } from '../components/freela/ReviewStars';
+import { PosterCard } from '../components/street/PosterCard';
+import { RoughButton } from '../components/street/RoughButton';
+import { StatusStamp } from '../components/street/StatusStamp';
 
-function MarqueeRow({ items, reverse = false }) {
-  const navigate = useNavigate();
-  const loop = [...items, ...items];
-
-  return (
-    <div className="overflow-hidden border-y-4 border-primary">
-      <ul
-        className={`flex w-max gap-4 py-4 px-4 motion-reduce:animate-none ${
-          reverse ? 'animate-marquee-reverse' : 'animate-marquee'
-        } hover:[animation-play-state:paused]`}
-      >
-        {loop.map((person, index) => (
-          <li key={`${person.id}-${index}`} className="shrink-0">
-            <button
-              type="button"
-              onClick={() => navigate('/login')}
-              className="flex items-center gap-3 min-h-11 min-w-11 px-4 py-3 bg-tertiary text-inverse-on-surface border-2 border-primary text-left"
-            >
-              <span
-                aria-hidden="true"
-                className="min-h-11 min-w-11 inline-flex items-center justify-center bg-primary text-on-primary font-headline font-extrabold text-sm"
-              >
-                {person.initials}
-              </span>
-              <span className="space-y-0.5">
-                <span className="block font-headline font-extrabold uppercase tracking-tight">
-                  {person.displayName}
-                </span>
-                <span className="block text-xs uppercase tracking-widest text-primary">
-                  {person.kind === 'bar' ? 'Bar' : 'Freela'} · {person.specialty}
-                </span>
-                <ReviewStars value={person.rating} />
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+const rotates = ['-rotate-1', 'rotate-1', 'rotate-2', '-rotate-2'];
 
 export function PessoalPage() {
-  const people = fetchShowcase();
+  const [people, setPeople] = useState(() => fetchShowcase());
   const navigate = useNavigate();
-  const bars = people.filter((item) => item.kind === 'bar');
-  const freelas = people.filter((item) => item.kind === 'freela');
+
+  useEffect(() => subscribeFreelaStore(() => setPeople(fetchShowcase())), []);
 
   return (
-    <div className="min-h-[calc(100dvh-4rem)] bg-secondary-dim text-inverse-on-surface">
+    <div className="min-h-[calc(100dvh-4rem)] overflow-x-hidden">
       <div className="px-4 md:px-8 py-12 md:py-16 space-y-10 max-w-7xl mx-auto">
         <header className="space-y-4">
-          <p className="text-xs font-bold uppercase tracking-[0.3em] text-primary">
-            Centro-Leste · vitrine
-          </p>
-          <h1 className="font-headline text-4xl md:text-6xl font-extrabold uppercase tracking-tighter">
+          <StatusStamp>NO LESTE</StatusStamp>
+          <h1 className="font-spray text-4xl md:text-6xl -rotate-2 motion-reduce:rotate-0 w-fit">
             Pessoal
           </h1>
           <p className="text-sm md:text-base text-outline max-w-xl">
-            Quem circula na noite. Nome parcial, especialidade e nota. Contato e valores só depois
-            do login.
+            Quem circula na noite. Nome parcial, especialidade e nota. Contato só depois do login.
           </p>
         </header>
-      </div>
 
-      <section aria-label="Letreiro de bares e freelas" className="space-y-0">
-        <MarqueeRow items={[...freelas, ...bars]} />
-        <MarqueeRow items={[...bars, ...freelas]} reverse />
-      </section>
-
-      <div className="px-4 md:px-8 py-12">
-        <button
-          type="button"
-          onClick={() => navigate('/login')}
-          className="min-h-11 px-6 py-3 border-4 border-primary bg-primary text-on-primary font-headline font-extrabold uppercase tracking-tight hover:bg-transparent hover:text-primary"
+        <section
+          aria-label="Bares e freelas"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6"
         >
-          Entrar para ver perfis
-        </button>
+          {people.map((person, index) => (
+            <button
+              key={person.id}
+              type="button"
+              onClick={() => navigate('/login')}
+              className="text-left min-h-11"
+            >
+              <PosterCard
+                variant={person.kind === 'bar' ? 'paper' : 'ink'}
+                rotate={rotates[index % rotates.length]}
+              >
+                {person.photoDataUrl ? (
+                  <img
+                    src={person.photoDataUrl}
+                    alt=""
+                    className="sticker mb-4 object-cover w-14 h-14 p-0"
+                  />
+                ) : (
+                  <span className="sticker mb-4">{person.initials}</span>
+                )}
+                <span className="block font-display text-2xl uppercase tracking-tight mt-3">
+                  {person.displayName}
+                </span>
+                <span className="block font-display text-sm tracking-widest uppercase text-primary mt-1">
+                  {person.kind === 'bar' ? 'Bar' : 'Freela'} · {person.specialty}
+                </span>
+                <span className="block mt-2">
+                  <ReviewStars value={person.rating} />
+                </span>
+              </PosterCard>
+            </button>
+          ))}
+        </section>
+
+        <RoughButton onClick={() => navigate('/login')}>Entrar para ver perfis</RoughButton>
       </div>
     </div>
   );

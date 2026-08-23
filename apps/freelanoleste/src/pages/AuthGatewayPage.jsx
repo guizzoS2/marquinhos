@@ -1,11 +1,12 @@
-import { Link, Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { RoughButton } from '../components/street/RoughButton';
+import { StatusStamp } from '../components/street/StatusStamp';
 
 function homeFor(user) {
   if (user?.role === 'admin') return '/admin';
   if (user?.role === 'freela') return '/freela';
-  if (user?.role === 'employee') return '/bar/estoque';
-  if (user?.role === 'owner') return '/bar';
+  if (user?.role === 'owner' || user?.role === 'staff' || user?.role === 'employee') return '/bar';
   return '/';
 }
 
@@ -18,33 +19,36 @@ export function AuthGatewayPage() {
   }
 
   return (
-    <div className="relative flex flex-col md:flex-row flex-1 min-h-0 w-full">
-      <Link
-        to="/login/bar"
-        className="flex-1 min-h-11 bg-primary text-on-surface flex flex-col items-center justify-center p-4 md:p-8 gap-4 hover:bg-primary-dim"
-      >
-        <span className="text-xs font-bold uppercase tracking-[0.35em]">Contratante</span>
-        <h1 className="font-headline font-extrabold text-5xl md:text-8xl uppercase tracking-tighter text-center">
+    <div className="flex flex-col md:flex-row w-full min-h-[calc(100dvh-4rem)] overflow-x-hidden">
+      <section className="min-h-[50dvh] md:min-h-[calc(100dvh-4rem)] md:w-1/2 bg-primary text-on-primary flex flex-col items-center justify-center p-4 md:p-8 gap-6">
+        <p className="font-display text-sm tracking-[0.35em] uppercase">Contratante</p>
+        <h1 className="font-spray text-4xl md:text-6xl text-center -rotate-1 motion-reduce:rotate-0">
           Bar
         </h1>
-      </Link>
+        <RoughButton
+          to="/login/bar"
+          variant="ghost"
+          className="w-full max-w-sm md:min-h-32 text-2xl md:text-5xl"
+        >
+          Sou bar
+        </RoughButton>
+      </section>
 
-      <Link
-        to="/login/freela"
-        className="flex-1 min-h-11 bg-inverse-surface text-primary flex flex-col items-center justify-center p-4 md:p-8 gap-4 hover:bg-secondary-dim"
-      >
-        <span className="text-xs font-bold uppercase tracking-[0.35em]">Profissional</span>
-        <h2 className="font-headline font-extrabold text-5xl md:text-8xl uppercase tracking-tighter text-center">
+      <section className="min-h-[50dvh] md:min-h-[calc(100dvh-4rem)] md:w-1/2 bg-inverse-surface text-inverse-on-surface flex flex-col items-center justify-center p-4 md:p-8 gap-6">
+        <StatusStamp rotate="-rotate-2">NO LESTE</StatusStamp>
+        <p className="font-display text-sm tracking-[0.35em] uppercase text-primary">
+          Profissional
+        </p>
+        <h2 className="font-spray text-4xl md:text-6xl text-center rotate-1 motion-reduce:rotate-0">
           Freela
         </h2>
-      </Link>
-
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10">
-        <div className="absolute top-1/2 left-0 h-16 w-full -translate-y-1/2 bg-gradient-to-b from-primary via-white/40 to-inverse-surface blur-md md:hidden" />
-        <div className="absolute left-1/2 top-0 hidden h-full w-16 -translate-x-1/2 bg-gradient-to-r from-primary via-white/40 to-inverse-surface blur-md md:block" />
-        <div className="absolute top-1/2 left-0 h-px w-full -translate-y-1/2 bg-white md:hidden" />
-        <div className="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-white md:block" />
-      </div>
+        <RoughButton
+          to="/login/freela"
+          className="w-full max-w-sm md:min-h-32 text-2xl md:text-5xl"
+        >
+          Sou freela
+        </RoughButton>
+      </section>
     </div>
   );
 }

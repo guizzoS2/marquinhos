@@ -1,13 +1,74 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   fetchBarSubscription,
   fetchMarketplace,
   FREELA_TAGS,
   formatBrl,
+  inviteFreela,
 } from '../../services/ownerApi';
+import { subscribeFreelaStore } from '../../services/freelaStore';
 import { ReviewStars } from '../../components/freela/ReviewStars';
 import { Button } from '../../components/Button';
+
+function InviteForm({ person }) {
+  const navigate = useNavigate();
+  const [date, setDate] = useState('');
+  const [amount, setAmount] = useState(String(person.minBaseRate));
+  const [error, setError] = useState('');
+
+  function handleInvite(event) {
+    event.preventDefault();
+    setError('');
+    try {
+      const result = inviteFreela({
+        freelaId: person.id,
+        date,
+        amount,
+        title: `${person.role} — convite`,
+      });
+      navigate(`/bar/chat/${result.roomId}`);
+    } catch (err) {
+      setError(err.message || 'Não foi possível convidar.');
+    }
+  }
+
+  return (
+    <form className="space-y-3 pt-2" onSubmit={handleInvite}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="block space-y-2">
+          <span className="font-display text-sm tracking-widest uppercase text-[var(--muted)]">
+            Data
+          </span>
+          <input
+            required
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            className="bar-field w-full min-h-11 px-3 py-3"
+          />
+        </label>
+        <label className="block space-y-2">
+          <span className="font-display text-sm tracking-widest uppercase text-[var(--muted)]">
+            Valor (R$)
+          </span>
+          <input
+            required
+            type="number"
+            min={person.minBaseRate}
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            className="bar-field w-full min-h-11 px-3 py-3"
+          />
+        </label>
+      </div>
+      {error ? <p className="text-sm text-error">{error}</p> : null}
+      <Button type="submit" className="w-full">
+        Convidar e abrir chat
+      </Button>
+    </form>
+  );
+}
 
 export function BarMarketplacePage() {
   const subscription = useMemo(() => fetchBarSubscription(), []);
@@ -15,28 +76,31 @@ export function BarMarketplacePage() {
   const [maxRate, setMaxRate] = useState('');
   const [minRating, setMinRating] = useState('');
   const [tag, setTag] = useState('');
-  const people = useMemo(
-    () => fetchMarketplace({ query, maxRate, minRating, tag }),
-    [query, maxRate, minRating, tag]
+  const [people, setPeople] = useState(() =>
+    fetchMarketplace({ query, maxRate, minRating, tag })
   );
 
+  useEffect(() => {
+    setPeople(fetchMarketplace({ query, maxRate, minRating, tag }));
+    return subscribeFreelaStore(() => {
+      setPeople(fetchMarketplace({ query, maxRate, minRating, tag }));
+    });
+  }, [query, maxRate, minRating, tag]);
+
   return (
-    <div className="space-y-6 md:space-y-8 max-w-7xl">
+    <div className="space-y-8">
       <section className="space-y-2">
-        <h2 className="font-headline text-2xl md:text-3xl font-extrabold tracking-tight">
-          Vitrine de freelas
-        </h2>
-        <p className="text-on-surface-variant text-sm">
-          Busca na base da plataforma. Contratação e diária passam pelo Stripe com split. Sem PIX.
+        <h2 className="font-display text-4xl uppercase tracking-wide">Vitrine</h2>
+        <p className="text-sm text-[var(--muted)]">
+          Base da plataforma. Diária no Stripe com split. Sem PIX.
         </p>
       </section>
 
       {!subscription.active ? (
-        <p className="text-sm font-medium bg-error/10 text-error rounded-2xl p-4">
-          Assinatura Stripe {subscription.status}. Marketplace restrito até o pagamento no Customer
-          Portal.{' '}
-          <Link to="/bar/pagamentos" className="font-semibold underline min-h-11 inline-flex items-center">
-            Gerenciar pagamentos
+        <p className="text-sm text-error">
+          Assinatura {subscription.status}.{' '}
+          <Link to="/bar/pagamentos" className="underline min-h-11 inline-flex items-center">
+            Pagamentos
           </Link>
         </p>
       ) : null}
@@ -46,31 +110,31 @@ export function BarMarketplacePage() {
         onSubmit={(event) => event.preventDefault()}
       >
         <label className="block space-y-2">
-          <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant pl-1">
+          <span className="font-display text-sm tracking-widest uppercase text-[var(--muted)]">
             Busca
           </span>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Nome, função, bio"
-            className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11"
+            className="bar-field w-full min-h-11 px-3 py-3"
           />
         </label>
         <label className="block space-y-2">
-          <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant pl-1">
-            Valor mínimo até (R$)
+          <span className="font-display text-sm tracking-widest uppercase text-[var(--muted)]">
+            Piso até
           </span>
           <input
             type="number"
             min="0"
             value={maxRate}
             onChange={(event) => setMaxRate(event.target.value)}
-            className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11"
+            className="bar-field w-full min-h-11 px-3 py-3"
           />
         </label>
         <label className="block space-y-2">
-          <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant pl-1">
-            Nota mínima
+          <span className="font-display text-sm tracking-widest uppercase text-[var(--muted)]">
+            Nota mín.
           </span>
           <input
             type="number"
@@ -79,17 +143,17 @@ export function BarMarketplacePage() {
             step="0.1"
             value={minRating}
             onChange={(event) => setMinRating(event.target.value)}
-            className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11"
+            className="bar-field w-full min-h-11 px-3 py-3"
           />
         </label>
         <label className="block space-y-2">
-          <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant pl-1">
+          <span className="font-display text-sm tracking-widest uppercase text-[var(--muted)]">
             Especialidade
           </span>
           <select
             value={tag}
             onChange={(event) => setTag(event.target.value)}
-            className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11"
+            className="bar-field w-full min-h-11 px-3 py-3"
           >
             <option value="">Todas</option>
             {FREELA_TAGS.map((item) => (
@@ -101,42 +165,51 @@ export function BarMarketplacePage() {
         </label>
       </form>
 
-      <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <ul>
         {people.map((person) => (
-          <li
-            key={person.id}
-            className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-sm space-y-3 min-h-11"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="font-headline font-bold text-lg">{person.name}</h3>
-                <p className="text-sm text-on-surface-variant">{person.role}</p>
+          <li key={person.id} className="bar-row">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <div className="w-12 h-12 border-2 border-[var(--ink)] overflow-hidden shrink-0 bg-[var(--sheet,#f7f4ee)]">
+                {person.photoDataUrl ? (
+                  <img
+                    src={person.photoDataUrl}
+                    alt={`Foto de ${person.name}`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : null}
               </div>
-              <ReviewStars value={person.rating} />
-            </div>
-            <p className="text-sm text-on-surface-variant">{person.bio}</p>
-            <p className="text-sm font-semibold">Piso {formatBrl(person.minBaseRate)}</p>
-            <p className="text-xs text-on-surface-variant">{person.reviewCount} reviews</p>
-            <div className="flex flex-wrap gap-2">
-              {person.tags.map((item) => (
-                <span
-                  key={item}
-                  className="px-3 py-2 min-h-11 inline-flex items-center rounded-xl bg-surface-container text-xs font-medium"
-                >
-                  {item}
-                </span>
-              ))}
+              <div className="min-w-0 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-display text-2xl uppercase">{person.name}</h3>
+                  <ReviewStars value={person.rating} />
+                </div>
+                <p className="text-sm text-[var(--muted)]">{person.role}</p>
+                <p className="text-sm">{person.bio}</p>
+                <p className="font-mono text-sm">Piso {formatBrl(person.minBaseRate)}</p>
+                <div className="flex flex-wrap gap-2">
+                  {(person.tags || []).map((item) => (
+                    <span key={item} className="bar-sticker text-xs">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+                {subscription.active ? (
+                  <InviteForm person={person} />
+                ) : (
+                  <p className="text-sm text-[var(--muted)]">Ative a assinatura para convidar.</p>
+                )}
+              </div>
             </div>
           </li>
         ))}
       </ul>
 
       {people.length === 0 ? (
-        <p className="text-sm text-on-surface-variant">Nenhum freela com esses filtros.</p>
+        <p className="text-sm text-[var(--muted)]">Nenhum freela com esses filtros.</p>
       ) : null}
 
-      <Link to="/bar/propostas">
-        <Button variant="secondary">Ver propostas e chat</Button>
+      <Link to="/bar/propostas" className="inline-flex min-h-11 items-center">
+        <Button variant="secondary">Propostas e chat</Button>
       </Link>
     </div>
   );

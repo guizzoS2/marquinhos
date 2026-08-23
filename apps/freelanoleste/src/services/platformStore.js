@@ -1,4 +1,5 @@
 const STORE_KEY = 'fnl_platform_store';
+const STORE_EVENT = 'fnl-platform-store';
 
 const seed = {
   kpis: {
@@ -122,6 +123,88 @@ function readStore() {
 
 function writeStore(next) {
   localStorage.setItem(STORE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event(STORE_EVENT));
+}
+
+export function slugifyTenant(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
+export function subscribePlatformStore(callback) {
+  const handler = () => callback(loadPlatformStore());
+  window.addEventListener(STORE_EVENT, handler);
+  window.addEventListener('storage', handler);
+  return () => {
+    window.removeEventListener(STORE_EVENT, handler);
+    window.removeEventListener('storage', handler);
+  };
+}
+
+export function getTenantById(tenantId) {
+  if (!tenantId) return null;
+  return loadPlatformStore().tenants.find((item) => item.id === tenantId) || null;
+}
+
+export function createTenant({ name, slug, ownerEmail }) {
+  const trimmedName = String(name || '').trim();
+  const normalizedSlug = slugifyTenant(slug || trimmedName);
+  const email = String(ownerEmail || '').trim().toLowerCase();
+  if (!trimmedName) {
+    throw new Error('Informe o nome do bar.');
+  }
+  if (!normalizedSlug) {
+    throw new Error('Informe um slug.');
+  }
+  if (!email) {
+    throw new Error('Informe o e-mail do dono.');
+  }
+  const store = readStore();
+  if (store.tenants.some((item) => item.slug === normalizedSlug || item.id === normalizedSlug)) {
+    throw new Error('Slug já em uso.');
+  }
+  const tenant = {
+    id: normalizedSlug,
+    name: trimmedName,
+    slug: normalizedSlug,
+    ownerEmail: email,
+    stripeStatus: 'incomplete',
+    stripeSubscriptionId: null,
+    primaryHex: '',
+    logoDataUrl: '',
+  };
+  const next = { ...store, tenants: [...store.tenants, tenant] };
+  writeStore(next);
+  return tenant;
+}
+
+export function setTenantStripeStatus(tenantId, stripeStatus) {
+  const allowed = ['active', 'incomplete', 'canceled', 'past_due'];
+  const nextStatus = allowed.includes(stripeStatus) ? stripeStatus : 'incomplete';
+  const store = readStore();
+  const tenants = store.tenants.map((item) => {
+    if (item.id !== tenantId) return item;
+    if (nextStatus === 'active') {
+      return {
+        ...item,
+        stripeStatus: 'active',
+        stripeSubscriptionId: item.stripeSubscriptionId || `sub_mock_${item.id}`,
+      };
+    }
+    return {
+      ...item,
+      stripeStatus: nextStatus,
+    };
+  });
+  const next = { ...store, tenants };
+  writeStore(next);
+  return next.tenants;
 }
 
 export function loadPlatformStore() {
@@ -140,6 +223,24 @@ export function saveTickets(tickets) {
   const next = { ...current, tickets };
   writeStore(next);
   return next;
+}
+
+export function savePayments(payments) {
+  const current = readStore();
+  const next = { ...current, payments };
+  writeStore(next);
+  return next;
+}
+
+export function appendPlatformPayment(payment) {
+  const current = readStore();
+  if (
+    payment?.proposalId &&
+    current.payments.some((item) => item.kind === payment.kind && item.proposalId === payment.proposalId)
+  ) {
+    return current.payments;
+  }
+  return savePayments([...current.payments, payment]).payments;
 }
 
 export const stripeStatusLabel = {

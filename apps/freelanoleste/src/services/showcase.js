@@ -1,3 +1,6 @@
+import { listFreelaProfiles } from './freelaStore';
+import { loadOwnerStore } from './ownerStore';
+
 function partialName(fullName) {
   const parts = String(fullName)
     .replace(/['']/g, '')
@@ -19,24 +22,49 @@ function initials(fullName) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-const raw = [
-  { id: 'f1', kind: 'freela', name: 'Ricardo Alves', specialty: 'Barman', rating: 4.9 },
-  { id: 'b-mq', kind: 'bar', name: "Marquinho's", specialty: 'Bar', rating: 4.5 },
-  { id: 'f2', kind: 'freela', name: 'Marina Santos', specialty: 'Garçom', rating: 4.7 },
-  { id: 'b-bl', kind: 'bar', name: 'Bar do Leste', specialty: 'Bar', rating: 4.2 },
-  { id: 'f3', kind: 'freela', name: 'Lucas Silva', specialty: 'Cozinha', rating: 4.8 },
-  { id: 'f4', kind: 'freela', name: 'Patrícia Moura', specialty: 'Barwoman', rating: 4.4 },
-  { id: 'b-ca', kind: 'bar', name: 'Casa Amarela', specialty: 'Bar', rating: 4.8 },
-  { id: 'f-demo', kind: 'freela', name: 'Freela demo', specialty: 'Barman', rating: 4.6 },
+const seedBars = [
+  { id: 'b-mq', tenantId: 'marquinhos', kind: 'bar', name: "Marquinho's", specialty: 'Bar', rating: 4.5 },
+  { id: 'b-bl', tenantId: 'bar-leste', kind: 'bar', name: 'Bar do Leste', specialty: 'Bar', rating: 4.2 },
+  { id: 'b-ca', tenantId: 'casa-amarela', kind: 'bar', name: 'Casa Amarela', specialty: 'Bar', rating: 4.8 },
 ];
 
-export function fetchShowcase() {
-  return raw.map((item) => ({
+function barRating(profile, fallback) {
+  const reviews = profile?.reviews || [];
+  if (!reviews.length) return fallback;
+  const sum = reviews.reduce((acc, item) => acc + Number(item.rating || 0), 0);
+  return Math.round((sum / reviews.length) * 10) / 10;
+}
+
+function toCard(item) {
+  return {
     id: item.id,
     kind: item.kind,
     displayName: partialName(item.name),
     specialty: item.specialty,
     rating: item.rating,
     initials: initials(item.name),
+    photoDataUrl: item.photoDataUrl || '',
+  };
+}
+
+export function fetchShowcase() {
+  const owner = loadOwnerStore();
+  const bars = seedBars.map((bar) => {
+    const profile = owner.profiles[bar.tenantId];
+    return {
+      ...bar,
+      name: profile?.name || bar.name,
+      rating: barRating(profile, bar.rating),
+      photoDataUrl: profile?.photoDataUrl || '',
+    };
+  });
+  const freelas = listFreelaProfiles().map((person) => ({
+    id: person.id,
+    kind: 'freela',
+    name: person.name,
+    specialty: person.role,
+    rating: person.rating ?? 0,
+    photoDataUrl: person.photoDataUrl || '',
   }));
+  return [...bars, ...freelas].map(toCard);
 }

@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function RequireAdmin() {
-  const { user, isAdmin, isFreela, isOwner } = useAuth();
+  const { user, isAdmin, isFreela, isBar } = useAuth();
   const location = useLocation();
 
   if (!user) {
@@ -17,7 +17,7 @@ export function RequireAdmin() {
     return <Navigate to="/freela" replace />;
   }
 
-  if (isOwner) {
+  if (isBar) {
     return <Navigate to="/bar" replace />;
   }
 

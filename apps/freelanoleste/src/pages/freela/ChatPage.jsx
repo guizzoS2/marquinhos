@@ -5,6 +5,7 @@ import {
   postChatMessage,
   resolveProposal,
   sendCounterProposal,
+  submitFreelaReview,
 } from '../../services/freelaApi';
 
 export function FreelaChatPage() {
@@ -18,6 +19,7 @@ export function FreelaChatPage() {
       postMessage={postChatMessage}
       sendCounter={sendCounterProposal}
       resolve={resolveProposal}
+      submitReview={submitFreelaReview}
     />
   );
 }

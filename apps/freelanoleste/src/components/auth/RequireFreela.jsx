@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function RequireFreela() {
-  const { user, isFreela, isAdmin, isOwner } = useAuth();
+  const { user, isFreela, isAdmin, isBar } = useAuth();
   const location = useLocation();
 
   if (!user) {
@@ -13,7 +13,7 @@ export function RequireFreela() {
     return <Navigate to="/admin" replace />;
   }
 
-  if (isOwner) {
+  if (isBar) {
     return <Navigate to="/bar" replace />;
   }
 

@@ -22,7 +22,7 @@ export default {
         error: '#B31B25',
         tertiary: '#3D3D3D',
         'surface-dim': '#E5E5E5',
-        primary: '#FFDB15',
+        primary: 'var(--color-primary, #FFDB15)',
         background: '#FFFFFF',
         'primary-container': '#FFDB15',
         'surface-container-high': '#EBEBEB',

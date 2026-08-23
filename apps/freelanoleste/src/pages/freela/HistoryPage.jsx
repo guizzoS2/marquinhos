@@ -1,14 +1,63 @@
-import { useMemo, useState } from 'react';
-import { fetchHistory, formatBrl } from '../../services/freelaApi';
+import { useEffect, useState } from 'react';
+import { fetchHistory, formatBrl, submitFreelaReview } from '../../services/freelaApi';
+import { hasReview, subscribeFreelaStore } from '../../services/freelaStore';
 import { DataTable } from '../../components/admin/DataTable';
+import { ReviewForm } from '../../components/freela/ReviewForm';
 import { ReviewStars } from '../../components/freela/ReviewStars';
 import { Button } from '../../components/Button';
 
 const PAGE_SIZE = 5;
 
+function ReviewBlock({ item }) {
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+          Review ao bar
+        </p>
+        {hasReview(item.reviewGiven) ? (
+          <>
+            <ReviewStars value={item.reviewGiven.rating} />
+            <p className="text-sm">{item.reviewGiven.comment}</p>
+          </>
+        ) : item.proposalId ? (
+          <ReviewForm
+            title="Avalie o bar"
+            onSubmit={({ rating, comment }) =>
+              submitFreelaReview({ proposalId: item.proposalId, rating, comment })
+            }
+          />
+        ) : (
+          <p className="text-sm text-on-surface-variant">Sem review deste lado.</p>
+        )}
+      </div>
+      <div className="space-y-2">
+        <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+          Review recebido
+        </p>
+        {hasReview(item.reviewReceived) ? (
+          <>
+            <ReviewStars value={item.reviewReceived.rating} />
+            <p className="text-sm">{item.reviewReceived.comment}</p>
+          </>
+        ) : (
+          <p className="text-sm text-on-surface-variant">Aguardando review do bar.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function FreelaHistoryPage() {
   const [page, setPage] = useState(1);
-  const data = useMemo(() => fetchHistory({ page, pageSize: PAGE_SIZE }), [page]);
+  const [data, setData] = useState(() => fetchHistory({ page, pageSize: PAGE_SIZE }));
+
+  useEffect(() => {
+    setData(fetchHistory({ page, pageSize: PAGE_SIZE }));
+    return subscribeFreelaStore(() => {
+      setData(fetchHistory({ page, pageSize: PAGE_SIZE }));
+    });
+  }, [page]);
 
   return (
     <div className="space-y-6 md:space-y-8 max-w-7xl">
@@ -17,9 +66,13 @@ export function FreelaHistoryPage() {
           Histórico e avaliações
         </h2>
         <p className="text-on-surface-variant text-sm">
-          Trabalhos concluídos com pagamento Stripe. Review dado ao bar e review recebido.
+          Só os seus turnos. Review depois de proposta aceita (pagamento mock).
         </p>
       </section>
+
+      {data.items.length === 0 ? (
+        <p className="text-sm text-on-surface-variant">Nenhum turno no seu histórico.</p>
+      ) : null}
 
       <div className="flex flex-col gap-4 md:hidden">
         {data.items.map((job) => (
@@ -37,53 +90,63 @@ export function FreelaHistoryPage() {
             <p className="text-xs text-on-surface-variant">
               {new Date(`${job.date}T12:00:00`).toLocaleDateString('pt-BR')} · {job.stripeTransferId}
             </p>
-            <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
-                Review ao bar
-              </p>
-              <ReviewStars value={job.reviewGiven.rating} />
-              <p className="text-sm">{job.reviewGiven.comment}</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
-                Review recebido
-              </p>
-              <ReviewStars value={job.reviewReceived.rating} />
-              <p className="text-sm">{job.reviewReceived.comment}</p>
-            </div>
+            <ReviewBlock item={job} />
           </article>
         ))}
       </div>
 
       <div className="hidden md:block">
-        <DataTable
-          columns={['Bar', 'Turno', 'Recebido', 'Review ao bar', 'Review recebido']}
-        >
-          {data.items.map((job) => (
-            <tr key={job.id} className="bg-surface-container-lowest">
-              <td className="px-4 md:px-6 py-4 font-bold whitespace-nowrap">{job.barName}</td>
-              <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                {job.title}
-                <p className="text-xs text-on-surface-variant">
-                  {new Date(`${job.date}T12:00:00`).toLocaleDateString('pt-BR')}
-                </p>
-              </td>
-              <td className="px-4 md:px-6 py-4 font-bold whitespace-nowrap">
-                {formatBrl(job.amountReceived)}
-              </td>
-              <td className="px-4 md:px-6 py-4 min-w-56">
-                <ReviewStars value={job.reviewGiven.rating} />
-                <p className="text-xs text-on-surface-variant mt-1">{job.reviewGiven.comment}</p>
-              </td>
-              <td className="px-4 md:px-6 py-4 min-w-56">
-                <ReviewStars value={job.reviewReceived.rating} />
-                <p className="text-xs text-on-surface-variant mt-1">
-                  {job.reviewReceived.comment}
-                </p>
-              </td>
-            </tr>
-          ))}
-        </DataTable>
+        {data.items.length ? (
+          <DataTable
+            columns={['Bar', 'Turno', 'Recebido', 'Review ao bar', 'Review recebido']}
+          >
+            {data.items.map((job) => (
+              <tr key={job.id} className="bg-surface-container-lowest">
+                <td className="px-4 md:px-6 py-4 font-bold whitespace-nowrap">{job.barName}</td>
+                <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                  {job.title}
+                  <p className="text-xs text-on-surface-variant">
+                    {new Date(`${job.date}T12:00:00`).toLocaleDateString('pt-BR')}
+                  </p>
+                </td>
+                <td className="px-4 md:px-6 py-4 font-bold whitespace-nowrap">
+                  {formatBrl(job.amountReceived)}
+                </td>
+                <td className="px-4 md:px-6 py-4 min-w-56">
+                  {hasReview(job.reviewGiven) ? (
+                    <>
+                      <ReviewStars value={job.reviewGiven.rating} />
+                      <p className="text-xs text-on-surface-variant mt-1">
+                        {job.reviewGiven.comment}
+                      </p>
+                    </>
+                  ) : job.proposalId ? (
+                    <ReviewForm
+                      title="Avalie o bar"
+                      onSubmit={({ rating, comment }) =>
+                        submitFreelaReview({ proposalId: job.proposalId, rating, comment })
+                      }
+                    />
+                  ) : (
+                    <p className="text-sm text-on-surface-variant">Sem review.</p>
+                  )}
+                </td>
+                <td className="px-4 md:px-6 py-4 min-w-56">
+                  {hasReview(job.reviewReceived) ? (
+                    <>
+                      <ReviewStars value={job.reviewReceived.rating} />
+                      <p className="text-xs text-on-surface-variant mt-1">
+                        {job.reviewReceived.comment}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-on-surface-variant">Aguardando o bar.</p>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-center gap-3">

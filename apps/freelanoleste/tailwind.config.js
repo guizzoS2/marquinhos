@@ -3,7 +3,11 @@ import preset from '../../packages/ui/tailwind.preset.js';
 /** @type {import('tailwindcss').Config} */
 export default {
   presets: [preset],
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+  content: [
+    './index.html',
+    './src/**/*.{js,jsx}',
+    '../../packages/dashboard/src/**/*.{js,jsx}',
+  ],
   darkMode: 'class',
   theme: {
     extend: {
