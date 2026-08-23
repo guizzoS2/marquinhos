@@ -248,17 +248,6 @@ export function SistemaPage() {
     >
       <span className="system-spine" aria-hidden="true" />
 
-      {focus ? (
-        <button
-          type="button"
-          aria-label="Voltar à visão dos dois lados"
-          onClick={() => setFocus(null)}
-          className="sticker min-h-11 min-w-11 fixed z-20 right-4 md:right-8 top-20"
-        >
-          <Icon name="close" />
-        </button>
-      ) : null}
-
       {dual ? (
         <>
           <div className="md:hidden">
@@ -343,7 +332,17 @@ export function SistemaPage() {
           }
         >
           <span className="system-rail md:hidden" aria-hidden="true" />
-          <header className="px-4 md:px-8 py-10 md:py-16 flex flex-col items-center gap-4 pr-20">
+          <div className="flex justify-end px-4 md:px-8 pt-3">
+            <button
+              type="button"
+              aria-label="Voltar à visão dos dois lados"
+              onClick={() => setFocus(null)}
+              className={`sticker min-h-11 min-w-11 ${focus === 'bar' ? 'sticker-ink' : ''}`}
+            >
+              <Icon name="close" />
+            </button>
+          </div>
+          <header className="px-4 md:px-8 pt-2 pb-10 md:pb-16 flex flex-col items-center gap-4">
             <StatusStamp className={focus === 'bar' ? 'stamp-ink' : ''}>
               {focus === 'bar' ? 'Painel' : 'No Leste'}
             </StatusStamp>

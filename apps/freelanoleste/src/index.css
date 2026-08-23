@@ -401,19 +401,22 @@ h3 {
     top: 0;
     bottom: 0;
     left: 50%;
-    width: 4px;
+    width: 6px;
     transform: translateX(-50%);
-    background: #000000;
+    background: #ffdb15;
+    box-shadow: -2px 0 0 #000000, 2px 0 0 #000000;
     z-index: 2;
     pointer-events: none;
   }
 
   .system-page[data-focus='freela'] .system-spine {
     background: #ffdb15;
+    box-shadow: none;
   }
 
   .system-page[data-focus='bar'] .system-spine {
     background: #111111;
+    box-shadow: none;
   }
 }
 
