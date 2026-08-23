@@ -9,6 +9,7 @@ import { FreelaLayout } from './components/freela/FreelaLayout';
 import { BarLayout } from './components/bar/BarLayout';
 import { BarOpsProviders } from './components/bar/OpsProviders';
 import { HomePage } from './pages/HomePage';
+import { SistemaPage } from './pages/SistemaPage';
 import { AuthGatewayPage } from './pages/AuthGatewayPage';
 import { RoleLoginPage } from './pages/LoginPage';
 import { RoleSignupPage } from './pages/SignupPage';
@@ -47,6 +48,7 @@ export default function App() {
         <Routes>
           <Route element={<Shell />}>
             <Route index element={<HomePage />} />
+            <Route path="sistema" element={<SistemaPage />} />
             <Route path="login" element={<AuthGatewayPage />} />
             <Route path="login/bar" element={<RoleLoginPage role="owner" />} />
             <Route path="login/freela" element={<RoleLoginPage role="freela" />} />

@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const publicLinks = [
   { to: '/', label: 'Início', end: true },
+  { to: '/sistema', label: 'O sistema' },
   { to: '/pessoal', label: 'Pessoal' },
 ];
 
