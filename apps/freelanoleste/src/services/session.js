@@ -1,13 +1,15 @@
 import {
   createUserWithEmailAndPassword,
+  onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
 import { listStaffAccounts } from '@fnl/dashboard';
+import { bootAuthenticatedCloud } from './boot';
 import { auth, isFirebaseConfigured } from './firebase';
 import {
   emailTaken,
-  peekDoc,
+  pickUserFields,
   readUserDoc,
   writeEmailLock,
   writeUserDoc,
@@ -81,7 +83,7 @@ function profileToSession(profile, role) {
 
 async function persistUser(uid, profile) {
   await writeUserDoc(uid, {
-    ...profile,
+    ...pickUserFields(profile),
     uid,
     updatedAt: new Date().toISOString(),
   });
@@ -219,34 +221,16 @@ export async function authenticate({ email, password, role }) {
       await signOut(auth);
       throw new Error('Este login não tem acesso a esta área.');
     }
-    const session = profileToSession(
-      { ...profile, uid: credential.user.uid },
-      hit
-    );
+    const session = profileToSession({ ...profile, uid: credential.user.uid }, hit);
     writeSession(session);
+    await bootAuthenticatedCloud();
     return session;
   } catch (error) {
-    if (error.message === 'Este login não tem acesso a esta área.') {
+    if (
+      error.message === 'Este login não tem acesso a esta área.' ||
+      error.message === 'Conta sem perfil.'
+    ) {
       throw error;
-    }
-    const staff = listStaffAccounts().find(
-      (item) =>
-        item.email === normalized &&
-        item.password === password &&
-        acceptedRoles.includes('staff')
-    );
-    if (staff) {
-      const session = {
-        uid: null,
-        id: staff.id || null,
-        email: staff.email,
-        role: 'staff',
-        name: staff.name,
-        tenantId: staff.tenantId,
-        permissions: staff.permissions || [],
-      };
-      writeSession(session);
-      return session;
     }
     throw mapAuthError(error);
   }
@@ -257,6 +241,48 @@ export async function logoutSession() {
   if (isFirebaseConfigured() && auth) {
     await signOut(auth);
   }
+}
+
+export function subscribeSession(callback) {
+  if (!isFirebaseConfigured() || !auth) {
+    callback(null);
+    return () => {};
+  }
+
+  return onAuthStateChanged(auth, async (firebaseUser) => {
+    if (!firebaseUser) {
+      writeSession(null);
+      callback(null);
+      return;
+    }
+
+    try {
+      const profile = await readUserDoc(firebaseUser.uid);
+      if (!profile) {
+        callback(readSession());
+        return;
+      }
+
+      const stored = readSession();
+      const roles = profile.roles || [];
+      const preferred =
+        stored?.uid === firebaseUser.uid && roles.includes(stored.role)
+          ? stored.role
+          : roles[0];
+      if (!preferred) {
+        callback(null);
+        return;
+      }
+
+      const session = profileToSession({ ...profile, uid: firebaseUser.uid }, preferred);
+      writeSession(session);
+      await bootAuthenticatedCloud();
+      callback(session);
+    } catch (error) {
+      console.warn('Firebase session', error);
+      callback(readSession());
+    }
+  });
 }
 
 export function isAdminSession(session = readSession()) {

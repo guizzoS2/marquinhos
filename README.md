@@ -38,11 +38,22 @@ npm run dev:plataforma    # :5174
 npm run dev:api           # :3333 mock
 ```
 
-### Marquinho's — login (modo local)
+### Firebase (obrigatório)
 
-- E-mail: `fabiosilsantos71@gmail.com`
+Login, cadastro, perfil e dados operacionais usam **Firebase Auth + Firestore**. Sem `FIREBASE_*` o app não sobe no modo local.
 
-Sem Firebase: conta local. Com Firebase: `apps/marquinhos/.env.example` → `.env` (prefixo `FIREBASE_`, sem `VITE_`) e o mesmo usuário no Auth.
+Os dois apps apontam para o **mesmo projeto**. Copie:
+
+- `apps/marquinhos/.env.example` → `apps/marquinhos/.env`
+- `apps/freelanoleste/.env.example` → `apps/freelanoleste/.env`
+
+Prefixo `FIREBASE_` (Vite também aceita `VITE_FIREBASE_*`). Seed inicial:
+
+```bash
+SEED_OWNER_PASSWORD=... SEED_ADMIN_PASSWORD=... node scripts/seed-firebase.mjs
+```
+
+Contas do seed: dono `fabiosilsantos71@gmail.com` · admin/freela `guilvieira409@gmail.com`.
 
 ### Vercel — projeto Marquinho's
 
@@ -57,7 +68,7 @@ Root Directory = raiz do repo (vazio / `.`). **Não** apontar para `apps/marquin
 
 SPA: `vercel.json` na raiz reescreve rotas para `index.html`.
 
-Firebase no deploy: Settings → Environment Variables com as chaves de `apps/marquinhos/.env.example`. Sem isso o app cai no modo local. Crie o usuário no Firebase Auth (e-mail/senha).
+Firebase no deploy: Settings → Environment Variables com as chaves de `apps/marquinhos/.env.example` **e** `apps/freelanoleste/.env.example`. Sem isso a tela bloqueia. Crie o usuário no Firebase Auth (e-mail/senha) ou rode o seed.
 
 ### Rotas Marquinho's
 
@@ -79,7 +90,7 @@ Firebase no deploy: Settings → Environment Variables com as chaves de `apps/ma
 | `guilvieira409@gmail.com` | Freela | `/login/freela` |
 | `guilvieira409@gmail.com` | Admin plataforma | `/login/admin` |
 
-Sem seeds de bar/freela/caixa. Cadastro em `/cadastro/bar` e `/cadastro/freela`.
+Sem seeds locais. Cadastro em `/cadastro-bar` e `/cadastro-freela` (grava Auth + `users/{uid}` + stores `fnl/*`).
 
 ### Rotas FreelaNoLeste
 

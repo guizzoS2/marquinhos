@@ -11,8 +11,12 @@ function homeFor(user) {
 }
 
 export function AuthGatewayPage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   const location = useLocation();
+
+  if (loading) {
+    return <div className="min-h-dvh" />;
+  }
 
   if (isAuthenticated) {
     return <Navigate to={location.state?.from || homeFor(user)} replace />;

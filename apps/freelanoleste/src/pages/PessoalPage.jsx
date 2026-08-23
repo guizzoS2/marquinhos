@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PATHS, hydrateDoc, peekDoc } from '../services/cloud';
 import { subscribeFreelaStore } from '../services/freelaStore';
 import { fetchShowcase } from '../services/showcase';
 import { ReviewStars } from '../components/freela/ReviewStars';
@@ -9,11 +10,25 @@ import { StatusStamp } from '../components/street/StatusStamp';
 
 const rotates = ['-rotate-1', 'rotate-1', 'rotate-2', '-rotate-2'];
 
+function showcaseCards() {
+  const stored = peekDoc(PATHS.showcase, { cards: [] });
+  return Array.isArray(stored?.cards) && stored.cards.length ? stored.cards : fetchShowcase();
+}
+
 export function PessoalPage() {
-  const [people, setPeople] = useState(() => fetchShowcase());
+  const [people, setPeople] = useState(() => showcaseCards());
   const navigate = useNavigate();
 
-  useEffect(() => subscribeFreelaStore(() => setPeople(fetchShowcase())), []);
+  useEffect(() => {
+    hydrateDoc(PATHS.showcase, { cards: [] })
+      .then((doc) => {
+        if (Array.isArray(doc?.cards)) setPeople(doc.cards);
+      })
+      .catch(() => {
+        setPeople(showcaseCards());
+      });
+    return subscribeFreelaStore(() => setPeople(showcaseCards()));
+  }, []);
 
   return (
     <div className="min-h-[calc(100dvh-4rem)] overflow-x-hidden">

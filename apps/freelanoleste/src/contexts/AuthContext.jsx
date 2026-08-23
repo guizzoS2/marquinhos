@@ -1,4 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { bootAuthenticatedCloud, ensureTenantOpsCloud } from '../services/boot';
+import { flushCloudWrites } from '../services/cloud';
 import { buildFreelaProfile, createFreelaProfile } from '../services/freelaApi';
 import { nextId } from '../services/freelaStore';
 import { ensureBarProfile } from '../services/ownerStore';
@@ -7,16 +9,25 @@ import {
   assertEmailAvailable,
   authenticate,
   logoutSession,
-  readSession,
   registerFreelaAccount,
   registerOwnerAccount,
+  subscribeSession,
   writeSession,
 } from '../services/session';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => readSession());
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = subscribeSession((session) => {
+      setUser(session);
+      setLoading(false);
+    });
+    return unsubscribe;
+  }, []);
 
   const login = useCallback(async ({ email, password, role }) => {
     const session = await authenticate({ email, password, role });
@@ -39,6 +50,8 @@ export function AuthProvider({ children }) {
       id,
     });
     createFreelaProfile({ ...profile, id: account.id, email: account.email });
+    await flushCloudWrites();
+    await bootAuthenticatedCloud();
     const session = {
       uid: account.uid,
       id: account.id,
@@ -76,6 +89,9 @@ export function AuthProvider({ children }) {
       ownerEmail: payload.email,
     });
     ensureBarProfile(tenant.id, tenant.name);
+    ensureTenantOpsCloud(tenant.id);
+    await flushCloudWrites();
+    await bootAuthenticatedCloud();
     const session = {
       uid: account.uid,
       id: null,
@@ -92,6 +108,7 @@ export function AuthProvider({ children }) {
   const value = useMemo(
     () => ({
       user,
+      loading,
       isAuthenticated: Boolean(user),
       isAdmin: user?.role === 'admin',
       isFreela: user?.role === 'freela',
@@ -104,7 +121,7 @@ export function AuthProvider({ children }) {
       registerFreela,
       registerOwner,
     }),
-    [user, login, logout, registerFreela, registerOwner]
+    [user, loading, login, logout, registerFreela, registerOwner]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

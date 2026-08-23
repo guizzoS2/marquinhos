@@ -123,6 +123,7 @@ export function ProfilePage() {
                 value={form.email}
                 onChange={handleChange}
                 required
+                disabled
               />
               <Input
                 label="Telefone"

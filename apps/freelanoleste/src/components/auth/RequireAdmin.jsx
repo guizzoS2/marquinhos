@@ -2,8 +2,12 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function RequireAdmin() {
-  const { user, isAdmin, isFreela, isBar } = useAuth();
+  const { user, loading, isAdmin, isFreela, isBar } = useAuth();
   const location = useLocation();
+
+  if (loading) {
+    return <div className="min-h-dvh" />;
+  }
 
   if (!user) {
     return <Navigate to="/login/admin" replace state={{ from: location.pathname }} />;

@@ -5,6 +5,7 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { BrandLogo } from '../components/layout/BrandLogo';
+import { isFirebaseConfigured } from '../services/firebase';
 import { homeForRole } from '../services/roles';
 
 export function LoginPage() {
@@ -13,6 +14,20 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  if (!isFirebaseConfigured()) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center p-4 sm:p-6 font-body">
+        <Card className="w-full max-w-md p-5 sm:p-8 space-y-3">
+          <h1 className="font-headline text-2xl font-extrabold">Firebase obrigatório</h1>
+          <p className="text-sm text-on-surface-variant">
+            Configure FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID e FIREBASE_APP_ID
+            em apps/marquinhos/.env
+          </p>
+        </Card>
+      </div>
+    );
+  }
 
   if (!loading && isAuthenticated) {
     return <Navigate to={homeForRole(user?.role)} replace />;
@@ -24,8 +39,8 @@ export function LoginPage() {
     setError('');
     try {
       await login({ email, password });
-    } catch {
-      setError('Credenciais inválidas.');
+    } catch (err) {
+      setError(err.message || 'Credenciais inválidas.');
     } finally {
       setSubmitting(false);
     }

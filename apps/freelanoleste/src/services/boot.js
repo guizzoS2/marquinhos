@@ -5,10 +5,12 @@ import {
 } from '@fnl/dashboard';
 import {
   PATHS,
+  flushCloudWrites,
   hydrateDoc,
   tenantOpsPath,
   writeCloudDoc,
 } from './cloud';
+import { isFirebaseConfigured } from './firebase';
 import { FREELA_SEED } from './freelaStore';
 import { OWNER_SEED } from './ownerStore';
 import { PLATFORM_SEED } from './platformStore';
@@ -23,9 +25,23 @@ function persistTenantOps(root) {
 }
 
 export async function bootCloud() {
-  const platform = await hydrateDoc(PATHS.platform, structuredClone(PLATFORM_SEED));
-  await hydrateDoc(PATHS.freela, structuredClone(FREELA_SEED));
-  await hydrateDoc(PATHS.owner, structuredClone(OWNER_SEED));
+  if (!isFirebaseConfigured()) {
+    throw new Error('Firebase não configurado.');
+  }
+  await hydrateDoc(PATHS.showcase, { cards: [], updatedAt: new Date().toISOString() });
+}
+
+export async function bootAuthenticatedCloud() {
+  if (!isFirebaseConfigured()) {
+    throw new Error('Firebase não configurado.');
+  }
+  await flushCloudWrites();
+
+  const platform = await hydrateDoc(PATHS.platform, structuredClone(PLATFORM_SEED), {
+    force: true,
+  });
+  await hydrateDoc(PATHS.freela, structuredClone(FREELA_SEED), { force: true });
+  await hydrateDoc(PATHS.owner, structuredClone(OWNER_SEED), { force: true });
 
   const tenantIds = (platform?.tenants || []).map((item) => item.id).filter(Boolean);
   const root = {};
@@ -33,7 +49,8 @@ export async function bootCloud() {
     tenantIds.map(async (tenantId) => {
       root[tenantId] = await hydrateDoc(
         tenantOpsPath(tenantId),
-        createEmptyTenantOps(tenantId)
+        createEmptyTenantOps(tenantId),
+        { force: true }
       );
     })
   );
@@ -44,4 +61,10 @@ export async function bootCloud() {
     cards: fetchShowcase(),
     updatedAt: new Date().toISOString(),
   });
+}
+
+export function ensureTenantOpsCloud(tenantId) {
+  const id = String(tenantId || '').trim();
+  if (!id) return;
+  writeCloudDoc(tenantOpsPath(id), createEmptyTenantOps(id));
 }
