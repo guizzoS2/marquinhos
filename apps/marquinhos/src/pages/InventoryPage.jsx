@@ -112,7 +112,7 @@ export function InventoryPage() {
         </section>
 
         <section className="flex flex-wrap items-center gap-3">
-          {data.filters.map((item) => (
+          {(data.filters || []).map((item) => (
             <button
               key={item}
               type="button"
@@ -221,8 +221,8 @@ export function InventoryPage() {
         </div>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {data.metrics.map((metric) => {
-            const tone = metricTone[metric.tone];
+          {(data.metrics || []).map((metric) => {
+            const tone = metricTone[metric.tone] || metricTone.secondary;
             return (
               <div
                 key={metric.id}

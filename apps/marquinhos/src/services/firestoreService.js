@@ -299,9 +299,92 @@ export async function ensureDashboardSeed() {
   }
 }
 
+function unwrapOverview(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  if (Array.isArray(raw.metrics) || Array.isArray(raw.weeklyPerformance) || 'topSold' in raw) {
+    return raw;
+  }
+  if (raw.overview && typeof raw.overview === 'object') {
+    return raw.overview;
+  }
+  return raw;
+}
+
+function buildOverview(rawOverview, rawCash, rawInventory, rawFreelancers) {
+  const source = unwrapOverview(rawOverview);
+  const cash = migrateCashFlow(rawCash || cashFlowFallback);
+  const items = Array.isArray(rawInventory?.items) ? rawInventory.items : [];
+  const people = Array.isArray(rawFreelancers?.people) ? rawFreelancers.people : [];
+  const low = items.filter((item) => item.status === 'low').length;
+  const freelaCents = (cash.expenses || [])
+    .filter(
+      (row) =>
+        row.categoryId === 'freelancer' ||
+        row.source === 'freelancer_daily' ||
+        row.source === 'platform_daily'
+    )
+    .reduce((sum, row) => sum + (row.amount || 0), 0);
+
+  return {
+    ...overviewFallback,
+    ...source,
+    metrics: [
+      {
+        id: 'revenue',
+        label: 'Faturamento Diário',
+        value: cash.summary?.totalRevenue || 'R$ 0',
+        badge: cash.summary?.revenueDelta || '',
+        badgeTone: 'positive',
+        icon: 'payments',
+      },
+      {
+        id: 'freela-cost',
+        label: 'Custo de Freelas Hoje',
+        value: formatCents(freelaCents),
+        badge: `${people.filter((p) => p.status === 'on_shift').length} em turno`,
+        badgeTone: 'neutral',
+        icon: 'engineering',
+      },
+      {
+        id: 'stock-alert',
+        label: 'Alerta de Estoque',
+        value: `${low} ${low === 1 ? 'Item' : 'Itens'}`,
+        badge: low ? 'ATENÇÃO' : '',
+        badgeTone: low ? 'critical' : 'neutral',
+        icon: 'warning',
+      },
+    ],
+    weeklyPerformance: Array.isArray(source.weeklyPerformance)
+      ? source.weeklyPerformance
+      : overviewFallback.weeklyPerformance,
+    topSold: Array.isArray(source.topSold) ? source.topSold : [],
+    suggestion: source.suggestion ?? overviewFallback.suggestion,
+  };
+}
+
+function normalizeInventory(raw) {
+  const current = raw && typeof raw === 'object' ? raw : inventoryFallback;
+  const items = Array.isArray(current.items) ? current.items : [];
+  return {
+    ...inventoryFallback,
+    ...current,
+    filters: current.filters?.length ? current.filters : inventoryFallback.filters,
+    items,
+    metrics: Array.isArray(current.metrics) && current.metrics.length
+      ? current.metrics
+      : recomputeInventoryMetrics(items),
+  };
+}
+
 export async function getOverview() {
   await ensureDashboardSeed();
-  return (await readDocument(DOCS.overview)) || overviewFallback;
+  const [overview, cashFlow, inventory, freelancers] = await Promise.all([
+    readDocument(DOCS.overview),
+    readDocument(DOCS.cashFlow),
+    readDocument(DOCS.inventory),
+    readDocument(DOCS.freelancers),
+  ]);
+  return buildOverview(overview, cashFlow, inventory, freelancers);
 }
 
 export async function getCashFlow() {
@@ -312,7 +395,7 @@ export async function getCashFlow() {
 
 export async function getInventory() {
   await ensureDashboardSeed();
-  return (await readDocument(DOCS.inventory)) || inventoryFallback;
+  return normalizeInventory((await readDocument(DOCS.inventory)) || inventoryFallback);
 }
 
 export async function getFreelancers() {

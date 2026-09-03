@@ -23,7 +23,7 @@ export function OverviewPage() {
     <>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-          {data.metrics.map((metric) => (
+          {(data.metrics || []).map((metric) => (
             <MetricCard key={metric.id} {...metric} />
           ))}
         </section>
