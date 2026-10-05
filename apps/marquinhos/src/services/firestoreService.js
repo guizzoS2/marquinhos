@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase';
 import { createAuthUserRest } from './identity';
 import {
@@ -26,6 +26,14 @@ import {
   normalizeMedida,
 } from './inventoryProduct';
 import { assertPrice, assertPromotionWindow, saleUnitPrice } from './catalogRules';
+import {
+  assertComanda,
+  normalizeSale,
+  paidSalesOnDay,
+  shiftAlreadyClosed,
+  totalsByPayment,
+} from './saleRules';
+import { format } from 'date-fns';
 import { isValidPhone, maskPhone } from './freelancerSchedule';
 
 const TENANT_ID = 'marquinhos';
@@ -194,6 +202,21 @@ async function writeOps(next) {
   opsCache = payload;
   await setDoc(doc(db, ...OPS_COLLECTION), payload);
   return payload;
+}
+
+async function commitOps(mutator) {
+  requireDb();
+  const ref = doc(db, ...OPS_COLLECTION);
+  const outcome = await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(ref);
+    const ops = snap.exists() ? snap.data() : emptyOps();
+    const produced = mutator(ops);
+    const payload = omitUndefined(produced.ops);
+    transaction.set(ref, payload);
+    return { payload, value: produced.value };
+  });
+  opsCache = outcome.payload;
+  return outcome.value;
 }
 
 async function writeEmailLock(email, uid) {
@@ -407,7 +430,8 @@ function normalizeInventory(raw) {
     productions: Array.isArray(current.productions) ? current.productions : [],
     promotions: Array.isArray(current.promotions) ? current.promotions : [],
     comboItems: Array.isArray(current.comboItems) ? current.comboItems : [],
-    sales: Array.isArray(current.sales) ? current.sales : [],
+    sales: (Array.isArray(current.sales) ? current.sales : []).map(normalizeSale),
+    closings: Array.isArray(current.closings) ? current.closings : [],
     metrics: recomputeInventoryMetrics(items),
   };
 }
@@ -1124,14 +1148,9 @@ export async function createCustomer(payload) {
   return customer;
 }
 
-export async function registerSale(payload) {
-  const forma = assertPaymentMethod(payload.forma_pagamento);
-  const linhas = Array.isArray(payload.itens) ? payload.itens : [];
-  if (!linhas.length) throw new Error('O carrinho está vazio.');
-
-  const inventory = await getInventory();
-  const now = new Date();
-  const resolved = linhas.map((linha) => {
+function resolveSaleLines(inventory, linhas, now) {
+  if (!Array.isArray(linhas) || !linhas.length) throw new Error('O carrinho está vazio.');
+  return linhas.map((linha) => {
     const produto = (inventory.items || []).find((item) => String(item.id) === String(linha.produto_id));
     if (!produto) throw new Error('Produto não encontrado.');
     const quantidade = Number(linha.quantidade);
@@ -1140,27 +1159,26 @@ export async function registerSale(payload) {
     const valorTotal = Math.round(valorUnitario * quantidade * 100) / 100;
     return { produto, quantidade, valor_unitario: valorUnitario, valor_total: valorTotal };
   });
-  const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
+}
 
-  let valorRecebido = null;
-  let troco = null;
-  let parcelas = null;
-  if (forma === 'dinheiro') {
-    valorRecebido = assertPrice(payload.valor_recebido);
-    if (valorRecebido < total) throw new Error('Valor recebido menor que o total.');
-    troco = Math.round((valorRecebido - total) * 100) / 100;
-  }
-  if (forma === 'cartao_credito') parcelas = assertInstallments(payload.parcelas);
+function saleItems(resolved) {
+  return resolved.map((line) => ({
+    produto_id: line.produto.id,
+    nome: line.produto.nome || line.produto.name,
+    quantidade: line.quantidade,
+    valor_unitario: line.valor_unitario,
+    valor_total: line.valor_total,
+  }));
+}
 
-  let cliente = { id: null, nome: 'Consumidor' };
-  if (payload.cliente_id) {
-    const found = (await getCustomers()).customers.find(
-      (item) => String(item.id) === String(payload.cliente_id)
-    );
-    if (!found) throw new Error('Cliente não encontrado.');
-    cliente = { id: found.id, nome: found.nome };
-  }
+function customerFromOps(ops, clienteId) {
+  if (!clienteId) return { id: null, nome: 'Consumidor' };
+  const found = (ops.customers?.customers || []).find((item) => String(item.id) === String(clienteId));
+  if (!found) throw new Error('Cliente não encontrado.');
+  return { id: found.id, nome: found.nome };
+}
 
+function deductSaleStock(inventory, resolved) {
   let items = [...(inventory.items || [])];
   function take(produtoId, qty) {
     const index = items.findIndex((item) => String(item.id) === String(produtoId));
@@ -1179,39 +1197,173 @@ export async function registerSale(payload) {
     }
     take(line.produto.id, line.quantidade);
   });
+  return items.map((item) => persistProduct(presentProduct(item, item.codigo)));
+}
 
+function assertOpenComandaFree(sales, numero, saleId) {
+  const clash = (sales || []).find(
+    (sale) =>
+      sale.status === 'aberta' &&
+      sale.numero_comanda === numero &&
+      String(sale.id) !== String(saleId || '')
+  );
+  if (clash) throw new Error('Essa comanda já está aberta.');
+}
+
+export async function saveOpenSale(payload) {
+  const numero = assertComanda(payload.numero_comanda);
   const usuarioId = await actorId();
-  const sale = {
-    id: `sale-${Date.now()}`,
-    cliente_id: cliente.id,
-    cliente_nome: cliente.nome,
-    forma_pagamento: forma,
-    valor_recebido: valorRecebido,
-    troco,
-    parcelas,
-    total,
-    itens: resolved.map((line) => ({
-      produto_id: line.produto.id,
-      nome: line.produto.nome || line.produto.name,
-      quantidade: line.quantidade,
-      valor_unitario: line.valor_unitario,
-      valor_total: line.valor_total,
-    })),
-    created_at: new Date().toISOString(),
-    usuario_id: usuarioId,
-  };
-
-  const stored = items.map((item) => persistProduct(presentProduct(item, item.codigo)));
-  await saveInventory({ ...inventory, sales: [sale, ...(inventory.sales || [])] }, stored);
-  await createIncome({
-    id: `inc-${sale.id}`,
-    date: new Date().toISOString().slice(0, 10),
-    description: `PDV · ${cliente.nome}`,
-    category: 'Varejo',
-    amount: Math.round(total * 100),
-    source: 'pdv',
+  await ensureDashboardSeed();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const now = new Date();
+    const resolved = resolveSaleLines(inventory, payload.itens, now);
+    const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
+    const cliente = customerFromOps(ops, payload.cliente_id);
+    assertOpenComandaFree(inventory.sales, numero, payload.sale_id);
+    const existing = payload.sale_id
+      ? (inventory.sales || []).find((sale) => String(sale.id) === String(payload.sale_id))
+      : null;
+    if (payload.sale_id && (!existing || existing.status !== 'aberta')) {
+      throw new Error('Comanda não encontrada.');
+    }
+    const sale = normalizeSale({
+      id: existing?.id || `sale-${Date.now()}`,
+      numero_comanda: numero,
+      status: 'aberta',
+      cliente_id: cliente.id,
+      cliente_nome: cliente.nome,
+      forma_pagamento: null,
+      total,
+      itens: saleItems(resolved),
+      created_at: existing?.created_at || now.toISOString(),
+      updated_at: now.toISOString(),
+      usuario_id: existing?.usuario_id || usuarioId,
+    });
+    const sales = existing
+      ? inventory.sales.map((item) => (item.id === sale.id ? sale : item))
+      : [sale, ...(inventory.sales || [])];
+    return {
+      ops: { ...ops, inventory: { ...inventory, sales } },
+      value: sale,
+    };
   });
-  return sale;
+}
+
+export async function registerSale(payload) {
+  const forma = assertPaymentMethod(payload.forma_pagamento);
+  const numero = assertComanda(payload.numero_comanda);
+  const usuarioId = await actorId();
+  await ensureDashboardSeed();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const now = new Date();
+    const resolved = resolveSaleLines(inventory, payload.itens, now);
+    const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
+    let valorRecebido = null;
+    let troco = null;
+    let parcelas = null;
+    if (forma === 'dinheiro') {
+      valorRecebido = assertPrice(payload.valor_recebido);
+      if (valorRecebido < total) throw new Error('Valor recebido menor que o total.');
+      troco = Math.round((valorRecebido - total) * 100) / 100;
+    }
+    if (forma === 'cartao_credito') parcelas = assertInstallments(payload.parcelas);
+    const cliente = customerFromOps(ops, payload.cliente_id);
+    assertOpenComandaFree(inventory.sales, numero, payload.sale_id);
+    const existing = payload.sale_id
+      ? (inventory.sales || []).find((sale) => String(sale.id) === String(payload.sale_id))
+      : null;
+    if (payload.sale_id && (!existing || existing.status !== 'aberta')) {
+      throw new Error('Comanda não encontrada.');
+    }
+    const stored = deductSaleStock(inventory, resolved);
+    const sale = normalizeSale({
+      id: existing?.id || `sale-${Date.now()}`,
+      numero_comanda: numero,
+      status: 'paga',
+      cliente_id: cliente.id,
+      cliente_nome: cliente.nome,
+      forma_pagamento: forma,
+      valor_recebido: valorRecebido,
+      troco,
+      parcelas,
+      total,
+      itens: saleItems(resolved),
+      created_at: existing?.created_at || now.toISOString(),
+      updated_at: now.toISOString(),
+      usuario_id: usuarioId,
+    });
+    const sales = existing
+      ? inventory.sales.map((item) => (item.id === sale.id ? sale : item))
+      : [sale, ...(inventory.sales || [])];
+    const cash = ops.cashFlow || cashFlowFallback;
+    const amountCents = Math.round(total * 100);
+    const income = {
+      id: `inc-${sale.id}`,
+      date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
+      description: `PDV · comanda ${numero} · ${cliente.nome}`,
+      category: 'Varejo',
+      categoryIcon: 'payments',
+      categoryTone: 'secondary',
+      value: formatCents(amountCents),
+      amount: amountCents,
+      source: 'pdv',
+      importKey: null,
+      createdAt: now.toISOString(),
+    };
+    const incomes = [income, ...(cash.incomes || [])];
+    const summary = buildCashFlowSummary(incomes, cash.expenses || [], {
+      revenueDelta: cash.summary?.revenueDelta,
+      expensesDelta: cash.summary?.expensesDelta,
+    });
+    return {
+      ops: {
+        ...ops,
+        inventory: {
+          ...inventory,
+          items: stored,
+          sales,
+          metrics: recomputeInventoryMetrics(stored),
+        },
+        cashFlow: {
+          ...cash,
+          incomes,
+          summary: { ...cash.summary, ...summary },
+        },
+      },
+      value: sale,
+    };
+  });
+}
+
+export async function closeShift() {
+  const usuarioId = await actorId();
+  await ensureDashboardSeed();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const now = new Date();
+    if (shiftAlreadyClosed(inventory.closings, now)) {
+      throw new Error('O turno de hoje já foi consolidado.');
+    }
+    const paid = paidSalesOnDay(inventory.sales, now);
+    if (!paid.length) throw new Error('Não há vendas pagas hoje.');
+    const totais = totalsByPayment(paid);
+    const closing = {
+      id: `close-${Date.now()}`,
+      closed_at: now.toISOString(),
+      sale_ids: paid.map((sale) => sale.id),
+      totais,
+      usuario_id: usuarioId,
+    };
+    return {
+      ops: {
+        ...ops,
+        inventory: { ...inventory, closings: [closing, ...(inventory.closings || [])] },
+      },
+      value: { closing, ...totais, count: paid.length },
+    };
+  });
 }
 
 export async function importStatementRows(rows) {

@@ -28,6 +28,7 @@ import { ComboForm } from '../catalog/ComboForm';
 import { ComboDetail } from '../catalog/ComboDetail';
 import { PromotionForm } from '../catalog/PromotionForm';
 import { CustomerForm } from '../pdv/CustomerForm';
+import { CloseShiftReport } from '../caixa/CloseShiftReport';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { PAYMENT_OPTIONS } from '../../services/inventoryProduct';
 
@@ -43,6 +44,7 @@ const titles = {
   'new-combo': 'Novo combo',
   'combo-detail': 'Detalhes do combo',
   'new-customer': 'Novo Cliente',
+  'close-register': 'Fechamento de caixa',
   'new-daily': 'Registrar Diária',
   'shift-detail': 'Agendamento',
   'new-freelancer': 'Novo Freelancer',
@@ -724,7 +726,9 @@ export function AppModal() {
                 ? 'point_of_sale'
                 : modal.type === 'confirm'
                   ? 'warning'
-                  : 'info';
+                  : modal.type === 'close-register'
+                    ? 'account_balance'
+                    : 'info';
 
   const wide =
     modal.type === 'import-statement' ||
@@ -733,7 +737,8 @@ export function AppModal() {
     modal.type === 'product-detail' ||
     modal.type === 'new-combo' ||
     modal.type === 'combo-detail' ||
-    modal.type === 'new-promotion';
+    modal.type === 'new-promotion' ||
+    modal.type === 'close-register';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -853,6 +858,8 @@ export function AppModal() {
           />
         ) : modal.type === 'confirm' ? (
           <ConfirmForm payload={modal.payload} onCancel={closeModal} />
+        ) : modal.type === 'close-register' ? (
+          <CloseShiftReport payload={modal.payload} onCancel={closeModal} />
         ) : (
           <div className="space-y-6">
             <p className="text-on-surface-variant font-body leading-relaxed">

@@ -22,6 +22,8 @@ function initialCart() {
     formaPagamento: 'dinheiro',
     valorRecebido: '',
     parcelas: '1',
+    numeroComanda: '',
+    saleId: '',
   };
 }
 
@@ -60,6 +62,16 @@ function cartReducer(state, action) {
       return { ...state, valorRecebido: action.valorRecebido };
     case 'set-installments':
       return { ...state, parcelas: action.parcelas };
+    case 'set-comanda':
+      return { ...state, numeroComanda: action.numeroComanda };
+    case 'load':
+      return {
+        ...initialCart(),
+        lines: (action.lines || []).map((line) => withQty(line, line.quantidade)),
+        clienteId: action.clienteId || '',
+        numeroComanda: action.numeroComanda != null ? String(action.numeroComanda) : '',
+        saleId: action.saleId || '',
+      };
     case 'clear':
       return initialCart();
     default:

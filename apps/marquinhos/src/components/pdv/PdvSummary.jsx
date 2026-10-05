@@ -6,7 +6,7 @@ import { RoleSelect } from '../freelancers/RoleSelect';
 import { useModal } from '../../contexts/ModalContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useCartDispatch, useCartState } from '../../contexts/CartContext';
-import { checkoutSale } from '../../services/dashboardService';
+import { checkoutSale, saveOpenTab } from '../../services/dashboardService';
 import { CARD_INSTALLMENTS, PAYMENT_OPTIONS, parseReaisInput } from '../../services/inventoryProduct';
 
 function money(value) {
@@ -20,6 +20,7 @@ export function PdvSummary({ customers = [] }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [created, setCreated] = useState(null);
+  const [savingTab, setSavingTab] = useState(false);
 
   const total = useMemo(
     () => Math.round(state.lines.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100,
@@ -39,11 +40,51 @@ export function PdvSummary({ customers = [] }) {
     return [{ value: '', label: 'Consumidor' }, ...list];
   }, [customers, created]);
 
-  function finish() {
+  const numero = Number(state.numeroComanda);
+
+  function salePayload() {
+    return {
+      sale_id: state.saleId || null,
+      numero_comanda: numero,
+      cliente_id: state.clienteId || null,
+      itens: state.lines.map((line) => ({
+        produto_id: line.produto_id,
+        quantidade: line.quantidade,
+        valor_unitario: line.valor_unitario,
+        valor_total: line.valor_total,
+      })),
+    };
+  }
+
+  function guardCart() {
     if (!state.lines.length) {
       toast.error('O carrinho está vazio.');
-      return;
+      return false;
     }
+    if (!Number.isInteger(numero) || numero <= 0) {
+      toast.error('Informe o número da comanda.');
+      return false;
+    }
+    return true;
+  }
+
+  async function saveOpen() {
+    if (!guardCart()) return;
+    setSavingTab(true);
+    try {
+      await saveOpenTab(salePayload());
+      dispatch({ type: 'clear' });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      toast.success('Comanda salva.');
+    } catch (err) {
+      toast.error(err?.message || 'Não foi possível salvar a comanda.');
+    } finally {
+      setSavingTab(false);
+    }
+  }
+
+  function finish() {
+    if (!guardCart()) return;
     if (state.formaPagamento === 'dinheiro' && (troco == null || troco < 0)) {
       toast.error('Informe um valor recebido que cubra o total.');
       return;
@@ -55,16 +96,10 @@ export function PdvSummary({ customers = [] }) {
       errorMessage: 'Não foi possível finalizar a venda.',
       onConfirm: async () => {
         await checkoutSale({
-          cliente_id: state.clienteId || null,
+          ...salePayload(),
           forma_pagamento: state.formaPagamento,
           valor_recebido: state.formaPagamento === 'dinheiro' ? recebido : null,
           parcelas: state.formaPagamento === 'cartao_credito' ? Number(state.parcelas) : null,
-          itens: state.lines.map((line) => ({
-            produto_id: line.produto_id,
-            quantidade: line.quantidade,
-            valor_unitario: line.valor_unitario,
-            valor_total: line.valor_total,
-          })),
         });
         dispatch({ type: 'clear' });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -169,6 +204,16 @@ export function PdvSummary({ customers = [] }) {
 
       <p className="text-2xl font-headline font-extrabold text-on-surface">Total {money(total)}</p>
 
+      <Input
+        id="pdv-comanda"
+        label="Número da comanda"
+        inputMode="numeric"
+        value={state.numeroComanda}
+        onChange={(event) =>
+          dispatch({ type: 'set-comanda', numeroComanda: event.target.value.replace(/\D/g, '') })
+        }
+      />
+
       <RoleSelect
         id="pdv-pagamento"
         label="Forma de pagamento"
@@ -206,7 +251,10 @@ export function PdvSummary({ customers = [] }) {
         />
       ) : null}
 
-      <div className="flex justify-end">
+      <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
+        <Button type="button" variant="secondary" onClick={saveOpen} disabled={savingTab || !state.lines.length}>
+          {savingTab ? 'Salvando...' : 'Salvar comanda'}
+        </Button>
         <Button type="button" onClick={finish} disabled={!state.lines.length}>
           Finalizar Venda
         </Button>

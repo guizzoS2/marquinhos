@@ -3,6 +3,7 @@ import { fetchCustomers, fetchInventory } from '../services/dashboardService';
 import { CartProvider } from '../contexts/CartContext';
 import { PdvSearch } from '../components/pdv/PdvSearch';
 import { PdvSummary } from '../components/pdv/PdvSummary';
+import { OpenComandas } from '../components/pdv/OpenComandas';
 
 export function PdvPage() {
   const inventory = useQuery({ queryKey: ['inventory'], queryFn: fetchInventory });
@@ -25,6 +26,7 @@ export function PdvPage() {
           <PdvSearch items={inventory.data.items || []} promotions={inventory.data.promotions || []} />
           <PdvSummary customers={customers.data?.customers || []} />
         </div>
+        <OpenComandas sales={inventory.data.sales || []} />
       </div>
     </CartProvider>
   );

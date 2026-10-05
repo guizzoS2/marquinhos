@@ -19,6 +19,8 @@ import {
   getCustomers,
   createCustomer,
   registerSale,
+  saveOpenSale,
+  closeShift,
   deleteInventoryItem,
   createInventoryItem,
   updateInventoryItem,
@@ -136,6 +138,15 @@ export function addCustomer(payload) {
 
 export function checkoutSale(payload) {
   return registerSale(payload);
+}
+
+export function saveOpenTab(payload) {
+  return saveOpenSale(payload);
+}
+
+export function closeCashShift() {
+  requireAdmin();
+  return closeShift();
 }
 
 export function addInventoryProduct(payload) {
