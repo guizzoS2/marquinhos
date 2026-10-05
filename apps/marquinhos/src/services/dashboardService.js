@@ -13,6 +13,7 @@ import {
   deleteExpense,
   createIncome,
   registerStockEntry,
+  createProduction,
   deleteInventoryItem,
   createInventoryItem,
   updateInventoryItem,
@@ -106,6 +107,10 @@ export function addStockEntry(payload) {
     ...payload,
     linkCash: isAdminRole(getCurrentRole()) && payload.linkCash !== false,
   });
+}
+
+export function addProduction(payload) {
+  return createProduction(payload);
 }
 
 export function addInventoryProduct(payload) {

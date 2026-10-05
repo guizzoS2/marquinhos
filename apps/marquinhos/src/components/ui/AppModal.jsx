@@ -23,6 +23,9 @@ import { isStockRole } from '../../services/roles';
 import { ProductForm } from '../inventory/ProductForm';
 import { ProductDetail } from '../inventory/ProductDetail';
 import { CategoryForm } from '../inventory/CategoryForm';
+import { ProductionForm } from '../inventory/ProductionForm';
+import { RoleSelect } from '../freelancers/RoleSelect';
+import { PAYMENT_OPTIONS } from '../../services/inventoryProduct';
 
 const titles = {
   'new-order': 'Nova Venda',
@@ -31,6 +34,7 @@ const titles = {
   'edit-product': 'Editar produto',
   'product-detail': 'Detalhes do Produto',
   'new-category': 'Nova categoria',
+  'new-production': 'Registrar Produção',
   'new-daily': 'Registrar Diária',
   'shift-detail': 'Agendamento',
   'new-freelancer': 'Novo Freelancer',
@@ -475,6 +479,7 @@ function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
     quantity: '',
     supplierId: '',
     value: '',
+    forma_pagamento: 'dinheiro',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -512,6 +517,7 @@ function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
           date: form.date,
           itemId: form.itemId,
           quantity: Number(form.quantity),
+          forma_pagamento: form.forma_pagamento,
           linkCash: false,
         });
         toast.success('Entrada lançada no estoque.');
@@ -527,6 +533,7 @@ function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
           supplierId: form.supplierId,
           supplier: supplier.name,
           amount: Math.round(Number(form.value) * 100),
+          forma_pagamento: form.forma_pagamento,
           linkCash: true,
         });
         toast.success('Entrada lançada no estoque e em Saídas.');
@@ -575,6 +582,14 @@ function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
         step="1"
         value={form.quantity}
         onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
+        required
+      />
+      <RoleSelect
+        id="entrada-pagamento"
+        label="Forma de pagamento"
+        options={PAYMENT_OPTIONS}
+        value={form.forma_pagamento}
+        onChange={(forma_pagamento) => setForm((prev) => ({ ...prev, forma_pagamento }))}
         required
       />
       {stockOnly ? null : (
@@ -792,6 +807,12 @@ export function AppModal() {
           />
         ) : modal.type === 'new-category' ? (
           <CategoryForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
+        ) : modal.type === 'new-production' ? (
+          <ProductionForm
+            items={modal.payload?.items || []}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
         ) : modal.type === 'new-product' || modal.type === 'edit-product' ? (
           <ProductForm
             item={modal.payload?.item}

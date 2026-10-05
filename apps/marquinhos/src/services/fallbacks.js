@@ -59,6 +59,8 @@ export const cashFlowFallback = {
 export const inventoryFallback = {
   filters: ['Todos', 'Cervejas', 'Destilados', 'Insumos', 'Soft Drinks'],
   items: [],
+  entries: [],
+  productions: [],
   metrics: [
     {
       id: 'low-stock',

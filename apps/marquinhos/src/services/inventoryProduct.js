@@ -1,5 +1,21 @@
 export const PRODUCT_MEASURES = ['UN', 'ML', 'L', 'G', 'KG'];
 
+export const PAYMENT_METHODS = ['dinheiro', 'cartao_credito', 'cartao_debito', 'pix'];
+
+export const PAYMENT_OPTIONS = [
+  { value: 'dinheiro', label: 'Dinheiro' },
+  { value: 'cartao_credito', label: 'Cartão de crédito' },
+  { value: 'cartao_debito', label: 'Cartão de débito' },
+  { value: 'pix', label: 'PIX' },
+];
+
+export function assertPaymentMethod(value) {
+  if (!PAYMENT_METHODS.includes(value)) {
+    throw new Error('Forma de pagamento inválida.');
+  }
+  return value;
+}
+
 const MEASURE_ALIASES = {
   UNIDADE: 'UN',
   UNID: 'UN',

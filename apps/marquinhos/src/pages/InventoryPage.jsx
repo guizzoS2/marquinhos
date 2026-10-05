@@ -35,6 +35,7 @@ export function InventoryPage() {
   const [filter, setFilter] = useState('Todos');
   const [query, setQuery] = useState('');
   const [view, setView] = useState('list');
+  const [section, setSection] = useState('stock');
   const { openModal } = useModal();
   const { user } = useAuth();
   const canAdmin = isAdminRole(user?.role);
@@ -70,6 +71,23 @@ export function InventoryPage() {
     });
   }
 
+  const todayProductions = useMemo(() => {
+    const now = new Date();
+    return (data?.productions || []).filter((row) => {
+      const date = new Date(row.data_producao);
+      return (
+        date.getFullYear() === now.getFullYear() &&
+        date.getMonth() === now.getMonth() &&
+        date.getDate() === now.getDate()
+      );
+    });
+  }, [data]);
+
+  function productName(produtoId) {
+    const item = (data?.items || []).find((row) => String(row.id) === String(produtoId));
+    return item?.nome || item?.name || 'Produto';
+  }
+
   function openNewProduct() {
     openModal('new-product', { categories: data?.filters, onSuccess: refreshInventory });
   }
@@ -80,6 +98,13 @@ export function InventoryPage() {
         refreshInventory();
         if (name) setFilter(name);
       },
+    });
+  }
+
+  function openProduction() {
+    openModal('new-production', {
+      items: data?.items || [],
+      onSuccess: refreshInventory,
     });
   }
 
@@ -128,17 +153,53 @@ export function InventoryPage() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-            <Button variant="secondary" onClick={openNewProduct}>
-              <Icon name="add" />
-              Novo produto
-            </Button>
-            <Button onClick={openStockEntry}>
-              <Icon name="add_circle" />
-              Registrar entrada
-            </Button>
+            {section === 'production' ? (
+              <Button onClick={openProduction}>
+                <Icon name="add" />
+                Registrar Produção
+              </Button>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={openNewProduct}>
+                  <Icon name="add" />
+                  Novo produto
+                </Button>
+                <Button onClick={openStockEntry}>
+                  <Icon name="add_circle" />
+                  Registrar entrada
+                </Button>
+              </>
+            )}
           </div>
         </section>
 
+        <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setSection('stock')}
+            className={
+              section === 'stock'
+                ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
+                : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
+            }
+          >
+            Estoque
+          </button>
+          <button
+            type="button"
+            onClick={() => setSection('production')}
+            className={
+              section === 'production'
+                ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
+                : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
+            }
+          >
+            Produção
+          </button>
+        </div>
+
+        {section === 'stock' ? (
+        <>
         <section className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
             {(data.filters || []).map((item) => (
@@ -367,6 +428,46 @@ export function InventoryPage() {
             );
           })}
         </section>
+        </>
+        ) : (
+          <section className="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
+                    <th className="px-6 py-4">Produto</th>
+                    <th className="px-6 py-4">Quantidade</th>
+                    <th className="px-6 py-4">Horário</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-variant/30">
+                  {todayProductions.length === 0 ? (
+                    <tr className="bg-surface-container-lowest">
+                      <td className="px-6 py-5 text-on-surface-variant" colSpan={3}>
+                        Nenhuma produção hoje.
+                      </td>
+                    </tr>
+                  ) : (
+                    todayProductions.map((row) => (
+                      <tr key={row.id} className="bg-surface-container-lowest">
+                        <td className="px-6 py-5 font-bold text-on-surface">
+                          {productName(row.produto_id)}
+                        </td>
+                        <td className="px-6 py-5 text-on-surface">{row.quantidade}</td>
+                        <td className="px-6 py-5 text-on-surface-variant">
+                          {new Date(row.data_producao).toLocaleTimeString('pt-BR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
       </div>
 
       <footer className="mt-12 px-4 md:px-8 py-6 border-t border-surface-variant/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-on-surface-variant text-sm font-body">
@@ -386,9 +487,9 @@ export function InventoryPage() {
 
       <button
         type="button"
-        onClick={openStockEntry}
+        onClick={section === 'production' ? openProduction : openStockEntry}
         className="fixed bottom-6 right-4 w-14 h-14 min-h-14 min-w-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all md:hidden z-50"
-        aria-label="Registrar entrada"
+        aria-label={section === 'production' ? 'Registrar produção' : 'Registrar entrada'}
       >
         <Icon name="add" />
       </button>

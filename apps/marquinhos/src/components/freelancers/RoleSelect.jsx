@@ -1,6 +1,16 @@
 import { Icon } from '../ui/Icon';
 
-export function RoleSelect({ id, label = 'Função', roles, value, onChange, required = false }) {
+export function RoleSelect({
+  id,
+  label = 'Função',
+  roles,
+  options,
+  value,
+  onChange,
+  required = false,
+}) {
+  const choices = options || (roles || []).map((role) => ({ value: role, label: role }));
+
   return (
     <div className="space-y-2">
       <label
@@ -17,9 +27,9 @@ export function RoleSelect({ id, label = 'Função', roles, value, onChange, req
           onChange={(event) => onChange(event.target.value)}
           required={required}
         >
-          {roles.map((role) => (
-            <option key={role} value={role}>
-              {role}
+          {choices.map((choice) => (
+            <option key={choice.value} value={choice.value}>
+              {choice.label}
             </option>
           ))}
         </select>

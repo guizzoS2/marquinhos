@@ -16,6 +16,7 @@ import {
 } from './cashFlowUtils';
 import {
   assertMedida,
+  assertPaymentMethod,
   assertVolumePeso,
   formatProductCode,
   isLowStock,
@@ -398,6 +399,8 @@ function normalizeInventory(raw) {
     ...current,
     filters: current.filters?.length ? current.filters : inventoryFallback.filters,
     items,
+    entries: Array.isArray(current.entries) ? current.entries : [],
+    productions: Array.isArray(current.productions) ? current.productions : [],
     metrics: recomputeInventoryMetrics(items),
   };
 }
@@ -867,6 +870,7 @@ export async function registerStockEntry(payload) {
   if (!Number.isFinite(addQty) || addQty <= 0) {
     throw new Error('Quantidade inválida.');
   }
+  const formaPagamento = assertPaymentMethod(payload.forma_pagamento);
 
   const linkCash = payload.linkCash !== false;
   let amountCents = 0;
@@ -889,11 +893,24 @@ export async function registerStockEntry(payload) {
   items[index] = {
     ...item,
     stock: formatStockLabel(nextQty, unit),
+    estoque_atual: nextQty,
     status,
     statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
   };
 
-  await saveInventory(current, items);
+  const entry = {
+    id: `buy-${Date.now()}`,
+    itemId: String(item.id),
+    quantity: addQty,
+    forma_pagamento: formaPagamento,
+    date: payload.date || new Date().toISOString().slice(0, 10),
+    created_at: new Date().toISOString(),
+  };
+
+  await saveInventory(
+    { ...current, entries: [entry, ...(current.entries || [])] },
+    items
+  );
 
   if (linkCash) {
     await createExpense({
@@ -908,6 +925,52 @@ export async function registerStockEntry(payload) {
   }
 
   return items[index];
+}
+
+export async function createProduction(payload) {
+  const current = await getInventory();
+  const produtoId = String(payload.produto_id || '').trim();
+  const quantidade = Number(payload.quantidade);
+  if (!produtoId) throw new Error('Selecione o produto.');
+  if (!Number.isInteger(quantidade) || quantidade <= 0) {
+    throw new Error('Quantidade inválida.');
+  }
+
+  const usuarioId = await actorId();
+  if (!usuarioId) throw new Error('Sessão inválida.');
+
+  const items = [...(current.items || [])];
+  const index = items.findIndex((item) => String(item.id) === produtoId);
+  if (index < 0) throw new Error('Item não encontrado.');
+
+  const item = items[index];
+  const parsed = parseStockLabel(item.stock);
+  const minParsed = parseStockLabel(item.minStock);
+  const nextQty = parsed.qty + quantidade;
+  const unit = parsed.unit || minParsed.unit || 'un';
+  const status = nextQty < minParsed.qty ? 'low' : 'stable';
+
+  items[index] = {
+    ...item,
+    estoque_atual: nextQty,
+    stock: formatStockLabel(nextQty, unit),
+    status,
+    statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
+  };
+
+  const production = {
+    id: `prod-${Date.now()}`,
+    produto_id: produtoId,
+    quantidade,
+    data_producao: new Date().toISOString(),
+    usuario_id: usuarioId,
+  };
+
+  const next = await saveInventory(
+    { ...current, productions: [production, ...(current.productions || [])] },
+    items
+  );
+  return { production, inventory: next };
 }
 
 export async function importStatementRows(rows) {
