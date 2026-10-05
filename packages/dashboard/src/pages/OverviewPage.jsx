@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDashboardApi } from '../contexts/DashboardApiContext';
 import { WeeklyChart } from '../components/dashboard/WeeklyChart';
 import { TopSoldList } from '../components/dashboard/TopSoldList';
+import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { useModal } from '../contexts/ModalContext';
 
@@ -89,6 +90,23 @@ export function OverviewPage() {
       ) : null}
 
       <p className="text-xs text-[var(--muted,#5c5c5c)]">{tenantName}</p>
+
+      <button
+        type="button"
+        onClick={() =>
+          openModal('new-order', {
+            onSuccess: () => {
+              queryClient.invalidateQueries({ queryKey: ['cash-flow', tenantId] });
+              queryClient.invalidateQueries({ queryKey: ['overview', tenantId] });
+            },
+          })
+        }
+        className="fixed bottom-6 right-4 md:bottom-8 md:right-8 w-14 h-14 min-h-14 min-w-14 bg-[var(--spray,#FFDB15)] text-[var(--ink,#111)] border-2 border-[var(--ink,#111)] flex items-center justify-center z-50"
+        aria-label="Nova venda"
+      >
+        <Icon name="add" className="text-3xl" />
+        <span className="sr-only">Nova venda</span>
+      </button>
     </div>
   );
 }
