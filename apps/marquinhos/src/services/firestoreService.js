@@ -14,7 +14,15 @@ import {
   formatCents,
   parseMoneyToCents,
 } from './cashFlowUtils';
-import { formatProductCode, isLowStock, maxProductCode, nextProductCode } from './inventoryProduct';
+import {
+  assertMedida,
+  assertVolumePeso,
+  formatProductCode,
+  isLowStock,
+  maxProductCode,
+  nextProductCode,
+  normalizeMedida,
+} from './inventoryProduct';
 
 const TENANT_ID = 'marquinhos';
 const OPS_COLLECTION = ['tenants', TENANT_ID, 'data', 'ops'];
@@ -626,7 +634,10 @@ async function saveInventory(current, items) {
 function presentProduct(item, codigo) {
   const parsed = parseStockLabel(item.stock);
   const minParsed = parseStockLabel(item.minStock);
-  const unidade = String(item.unidade || parsed.unit || minParsed.unit || 'un').trim() || 'un';
+  const medida = normalizeMedida(item.medida) || normalizeMedida(item.unidade) || 'UN';
+  const volumeNumber = Number(item.volume_peso);
+  const volumePeso = Number.isFinite(volumeNumber) ? volumeNumber : 0;
+  const stockUnit = item.stock ? parsed.unit || 'un' : 'un';
   const estoqueAtual = item.stock ? parsed.qty : Number(item.estoque_atual) || 0;
   const estoqueSugerido =
     item.estoque_sugerido != null && item.estoque_sugerido !== ''
@@ -642,8 +653,10 @@ function presentProduct(item, codigo) {
       ? item.valor_unitario
       : item.cost || formatCents(0);
   const cost = String(valor).includes('R$') ? String(valor) : formatCents(parseMoneyToCents(valor));
+  const rest = { ...item };
+  delete rest.unidade;
   return {
-    ...item,
+    ...rest,
     codigo: formatProductCode(item.codigo || codigo),
     nome,
     name: nome,
@@ -652,15 +665,16 @@ function presentProduct(item, codigo) {
     subtitle: descricao,
     categoria,
     category: categoria,
-    unidade,
+    volume_peso: volumePeso,
+    medida,
     estoque_atual: estoqueAtual,
     estoque_sugerido: estoqueSugerido,
     valor_unitario: cost,
     cost,
     foto,
     image: foto,
-    stock: formatStockLabel(estoqueAtual, unidade),
-    minStock: formatStockLabel(estoqueSugerido, unidade),
+    stock: formatStockLabel(estoqueAtual, stockUnit),
+    minStock: formatStockLabel(estoqueSugerido, item.minStock ? minParsed.unit || stockUnit : stockUnit),
     lowStock,
     status: lowStock ? 'low' : 'stable',
     statusLabel: lowStock ? 'Estoque Baixo' : 'Estável',
@@ -688,7 +702,8 @@ function persistProduct(item) {
     subtitle: descricao,
     categoria,
     category: categoria,
-    unidade: item.unidade || 'un',
+    volume_peso: Number.isFinite(Number(item.volume_peso)) ? Number(item.volume_peso) : 0,
+    medida: normalizeMedida(item.medida) || 'UN',
     estoque_atual: Number.isFinite(Number(item.estoque_atual)) ? Number(item.estoque_atual) : 0,
     estoque_sugerido: Number.isFinite(Number(item.estoque_sugerido)) ? Number(item.estoque_sugerido) : 0,
     valor_unitario: valor,
@@ -736,7 +751,6 @@ export async function createInventoryItem(payload) {
   const nome = String(payload.nome || payload.name || '').trim();
   if (!nome) throw new Error('Informe o nome do produto.');
 
-  const unidade = String(payload.unidade || payload.unit || 'un').trim() || 'un';
   const estoqueAtual = Number(payload.estoque_atual ?? payload.qty);
   const estoqueSugerido = Number(payload.estoque_sugerido ?? payload.minQty);
   if (!Number.isFinite(estoqueAtual) || estoqueAtual < 0) throw new Error('Estoque atual inválido.');
@@ -745,6 +759,8 @@ export async function createInventoryItem(payload) {
   }
 
   const categoria = String(payload.categoria || payload.category || 'Insumos').trim() || 'Insumos';
+  const medida = assertMedida(payload.medida);
+  const volumePeso = assertVolumePeso(payload.volume_peso);
   const now = new Date().toISOString();
   const actor = await actorId();
   const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
@@ -763,13 +779,14 @@ export async function createInventoryItem(payload) {
       marca: payload.marca,
       descricao: payload.descricao,
       categoria,
-      unidade,
+      volume_peso: volumePeso,
+      medida,
       estoque_atual: estoqueAtual,
       estoque_sugerido: estoqueSugerido,
       valor_unitario: payload.valor_unitario ?? payload.cost,
       foto: payload.foto || payload.image || '',
-      stock: formatStockLabel(estoqueAtual, unidade),
-      minStock: formatStockLabel(estoqueSugerido, unidade),
+      stock: formatStockLabel(estoqueAtual, 'un'),
+      minStock: formatStockLabel(estoqueSugerido, 'un'),
       created_at: now,
       updated_at: now,
       created_by: actor,
@@ -794,7 +811,8 @@ export async function updateInventoryItem(itemId, payload) {
   const currentItem = items[index];
   const nome = String(payload.nome || payload.name || currentItem.nome).trim();
   if (!nome) throw new Error('Informe o nome do produto.');
-  const unidade = String(payload.unidade || payload.unit || currentItem.unidade || 'un').trim() || 'un';
+  const medida = assertMedida(payload.medida);
+  const volumePeso = assertVolumePeso(payload.volume_peso);
   const estoqueAtual = Number(payload.estoque_atual ?? payload.qty ?? currentItem.estoque_atual);
   const estoqueSugerido = Number(
     payload.estoque_sugerido ?? payload.minQty ?? currentItem.estoque_sugerido
@@ -813,13 +831,14 @@ export async function updateInventoryItem(itemId, payload) {
       marca: payload.marca ?? currentItem.marca,
       descricao: payload.descricao ?? currentItem.descricao,
       categoria: payload.categoria || payload.category || currentItem.categoria,
-      unidade,
+      volume_peso: volumePeso,
+      medida,
       estoque_atual: estoqueAtual,
       estoque_sugerido: estoqueSugerido,
       valor_unitario: payload.valor_unitario ?? payload.cost ?? currentItem.valor_unitario,
       foto: payload.foto || payload.image || currentItem.foto,
-      stock: formatStockLabel(estoqueAtual, unidade),
-      minStock: formatStockLabel(estoqueSugerido, unidade),
+      stock: formatStockLabel(estoqueAtual, parseStockLabel(currentItem.stock).unit || 'un'),
+      minStock: formatStockLabel(estoqueSugerido, parseStockLabel(currentItem.minStock).unit || 'un'),
       codigo: currentItem.codigo,
       created_at: currentItem.created_at || now,
       created_by: currentItem.created_by || actor,

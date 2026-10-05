@@ -9,7 +9,8 @@ import {
   peekInventoryCode,
 } from '../../services/dashboardService';
 import { inventoryFallback } from '../../services/fallbacks';
-import { moneyInputValue, parseReaisInput } from '../../services/inventoryProduct';
+import { moneyInputValue, parseReaisInput, PRODUCT_MEASURES } from '../../services/inventoryProduct';
+import { RoleSelect } from '../freelancers/RoleSelect';
 import { readLocalImage } from '../../services/readLocalImage';
 
 export function ProductForm({ item, categories, onSuccess, onCancel }) {
@@ -32,7 +33,8 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
     marca: item?.marca || '',
     descricao: item?.descricao || item?.subtitle || '',
     categoria: item?.categoria || item?.category || categoryOptions[0],
-    unidade: item?.unidade || 'un',
+    volume_peso: item && item.volume_peso != null ? String(item.volume_peso) : '',
+    medida: PRODUCT_MEASURES.includes(item?.medida) ? item.medida : 'UN',
     estoque_atual: item ? String(item.estoque_atual ?? 0) : '0',
     estoque_sugerido: item ? String(item.estoque_sugerido ?? 0) : '0',
     valor_unitario: item ? moneyInputValue(item.valor_unitario || item.cost) : '',
@@ -67,7 +69,8 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
       marca: form.marca,
       descricao: form.descricao,
       categoria: form.categoria,
-      unidade: form.unidade,
+      volume_peso: form.volume_peso,
+      medida: form.medida,
       estoque_atual: form.estoque_atual,
       estoque_sugerido: form.estoque_sugerido,
       valor_unitario: valor,
@@ -126,7 +129,7 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
         />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="space-y-2">
+        <div className="space-y-2 md:col-span-2">
           <label
             htmlFor="produto-categoria"
             className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
@@ -147,9 +150,20 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
           </select>
         </div>
         <Input
-          label="Unidade"
-          value={form.unidade}
-          onChange={(event) => setForm((prev) => ({ ...prev, unidade: event.target.value }))}
+          label="Volume / Peso"
+          type="number"
+          min="0"
+          step="any"
+          value={form.volume_peso}
+          onChange={(event) => setForm((prev) => ({ ...prev, volume_peso: event.target.value }))}
+          required
+        />
+        <RoleSelect
+          id="produto-medida"
+          label="Medida"
+          roles={PRODUCT_MEASURES}
+          value={form.medida}
+          onChange={(medida) => setForm((prev) => ({ ...prev, medida }))}
           required
         />
         <Input

@@ -43,7 +43,11 @@ export function ProductDetail({ item, canDelete, onEdit, onDelete, onCancel }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Field label="Marca" value={item.marca} />
         <Field label="Categoria" value={item.categoria || item.category} />
-        <Field label="Unidade" value={item.unidade} />
+        <Field
+          label="Volume / Peso"
+          value={item.volume_peso == null || item.volume_peso === '' ? '' : String(item.volume_peso)}
+        />
+        <Field label="Medida" value={item.medida} />
         <Field label="Valor unitário" value={item.valor_unitario || item.cost} />
         <Field label="Estoque atual" value={item.stock} />
         <Field label="Estoque sugerido" value={item.minStock} />
