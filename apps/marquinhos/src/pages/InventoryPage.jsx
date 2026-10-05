@@ -71,14 +71,28 @@ export function InventoryPage() {
   }
 
   function openNewProduct() {
-    openModal('new-product', { onSuccess: refreshInventory });
+    openModal('new-product', { categories: data?.filters, onSuccess: refreshInventory });
+  }
+
+  function openNewCategory() {
+    openModal('new-category', {
+      onSuccess: (name) => {
+        refreshInventory();
+        if (name) setFilter(name);
+      },
+    });
   }
 
   function openProduct(item) {
     openModal('product-detail', {
       item,
       canDelete: canAdmin,
-      onEdit: () => openModal('edit-product', { item, onSuccess: refreshInventory }),
+      onEdit: () =>
+        openModal('edit-product', {
+          item,
+          categories: data?.filters,
+          onSuccess: refreshInventory,
+        }),
       onDelete: () => confirmDeleteItem(item),
     });
   }
@@ -141,6 +155,14 @@ export function InventoryPage() {
                 {item}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={openNewCategory}
+              className="inline-flex items-center gap-1 px-5 py-2 min-h-11 bg-surface-container-low text-on-surface hover:bg-surface-container-high rounded-full text-sm font-semibold transition-all"
+            >
+              <Icon name="add" />
+              Nova categoria
+            </button>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="relative w-full sm:w-64">

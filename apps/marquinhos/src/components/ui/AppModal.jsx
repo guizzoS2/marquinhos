@@ -22,6 +22,7 @@ import { expenseCategories } from '../../services/fallbacks';
 import { isStockRole } from '../../services/roles';
 import { ProductForm } from '../inventory/ProductForm';
 import { ProductDetail } from '../inventory/ProductDetail';
+import { CategoryForm } from '../inventory/CategoryForm';
 
 const titles = {
   'new-order': 'Nova Venda',
@@ -29,6 +30,7 @@ const titles = {
   'new-product': 'Novo produto',
   'edit-product': 'Editar produto',
   'product-detail': 'Detalhes do Produto',
+  'new-category': 'Nova categoria',
   'new-daily': 'Registrar Diária',
   'shift-detail': 'Agendamento',
   'new-freelancer': 'Novo Freelancer',
@@ -788,9 +790,12 @@ export function AppModal() {
             onDelete={modal.payload?.onDelete}
             onCancel={closeModal}
           />
+        ) : modal.type === 'new-category' ? (
+          <CategoryForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
         ) : modal.type === 'new-product' || modal.type === 'edit-product' ? (
           <ProductForm
             item={modal.payload?.item}
+            categories={modal.payload?.categories}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />

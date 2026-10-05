@@ -12,19 +12,20 @@ import { inventoryFallback } from '../../services/fallbacks';
 import { moneyInputValue, parseReaisInput } from '../../services/inventoryProduct';
 import { readLocalImage } from '../../services/readLocalImage';
 
-const categories = inventoryFallback.filters.filter((item) => item !== 'Todos');
-
-export function ProductForm({ item, onSuccess, onCancel }) {
+export function ProductForm({ item, categories, onSuccess, onCancel }) {
   const toast = useToast();
   const isEdit = Boolean(item);
+  const categorySource = (categories?.length ? categories : inventoryFallback.filters).filter(
+    (entry) => entry !== 'Todos'
+  );
   const { data: nextCode } = useQuery({
     queryKey: ['inventory', 'next-code'],
     queryFn: peekInventoryCode,
     enabled: !isEdit,
   });
-  const categoryOptions = categories.includes(item?.categoria || item?.category)
-    ? categories
-    : [...categories, item?.categoria || item?.category].filter(Boolean);
+  const categoryOptions = categorySource.includes(item?.categoria || item?.category)
+    ? categorySource
+    : [...categorySource, item?.categoria || item?.category].filter(Boolean);
 
   const [form, setForm] = useState({
     nome: item?.nome || item?.name || '',

@@ -693,6 +693,26 @@ export async function peekNextProductCode() {
   return nextProductCode(current.items || []);
 }
 
+export async function addInventoryCategory(name) {
+  await ensureDashboardSeed();
+  const raw = (await readDocument(DOCS.inventory)) || inventoryFallback;
+  const current = normalizeInventory(raw);
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o nome da categoria.');
+  if (label.toLowerCase() === 'todos') throw new Error('Use outro nome para a categoria.');
+  const filters = current.filters?.length ? [...current.filters] : [...inventoryFallback.filters];
+  if (filters.some((item) => item.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Essa categoria já existe.');
+  }
+  const next = {
+    ...raw,
+    filters: [...filters, label],
+    items: Array.isArray(raw.items) ? raw.items : [],
+  };
+  await writeDocument(DOCS.inventory, next);
+  return { name: label, inventory: normalizeInventory(next) };
+}
+
 export async function createInventoryItem(payload) {
   const current = await getInventory();
   const nome = String(payload.nome || payload.name || '').trim();

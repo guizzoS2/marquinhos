@@ -17,6 +17,7 @@ import {
   createInventoryItem,
   updateInventoryItem,
   peekNextProductCode,
+  addInventoryCategory,
   updateFreelancerStatus,
   updateFreelancer,
   deleteFreelancer,
@@ -113,6 +114,10 @@ export function addInventoryProduct(payload) {
 
 export function peekInventoryCode() {
   return peekNextProductCode();
+}
+
+export function addInventoryFilter(name) {
+  return addInventoryCategory(name);
 }
 
 export function editInventoryProduct(itemId, payload) {
