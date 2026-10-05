@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
-import { addProduction } from '../../services/dashboardService';
+import { addProduction, editProduction } from '../../services/dashboardService';
 import { RoleSelect } from '../freelancers/RoleSelect';
 
-export function ProductionForm({ items = [], onSuccess, onCancel }) {
+export function ProductionForm({ items = [], production = null, onSuccess, onCancel }) {
   const toast = useToast();
-  const [produtoId, setProdutoId] = useState(items[0] ? String(items[0].id) : '');
-  const [quantidade, setQuantidade] = useState('');
+  const editing = Boolean(production?.id);
+  const [produtoId, setProdutoId] = useState(
+    production?.produto_id ? String(production.produto_id) : items[0] ? String(items[0].id) : ''
+  );
+  const [quantidade, setQuantidade] = useState(production?.quantidade != null ? String(production.quantidade) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -17,11 +20,13 @@ export function ProductionForm({ items = [], onSuccess, onCancel }) {
     setSaving(true);
     setError('');
     try {
-      await addProduction({
+      const payload = {
         produto_id: produtoId,
         quantidade: Number(quantidade),
-      });
-      toast.success('Produção registrada.');
+      };
+      if (editing) await editProduction(production.id, payload);
+      else await addProduction(payload);
+      toast.success(editing ? 'Produção atualizada.' : 'Produção registrada.');
       onSuccess?.();
       onCancel();
     } catch (err) {
@@ -61,7 +66,7 @@ export function ProductionForm({ items = [], onSuccess, onCancel }) {
           Cancelar
         </Button>
         <Button type="submit" disabled={saving || !items.length}>
-          {saving ? 'Salvando...' : 'Registrar produção'}
+          {saving ? 'Salvando...' : editing ? 'Salvar produção' : 'Registrar produção'}
         </Button>
       </div>
     </form>

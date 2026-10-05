@@ -14,8 +14,14 @@ import {
   createIncome,
   registerStockEntry,
   createProduction,
+  updateProduction,
+  deleteProduction,
   createPromotion,
+  updatePromotion,
+  deletePromotion,
   createCombo,
+  updateCombo,
+  deleteCombo,
   getCustomers,
   createCustomer,
   registerSale,
@@ -120,12 +126,36 @@ export function addProduction(payload) {
   return createProduction(payload);
 }
 
+export function editProduction(productionId, payload) {
+  return updateProduction(productionId, payload);
+}
+
+export function removeProduction(productionId) {
+  return deleteProduction(productionId);
+}
+
 export function addPromotion(payload) {
   return createPromotion(payload);
 }
 
+export function editPromotion(promotionId, payload) {
+  return updatePromotion(promotionId, payload);
+}
+
+export function removePromotion(promotionId) {
+  return deletePromotion(promotionId);
+}
+
 export function addCombo(payload) {
   return createCombo(payload);
+}
+
+export function editCombo(comboId, payload) {
+  return updateCombo(comboId, payload);
+}
+
+export function removeCombo(comboId) {
+  return deleteCombo(comboId);
 }
 
 export function fetchCustomers() {

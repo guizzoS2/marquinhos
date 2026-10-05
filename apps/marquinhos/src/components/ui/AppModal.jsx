@@ -40,8 +40,11 @@ const titles = {
   'product-detail': 'Detalhes do Produto',
   'new-category': 'Nova categoria',
   'new-production': 'Registrar Produção',
+  'edit-production': 'Editar produção',
   'new-promotion': 'Nova promoção',
+  'edit-promotion': 'Editar promoção',
   'new-combo': 'Novo combo',
+  'edit-combo': 'Editar combo',
   'combo-detail': 'Detalhes do combo',
   'new-customer': 'Novo Cliente',
   'close-register': 'Fechamento de caixa',
@@ -706,9 +709,11 @@ export function AppModal() {
   if (!isOpen) return null;
 
   const title =
-    modal.type === 'new-freelancer' && modal.payload?.person
-      ? 'Editar Freelancer'
-      : titles[modal.type] || 'Confirmação';
+    modal.type === 'new-promotion' && modal.payload?.reactivate
+      ? 'Reativar promoção'
+      : modal.type === 'new-freelancer' && modal.payload?.person
+        ? 'Editar Freelancer'
+        : titles[modal.type] || 'Confirmação';
   const iconName =
     modal.type === 'new-freelancer'
       ? 'person_add'
@@ -736,8 +741,10 @@ export function AppModal() {
     modal.type === 'edit-product' ||
     modal.type === 'product-detail' ||
     modal.type === 'new-combo' ||
+    modal.type === 'edit-combo' ||
     modal.type === 'combo-detail' ||
     modal.type === 'new-promotion' ||
+    modal.type === 'edit-promotion' ||
     modal.type === 'close-register';
 
   return (
@@ -823,23 +830,28 @@ export function AppModal() {
           />
         ) : modal.type === 'new-category' ? (
           <CategoryForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
-        ) : modal.type === 'new-production' ? (
+        ) : modal.type === 'new-production' || modal.type === 'edit-production' ? (
           <ProductionForm
             items={modal.payload?.items || []}
+            production={modal.payload?.production}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
         ) : modal.type === 'new-customer' ? (
           <CustomerForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
-        ) : modal.type === 'new-promotion' ? (
+        ) : modal.type === 'new-promotion' || modal.type === 'edit-promotion' ? (
           <PromotionForm
             items={modal.payload?.items || []}
+            promotion={modal.payload?.promotion}
+            reactivate={Boolean(modal.payload?.reactivate)}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
-        ) : modal.type === 'new-combo' ? (
+        ) : modal.type === 'new-combo' || modal.type === 'edit-combo' ? (
           <ComboForm
             items={modal.payload?.items || []}
+            combo={modal.payload?.combo}
+            parts={modal.payload?.parts || []}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />

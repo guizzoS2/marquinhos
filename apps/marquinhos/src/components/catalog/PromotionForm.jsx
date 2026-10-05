@@ -3,15 +3,21 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { useToast } from '../../contexts/ToastContext';
-import { addPromotion } from '../../services/dashboardService';
-import { parseReaisInput } from '../../services/inventoryProduct';
+import { addPromotion, editPromotion } from '../../services/dashboardService';
+import { moneyInputValue, parseReaisInput } from '../../services/inventoryProduct';
+import { toDateTimeLocal } from '../../services/catalogRules';
 
-export function PromotionForm({ items = [], onSuccess, onCancel }) {
+export function PromotionForm({ items = [], promotion = null, reactivate = false, onSuccess, onCancel }) {
   const toast = useToast();
-  const [produtoId, setProdutoId] = useState(items[0] ? String(items[0].id) : '');
-  const [preco, setPreco] = useState('');
-  const [inicio, setInicio] = useState('');
-  const [termino, setTermino] = useState('');
+  const editing = Boolean(promotion?.id) && !reactivate;
+  const [produtoId, setProdutoId] = useState(
+    promotion?.produto_id ? String(promotion.produto_id) : items[0] ? String(items[0].id) : ''
+  );
+  const [preco, setPreco] = useState(
+    promotion?.preco_promocional != null ? moneyInputValue(promotion.preco_promocional) : ''
+  );
+  const [inicio, setInicio] = useState(promotion ? toDateTimeLocal(promotion.data_inicio) : '');
+  const [termino, setTermino] = useState(promotion ? toDateTimeLocal(promotion.data_termino) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,13 +32,15 @@ export function PromotionForm({ items = [], onSuccess, onCancel }) {
       return;
     }
     try {
-      await addPromotion({
+      const payload = {
         produto_id: produtoId,
         preco_promocional: precoPromocional,
         data_inicio: inicio,
         data_termino: termino,
-      });
-      toast.success('Promoção cadastrada.');
+      };
+      if (editing) await editPromotion(promotion.id, payload);
+      else await addPromotion(payload);
+      toast.success(editing ? 'Promoção atualizada.' : reactivate ? 'Promoção reativada.' : 'Promoção cadastrada.');
       onSuccess?.();
       onCancel();
     } catch (err) {
@@ -86,7 +94,7 @@ export function PromotionForm({ items = [], onSuccess, onCancel }) {
           Cancelar
         </Button>
         <Button type="submit" disabled={saving || !items.length}>
-          {saving ? 'Salvando...' : 'Cadastrar promoção'}
+          {saving ? 'Salvando...' : editing ? 'Salvar promoção' : reactivate ? 'Reativar promoção' : 'Cadastrar promoção'}
         </Button>
       </div>
     </form>

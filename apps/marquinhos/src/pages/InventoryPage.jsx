@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchInventory, removeInventoryItem } from '../services/dashboardService';
+import { fetchInventory, removeInventoryItem, removeProduction } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { useModal } from '../contexts/ModalContext';
@@ -105,6 +105,33 @@ export function InventoryPage() {
     openModal('new-production', {
       items: data?.items || [],
       onSuccess: refreshInventory,
+    });
+  }
+
+  function productStock(produtoId) {
+    const item = (data?.items || []).find((row) => String(row.id) === String(produtoId));
+    if (!item) return '—';
+    return item.estoque_atual;
+  }
+
+  function openEditProduction(row) {
+    openModal('edit-production', {
+      production: row,
+      items: data?.items || [],
+      onSuccess: refreshInventory,
+    });
+  }
+
+  function confirmDeleteProduction(row) {
+    openModal('confirm', {
+      message: `Excluir a produção de ${row.quantidade} un? O estoque de ${productName(row.produto_id)} será reduzido.`,
+      confirmLabel: 'Excluir',
+      successMessage: 'Produção excluída.',
+      errorMessage: 'Não foi possível excluir a produção.',
+      onConfirm: async () => {
+        await removeProduction(row.id);
+        refreshInventory();
+      },
     });
   }
 
@@ -436,14 +463,16 @@ export function InventoryPage() {
                 <thead>
                   <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
                     <th className="px-6 py-4">Produto</th>
-                    <th className="px-6 py-4">Quantidade</th>
+                    <th className="px-6 py-4">Quantidade Produzida</th>
+                    <th className="px-6 py-4">Estoque Atual</th>
                     <th className="px-6 py-4">Horário</th>
+                    <th className="px-6 py-4">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-variant/30">
                   {todayProductions.length === 0 ? (
                     <tr className="bg-surface-container-lowest">
-                      <td className="px-6 py-5 text-on-surface-variant" colSpan={3}>
+                      <td className="px-6 py-5 text-on-surface-variant" colSpan={5}>
                         Nenhuma produção hoje.
                       </td>
                     </tr>
@@ -454,11 +483,24 @@ export function InventoryPage() {
                           {productName(row.produto_id)}
                         </td>
                         <td className="px-6 py-5 text-on-surface">{row.quantidade}</td>
+                        <td className="px-6 py-5 text-on-surface">{productStock(row.produto_id)}</td>
                         <td className="px-6 py-5 text-on-surface-variant">
                           {new Date(row.data_producao).toLocaleTimeString('pt-BR', {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="secondary" onClick={() => openEditProduction(row)}>
+                              <Icon name="edit" />
+                              Editar
+                            </Button>
+                            <Button type="button" variant="danger" onClick={() => confirmDeleteProduction(row)}>
+                              <Icon name="delete" />
+                              Excluir
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))

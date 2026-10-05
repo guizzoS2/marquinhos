@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchInventory } from '../services/dashboardService';
+import { fetchInventory, removeCombo, removePromotion } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { useModal } from '../contexts/ModalContext';
@@ -111,12 +111,14 @@ export function CatalogPage() {
                   <th className="px-6 py-4">Preço promocional</th>
                   <th className="px-6 py-4">Início</th>
                   <th className="px-6 py-4">Término</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-variant/30">
                 {(data.promotions || []).length === 0 ? (
                   <tr className="bg-surface-container-lowest">
-                    <td className="px-6 py-5 text-on-surface-variant" colSpan={4}>
+                    <td className="px-6 py-5 text-on-surface-variant" colSpan={6}>
                       Nenhuma promoção cadastrada.
                     </td>
                   </tr>
@@ -136,6 +138,70 @@ export function CatalogPage() {
                       <td className="px-6 py-5 text-on-surface-variant">
                         {formatCatalogDate(row.data_termino)}
                       </td>
+                      <td className="px-6 py-5">
+                        <span
+                          className={
+                            row.status === 'Ativa'
+                              ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-secondary-container/20 text-on-secondary-fixed-variant'
+                              : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-surface-variant/40 text-on-surface-variant'
+                          }
+                        >
+                          {row.status === 'Ativa' ? 'Ativa' : 'Inativa'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() =>
+                              openModal('edit-promotion', {
+                                promotion: row,
+                                items: data.items || [],
+                                onSuccess: refresh,
+                              })
+                            }
+                          >
+                            <Icon name="edit" />
+                            Editar
+                          </Button>
+                          {row.status !== 'Ativa' ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={() =>
+                                openModal('new-promotion', {
+                                  reactivate: true,
+                                  promotion: row,
+                                  items: data.items || [],
+                                  onSuccess: refresh,
+                                })
+                              }
+                            >
+                              Reativar
+                            </Button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            variant="danger"
+                            onClick={() =>
+                              openModal('confirm', {
+                                message: `Excluir a promoção de ${productName(row.produto_id)}?`,
+                                confirmLabel: 'Excluir',
+                                successMessage: 'Promoção excluída.',
+                                errorMessage: 'Não foi possível excluir a promoção.',
+                                onConfirm: async () => {
+                                  await removePromotion(row.id);
+                                  refresh();
+                                },
+                              })
+                            }
+                          >
+                            <Icon name="delete" />
+                            Excluir
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -150,31 +216,71 @@ export function CatalogPage() {
           {combos.map((combo) => {
             const parts = partsOf(combo);
             return (
-              <button
+              <article
                 key={combo.id}
-                type="button"
-                onClick={() => openModal('combo-detail', { combo, parts })}
-                className="w-full text-left bg-surface-container-lowest rounded-2xl p-6 min-h-11 transition-all hover:shadow-xl hover:shadow-on-surface/5"
+                className="bg-surface-container-lowest rounded-2xl p-6 min-h-11"
               >
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div>
-                    <h3 className="font-headline font-bold text-lg text-on-surface">{combo.nome}</h3>
-                    <p className="text-sm text-on-surface-variant">{combo.codigo}</p>
+                <button
+                  type="button"
+                  onClick={() => openModal('combo-detail', { combo, parts })}
+                  className="w-full text-left min-h-11"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div>
+                      <h3 className="font-headline font-bold text-lg text-on-surface">{combo.nome}</h3>
+                      <p className="text-sm text-on-surface-variant">{combo.codigo}</p>
+                    </div>
+                    <p className="font-headline font-extrabold text-on-surface">{combo.valor_unitario}</p>
                   </div>
-                  <p className="font-headline font-extrabold text-on-surface">{combo.valor_unitario}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {parts.map((part) => (
+                      <span
+                        key={part.id || part.produto_associado_id}
+                        className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-secondary-container text-on-secondary-container"
+                      >
+                        <img alt="" src={part.foto} className="w-6 h-6 rounded-full object-cover" />
+                        {part.nome}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                      openModal('edit-combo', {
+                        combo,
+                        parts,
+                        items: data.items || [],
+                        onSuccess: refresh,
+                      })
+                    }
+                  >
+                    <Icon name="edit" />
+                    Editar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    onClick={() =>
+                      openModal('confirm', {
+                        message: `Excluir o combo ${combo.nome}?`,
+                        confirmLabel: 'Excluir',
+                        successMessage: 'Combo excluído.',
+                        errorMessage: 'Não foi possível excluir o combo.',
+                        onConfirm: async () => {
+                          await removeCombo(combo.id);
+                          refresh();
+                        },
+                      })
+                    }
+                  >
+                    <Icon name="delete" />
+                    Excluir
+                  </Button>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {parts.map((part) => (
-                    <span
-                      key={part.id || part.produto_associado_id}
-                      className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-secondary-container text-on-secondary-container"
-                    >
-                      <img alt="" src={part.foto} className="w-6 h-6 rounded-full object-cover" />
-                      {part.nome}
-                    </span>
-                  ))}
-                </div>
-              </button>
+              </article>
             );
           })}
         </div>

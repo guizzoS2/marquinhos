@@ -36,6 +36,21 @@ export function assertPromotionWindow(inicio, termino) {
   };
 }
 
+export function promotionStatus(promotion, now) {
+  const start = parseISO(String(promotion?.data_inicio || ''));
+  const end = parseISO(String(promotion?.data_termino || ''));
+  if (!isValid(start) || !isValid(end)) return 'Inativa';
+  if (!(isBefore(start, end) || isEqual(start, end))) return 'Inativa';
+  if (!isWithinInterval(now, { start, end })) return 'Inativa';
+  return 'Ativa';
+}
+
+export function toDateTimeLocal(value) {
+  const parsed = parseISO(String(value || ''));
+  if (!isValid(parsed)) return '';
+  return format(parsed, DATE_TIME);
+}
+
 export function promotionPriceAt(promotions, produtoId, now = new Date()) {
   const matches = (promotions || []).filter((row) => {
     if (String(row.produto_id) !== String(produtoId)) return false;

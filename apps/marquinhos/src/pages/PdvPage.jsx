@@ -23,7 +23,11 @@ export function PdvPage() {
           </p>
         </section>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <PdvSearch items={inventory.data.items || []} promotions={inventory.data.promotions || []} />
+          <PdvSearch
+            items={inventory.data.items || []}
+            promotions={inventory.data.promotions || []}
+            serverNow={inventory.data.serverNow}
+          />
           <PdvSummary customers={customers.data?.customers || []} />
         </div>
         <OpenComandas sales={inventory.data.sales || []} />

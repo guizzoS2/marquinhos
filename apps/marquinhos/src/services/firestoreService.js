@@ -1,4 +1,4 @@
-import { doc, getDoc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase';
 import { createAuthUserRest } from './identity';
 import {
@@ -25,7 +25,7 @@ import {
   nextProductCode,
   normalizeMedida,
 } from './inventoryProduct';
-import { assertPrice, assertPromotionWindow, saleUnitPrice } from './catalogRules';
+import { assertPrice, assertPromotionWindow, promotionStatus, saleUnitPrice } from './catalogRules';
 import {
   assertComanda,
   normalizeSale,
@@ -455,7 +455,16 @@ export async function getCashFlow() {
 
 export async function getInventory() {
   await ensureDashboardSeed();
-  return normalizeInventory((await readDocument(DOCS.inventory)) || inventoryFallback);
+  const now = await readServerNow();
+  const inventory = normalizeInventory((await readDocument(DOCS.inventory)) || inventoryFallback);
+  return {
+    ...inventory,
+    promotions: (inventory.promotions || []).map((row) => ({
+      ...promotionRecord(row),
+      status: promotionStatus(row, now),
+    })),
+    serverNow: now.toISOString(),
+  };
 }
 
 function normalizeFreelancers(raw) {
@@ -655,14 +664,48 @@ function recomputeInventoryMetrics(items) {
   ];
 }
 
+function promotionRecord(row) {
+  return {
+    id: row.id,
+    produto_id: row.produto_id,
+    preco_promocional: row.preco_promocional,
+    data_inicio: row.data_inicio,
+    data_termino: row.data_termino,
+  };
+}
+
 async function saveInventory(current, items) {
+  const { serverNow: _serverNow, ...rest } = current || {};
   const next = {
-    ...current,
+    ...rest,
     items,
+    promotions: (rest.promotions || []).map(promotionRecord),
     metrics: recomputeInventoryMetrics(items),
   };
   await writeDocument(DOCS.inventory, next);
   return next;
+}
+
+const CLOCK_DOC = ['tenants', TENANT_ID, 'data', 'clock'];
+let clockOffsetMs = null;
+let clockSampledAt = 0;
+
+async function readServerNow() {
+  requireDb();
+  if (clockOffsetMs != null && Date.now() - clockSampledAt < 60_000) {
+    return new Date(Date.now() + clockOffsetMs);
+  }
+  const ref = doc(db, ...CLOCK_DOC);
+  await setDoc(ref, { at: serverTimestamp() });
+  const snap = await getDoc(ref);
+  const at = snap.data()?.at;
+  if (!at || typeof at.toDate !== 'function') {
+    throw new Error('Não foi possível ler o horário do servidor.');
+  }
+  const serverDate = at.toDate();
+  clockOffsetMs = serverDate.getTime() - Date.now();
+  clockSampledAt = Date.now();
+  return serverDate;
 }
 
 function presentProduct(item, codigo) {
@@ -1006,6 +1049,63 @@ export async function createProduction(payload) {
   return { production, inventory: next };
 }
 
+function replaceItem(items, produtoId, nextItem) {
+  const index = items.findIndex((item) => String(item.id) === String(produtoId));
+  if (index < 0) throw new Error('Item não encontrado.');
+  const copy = [...items];
+  copy[index] = nextItem;
+  return copy;
+}
+
+export async function updateProduction(productionId, payload) {
+  const current = await getInventory();
+  const existing = (current.productions || []).find((row) => String(row.id) === String(productionId));
+  if (!existing) throw new Error('Produção não encontrada.');
+  const produtoId = String(payload.produto_id || '').trim();
+  const quantidade = Number(payload.quantidade);
+  if (!produtoId) throw new Error('Selecione o produto.');
+  if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+
+  let items = [...(current.items || [])];
+  if (produtoId === String(existing.produto_id)) {
+    const item = items.find((row) => String(row.id) === produtoId);
+    if (!item) throw new Error('Item não encontrado.');
+    items = replaceItem(items, produtoId, applyStockDelta(item, quantidade - Number(existing.quantidade)));
+  } else {
+    const previous = items.find((row) => String(row.id) === String(existing.produto_id));
+    if (!previous) throw new Error('Item não encontrado.');
+    items = replaceItem(items, existing.produto_id, applyStockDelta(previous, -Number(existing.quantidade)));
+    const nextItem = items.find((row) => String(row.id) === produtoId);
+    if (!nextItem) throw new Error('Item não encontrado.');
+    items = replaceItem(items, produtoId, applyStockDelta(nextItem, quantidade));
+  }
+
+  const production = {
+    ...existing,
+    produto_id: produtoId,
+    quantidade,
+  };
+  const productions = current.productions.map((row) => (row.id === existing.id ? production : row));
+  const next = await saveInventory({ ...current, productions }, items);
+  return { production, inventory: next };
+}
+
+export async function deleteProduction(productionId) {
+  const current = await getInventory();
+  const existing = (current.productions || []).find((row) => String(row.id) === String(productionId));
+  if (!existing) throw new Error('Produção não encontrada.');
+  const item = (current.items || []).find((row) => String(row.id) === String(existing.produto_id));
+  if (!item) throw new Error('Item não encontrado.');
+  const items = replaceItem(
+    current.items || [],
+    existing.produto_id,
+    applyStockDelta(item, -Number(existing.quantidade))
+  );
+  const productions = current.productions.filter((row) => row.id !== existing.id);
+  const next = await saveInventory({ ...current, productions }, items);
+  return next;
+}
+
 export async function createPromotion(payload) {
   const current = await getInventory();
   const produtoId = String(payload.produto_id || '').trim();
@@ -1027,6 +1127,37 @@ export async function createPromotion(payload) {
     stored
   );
   return { promotion, inventory: next };
+}
+
+export async function updatePromotion(promotionId, payload) {
+  const current = await getInventory();
+  const existing = (current.promotions || []).find((row) => String(row.id) === String(promotionId));
+  if (!existing) throw new Error('Promoção não encontrada.');
+  const produtoId = String(payload.produto_id || '').trim();
+  const produto = (current.items || []).find((item) => String(item.id) === produtoId);
+  if (!produto) throw new Error('Produto não encontrado. Cadastre em Estoque.');
+  const preco = assertPrice(payload.preco_promocional);
+  const janela = assertPromotionWindow(payload.data_inicio, payload.data_termino);
+  const promotion = {
+    id: existing.id,
+    produto_id: produtoId,
+    preco_promocional: preco,
+    data_inicio: janela.data_inicio,
+    data_termino: janela.data_termino,
+  };
+  const promotions = current.promotions.map((row) => (row.id === existing.id ? promotion : row));
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  const next = await saveInventory({ ...current, promotions }, stored);
+  return { promotion, inventory: next };
+}
+
+export async function deletePromotion(promotionId) {
+  const current = await getInventory();
+  const existing = (current.promotions || []).find((row) => String(row.id) === String(promotionId));
+  if (!existing) throw new Error('Promoção não encontrada.');
+  const promotions = current.promotions.filter((row) => row.id !== existing.id);
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  return saveInventory({ ...current, promotions }, stored);
 }
 
 export async function createCombo(payload) {
@@ -1109,6 +1240,78 @@ export async function createCombo(payload) {
     [...coded, persistProduct(draft)]
   );
   return { item: presentProduct(draft, codigo), inventory: next };
+}
+
+function comboLines(current, linhas, comboId) {
+  const pool = (current.items || []).filter((item) => item.tipo !== 'combo');
+  const seen = new Set();
+  return linhas.map((linha, index) => {
+    const produtoId = String(linha.produto_associado_id || '').trim();
+    if (!pool.some((item) => String(item.id) === produtoId)) {
+      throw new Error('Produto não encontrado. Cadastre em Estoque.');
+    }
+    if (seen.has(produtoId)) throw new Error('Produto repetido no combo.');
+    seen.add(produtoId);
+    const quantidade = Number(linha.quantidade);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+    if (typeof linha.deduz_estoque_integral !== 'boolean') {
+      throw new Error('Informe se o item deduz o estoque integral.');
+    }
+    return {
+      id: `combo-item-${comboId}-${index}`,
+      combo_id: comboId,
+      produto_associado_id: produtoId,
+      quantidade,
+      deduz_estoque_integral: linha.deduz_estoque_integral,
+    };
+  });
+}
+
+export async function updateCombo(comboId, payload) {
+  const current = await getInventory();
+  const existing = (current.items || []).find((item) => String(item.id) === String(comboId));
+  if (!existing || existing.tipo !== 'combo') throw new Error('Combo não encontrado.');
+  const nome = String(payload.nome || '').trim();
+  if (!nome) throw new Error('Informe o nome do combo.');
+  const preco = assertPrice(payload.valor ?? payload.valor_unitario);
+  const linhas = Array.isArray(payload.itens) ? payload.itens : [];
+  if (!linhas.length) throw new Error('Adicione ao menos um produto ao combo.');
+  const rows = comboLines(current, linhas, existing.id);
+  const actor = await actorId();
+  const draft = presentProduct(
+    {
+      ...existing,
+      nome,
+      name: nome,
+      valor_unitario: preco,
+      cost: preco,
+      updated_at: new Date().toISOString(),
+      updated_by: actor,
+    },
+    existing.codigo
+  );
+  const items = (current.items || []).map((item) =>
+    String(item.id) === String(existing.id)
+      ? persistProduct(draft)
+      : persistProduct(presentProduct(item, item.codigo))
+  );
+  const comboItems = [
+    ...rows,
+    ...(current.comboItems || []).filter((row) => String(row.combo_id) !== String(existing.id)),
+  ];
+  const next = await saveInventory({ ...current, comboItems }, items);
+  return { item: presentProduct(draft, existing.codigo), inventory: next };
+}
+
+export async function deleteCombo(comboId) {
+  const current = await getInventory();
+  const existing = (current.items || []).find((item) => String(item.id) === String(comboId));
+  if (!existing || existing.tipo !== 'combo') throw new Error('Combo não encontrado.');
+  const items = (current.items || [])
+    .filter((item) => String(item.id) !== String(existing.id))
+    .map((item) => persistProduct(presentProduct(item, item.codigo)));
+  const comboItems = (current.comboItems || []).filter((row) => String(row.combo_id) !== String(existing.id));
+  return saveInventory({ ...current, comboItems }, items);
 }
 
 function applyStockDelta(item, delta) {
@@ -1214,9 +1417,9 @@ export async function saveOpenSale(payload) {
   const numero = assertComanda(payload.numero_comanda);
   const usuarioId = await actorId();
   await ensureDashboardSeed();
+  const now = await readServerNow();
   return commitOps((ops) => {
     const inventory = normalizeInventory(ops.inventory);
-    const now = new Date();
     const resolved = resolveSaleLines(inventory, payload.itens, now);
     const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
     const cliente = customerFromOps(ops, payload.cliente_id);
@@ -1255,9 +1458,9 @@ export async function registerSale(payload) {
   const numero = assertComanda(payload.numero_comanda);
   const usuarioId = await actorId();
   await ensureDashboardSeed();
+  const now = await readServerNow();
   return commitOps((ops) => {
     const inventory = normalizeInventory(ops.inventory);
-    const now = new Date();
     const resolved = resolveSaleLines(inventory, payload.itens, now);
     const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
     let valorRecebido = null;

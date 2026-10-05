@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from 'react';
+import { isValid, parseISO } from 'date-fns';
 import { Input } from '../ui/Input';
 import { saleUnitPrice } from '../../services/catalogRules';
 import { useCartDispatch } from '../../contexts/CartContext';
@@ -7,7 +8,7 @@ function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-export const PdvSearch = memo(function PdvSearch({ items = [], promotions = [] }) {
+export const PdvSearch = memo(function PdvSearch({ items = [], promotions = [], serverNow }) {
   const dispatch = useCartDispatch();
   const [query, setQuery] = useState('');
 
@@ -38,7 +39,8 @@ export const PdvSearch = memo(function PdvSearch({ items = [], promotions = [] }
       ) : null}
       <div className="flex flex-col gap-2">
         {matches.map((item) => {
-          const preco = saleUnitPrice(item, promotions);
+          const pricedAt = parseISO(String(serverNow || ''));
+          const preco = isValid(pricedAt) ? saleUnitPrice(item, promotions, pricedAt) : saleUnitPrice(item, []);
           return (
             <button
               key={item.id}

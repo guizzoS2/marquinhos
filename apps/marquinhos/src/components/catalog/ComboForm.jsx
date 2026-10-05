@@ -3,15 +3,24 @@ import { Link } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
-import { addCombo } from '../../services/dashboardService';
-import { parseReaisInput } from '../../services/inventoryProduct';
+import { addCombo, editCombo } from '../../services/dashboardService';
+import { moneyInputValue, parseReaisInput } from '../../services/inventoryProduct';
 
-export function ComboForm({ items = [], onSuccess, onCancel }) {
+export function ComboForm({ items = [], combo = null, parts = [], onSuccess, onCancel }) {
   const toast = useToast();
-  const [nome, setNome] = useState('');
-  const [valor, setValor] = useState('');
+  const editing = Boolean(combo?.id);
+  const [nome, setNome] = useState(editing ? combo.nome || combo.name || '' : 'Combo ');
+  const [valor, setValor] = useState(editing ? moneyInputValue(combo.valor_unitario ?? combo.cost) : '');
   const [query, setQuery] = useState('');
-  const [lines, setLines] = useState([]);
+  const [lines, setLines] = useState(() =>
+    parts.map((part) => ({
+      produto_associado_id: String(part.produto_associado_id),
+      nome: part.nome,
+      foto: part.foto,
+      quantidade: String(part.quantidade ?? 1),
+      deduz_estoque_integral: part.deduz_estoque_integral === true,
+    }))
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -56,7 +65,7 @@ export function ComboForm({ items = [], onSuccess, onCancel }) {
       return;
     }
     try {
-      await addCombo({
+      const payload = {
         nome,
         valor: preco,
         itens: lines.map((line) => ({
@@ -64,8 +73,10 @@ export function ComboForm({ items = [], onSuccess, onCancel }) {
           quantidade: Number(line.quantidade),
           deduz_estoque_integral: line.deduz_estoque_integral,
         })),
-      });
-      toast.success('Combo cadastrado.');
+      };
+      if (editing) await editCombo(combo.id, payload);
+      else await addCombo(payload);
+      toast.success(editing ? 'Combo atualizado.' : 'Combo cadastrado.');
       onSuccess?.();
       onCancel();
     } catch (err) {
@@ -178,7 +189,7 @@ export function ComboForm({ items = [], onSuccess, onCancel }) {
           Cancelar
         </Button>
         <Button type="submit" disabled={saving || !lines.length}>
-          {saving ? 'Salvando...' : 'Cadastrar combo'}
+          {saving ? 'Salvando...' : editing ? 'Salvar combo' : 'Cadastrar combo'}
         </Button>
       </div>
     </form>
