@@ -1,5 +1,16 @@
-import { format, formatISO, isBefore, isValid, parse, parseISO } from 'date-fns';
+import {
+  compareDesc,
+  format,
+  formatISO,
+  isBefore,
+  isEqual,
+  isValid,
+  isWithinInterval,
+  parse,
+  parseISO,
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseMoneyToCents } from './cashFlowUtils';
 
 const DATE_TIME = "yyyy-MM-dd'T'HH:mm";
 
@@ -23,6 +34,29 @@ export function assertPromotionWindow(inicio, termino) {
     data_inicio: formatISO(dataInicio),
     data_termino: formatISO(dataTermino),
   };
+}
+
+export function promotionPriceAt(promotions, produtoId, now = new Date()) {
+  const matches = (promotions || []).filter((row) => {
+    if (String(row.produto_id) !== String(produtoId)) return false;
+    const start = parseISO(String(row.data_inicio || ''));
+    const end = parseISO(String(row.data_termino || ''));
+    if (!isValid(start) || !isValid(end)) return false;
+    if (!(isBefore(start, end) || isEqual(start, end))) return false;
+    return isWithinInterval(now, { start, end });
+  });
+  if (!matches.length) return null;
+  matches.sort((left, right) =>
+    compareDesc(parseISO(left.data_inicio), parseISO(right.data_inicio))
+  );
+  const price = Number(matches[0].preco_promocional);
+  return Number.isFinite(price) ? price : null;
+}
+
+export function saleUnitPrice(item, promotions, now = new Date()) {
+  const promo = promotionPriceAt(promotions, item?.id, now);
+  if (promo != null) return promo;
+  return parseMoneyToCents(item?.valor_unitario || item?.cost || 0) / 100;
 }
 
 export function formatCatalogDate(value) {

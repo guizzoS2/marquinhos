@@ -16,6 +16,14 @@ export function assertPaymentMethod(value) {
   return value;
 }
 
+export const CARD_INSTALLMENTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+export function assertInstallments(value) {
+  const parcelas = Number(value);
+  if (!CARD_INSTALLMENTS.includes(parcelas)) throw new Error('Parcelas inválidas.');
+  return parcelas;
+}
+
 const MEASURE_ALIASES = {
   UNIDADE: 'UN',
   UNID: 'UN',

@@ -10,6 +10,7 @@ import { OverviewPage } from './pages/OverviewPage';
 import { CashFlowPage } from './pages/CashFlowPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { CatalogPage } from './pages/CatalogPage';
+import { PdvPage } from './pages/PdvPage';
 import { FreelancersPage } from './pages/FreelancersPage';
 import { SuppliersPage } from './pages/SuppliersPage';
 import { StaffPage } from './pages/StaffPage';
@@ -39,6 +40,7 @@ function App() {
                     <Route path="fluxo-caixa" element={<CashFlowPage />} />
                     <Route path="estoque" element={<InventoryPage />} />
                     <Route path="catalogo" element={<CatalogPage />} />
+                    <Route path="pdv" element={<PdvPage />} />
                     <Route path="fornecedores" element={<SuppliersPage />} />
                     <Route path="freelancers" element={<FreelancersPage />} />
                     <Route path="equipe" element={<StaffPage />} />

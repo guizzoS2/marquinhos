@@ -15,6 +15,7 @@ import {
   parseMoneyToCents,
 } from './cashFlowUtils';
 import {
+  assertInstallments,
   assertMedida,
   assertPaymentMethod,
   assertVolumePeso,
@@ -24,7 +25,8 @@ import {
   nextProductCode,
   normalizeMedida,
 } from './inventoryProduct';
-import { assertPrice, assertPromotionWindow } from './catalogRules';
+import { assertPrice, assertPromotionWindow, saleUnitPrice } from './catalogRules';
+import { isValidPhone, maskPhone } from './freelancerSchedule';
 
 const TENANT_ID = 'marquinhos';
 const OPS_COLLECTION = ['tenants', TENANT_ID, 'data', 'ops'];
@@ -54,6 +56,7 @@ const DOCS = {
   freelancers: 'dashboard/freelancers',
   suppliers: 'dashboard/suppliers',
   staff: 'dashboard/staff',
+  customers: 'dashboard/customers',
 };
 
 const DEFAULT_PRODUCT_IMAGE =
@@ -404,6 +407,7 @@ function normalizeInventory(raw) {
     productions: Array.isArray(current.productions) ? current.productions : [],
     promotions: Array.isArray(current.promotions) ? current.promotions : [],
     comboItems: Array.isArray(current.comboItems) ? current.comboItems : [],
+    sales: Array.isArray(current.sales) ? current.sales : [],
     metrics: recomputeInventoryMetrics(items),
   };
 }
@@ -1081,6 +1085,133 @@ export async function createCombo(payload) {
     [...coded, persistProduct(draft)]
   );
   return { item: presentProduct(draft, codigo), inventory: next };
+}
+
+function applyStockDelta(item, delta) {
+  const parsed = parseStockLabel(item.stock);
+  const minParsed = parseStockLabel(item.minStock);
+  const nextQty = parsed.qty + delta;
+  if (nextQty < 0) throw new Error(`Estoque insuficiente de ${item.nome || item.name}.`);
+  const unit = parsed.unit || minParsed.unit || 'un';
+  const status = nextQty < minParsed.qty ? 'low' : 'stable';
+  return {
+    ...item,
+    estoque_atual: nextQty,
+    stock: formatStockLabel(nextQty, unit),
+    status,
+    statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
+  };
+}
+
+export async function getCustomers() {
+  await ensureDashboardSeed();
+  const raw = (await readDocument(DOCS.customers)) || {};
+  return { customers: Array.isArray(raw.customers) ? raw.customers : [] };
+}
+
+export async function createCustomer(payload) {
+  const current = await getCustomers();
+  const nome = String(payload.nome || '').trim();
+  if (!nome) throw new Error('Informe o nome.');
+  if (!isValidPhone(payload.contato)) throw new Error('Contato inválido.');
+  const customer = {
+    id: `cli-${Date.now()}`,
+    nome,
+    contato: maskPhone(payload.contato),
+    created_at: new Date().toISOString(),
+  };
+  await writeDocument(DOCS.customers, { customers: [customer, ...current.customers] });
+  return customer;
+}
+
+export async function registerSale(payload) {
+  const forma = assertPaymentMethod(payload.forma_pagamento);
+  const linhas = Array.isArray(payload.itens) ? payload.itens : [];
+  if (!linhas.length) throw new Error('O carrinho está vazio.');
+
+  const inventory = await getInventory();
+  const now = new Date();
+  const resolved = linhas.map((linha) => {
+    const produto = (inventory.items || []).find((item) => String(item.id) === String(linha.produto_id));
+    if (!produto) throw new Error('Produto não encontrado.');
+    const quantidade = Number(linha.quantidade);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+    const valorUnitario = saleUnitPrice(produto, inventory.promotions, now);
+    const valorTotal = Math.round(valorUnitario * quantidade * 100) / 100;
+    return { produto, quantidade, valor_unitario: valorUnitario, valor_total: valorTotal };
+  });
+  const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
+
+  let valorRecebido = null;
+  let troco = null;
+  let parcelas = null;
+  if (forma === 'dinheiro') {
+    valorRecebido = assertPrice(payload.valor_recebido);
+    if (valorRecebido < total) throw new Error('Valor recebido menor que o total.');
+    troco = Math.round((valorRecebido - total) * 100) / 100;
+  }
+  if (forma === 'cartao_credito') parcelas = assertInstallments(payload.parcelas);
+
+  let cliente = { id: null, nome: 'Consumidor' };
+  if (payload.cliente_id) {
+    const found = (await getCustomers()).customers.find(
+      (item) => String(item.id) === String(payload.cliente_id)
+    );
+    if (!found) throw new Error('Cliente não encontrado.');
+    cliente = { id: found.id, nome: found.nome };
+  }
+
+  let items = [...(inventory.items || [])];
+  function take(produtoId, qty) {
+    const index = items.findIndex((item) => String(item.id) === String(produtoId));
+    if (index < 0) throw new Error('Produto do combo não encontrado.');
+    items[index] = applyStockDelta(items[index], -qty);
+  }
+  resolved.forEach((line) => {
+    if (line.produto.tipo === 'combo') {
+      (inventory.comboItems || [])
+        .filter(
+          (row) =>
+            String(row.combo_id) === String(line.produto.id) && row.deduz_estoque_integral === true
+        )
+        .forEach((row) => take(row.produto_associado_id, row.quantidade * line.quantidade));
+      return;
+    }
+    take(line.produto.id, line.quantidade);
+  });
+
+  const usuarioId = await actorId();
+  const sale = {
+    id: `sale-${Date.now()}`,
+    cliente_id: cliente.id,
+    cliente_nome: cliente.nome,
+    forma_pagamento: forma,
+    valor_recebido: valorRecebido,
+    troco,
+    parcelas,
+    total,
+    itens: resolved.map((line) => ({
+      produto_id: line.produto.id,
+      nome: line.produto.nome || line.produto.name,
+      quantidade: line.quantidade,
+      valor_unitario: line.valor_unitario,
+      valor_total: line.valor_total,
+    })),
+    created_at: new Date().toISOString(),
+    usuario_id: usuarioId,
+  };
+
+  const stored = items.map((item) => persistProduct(presentProduct(item, item.codigo)));
+  await saveInventory({ ...inventory, sales: [sale, ...(inventory.sales || [])] }, stored);
+  await createIncome({
+    id: `inc-${sale.id}`,
+    date: new Date().toISOString().slice(0, 10),
+    description: `PDV · ${cliente.nome}`,
+    category: 'Varejo',
+    amount: Math.round(total * 100),
+    source: 'pdv',
+  });
+  return sale;
 }
 
 export async function importStatementRows(rows) {

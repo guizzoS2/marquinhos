@@ -27,6 +27,7 @@ import { ProductionForm } from '../inventory/ProductionForm';
 import { ComboForm } from '../catalog/ComboForm';
 import { ComboDetail } from '../catalog/ComboDetail';
 import { PromotionForm } from '../catalog/PromotionForm';
+import { CustomerForm } from '../pdv/CustomerForm';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { PAYMENT_OPTIONS } from '../../services/inventoryProduct';
 
@@ -41,6 +42,7 @@ const titles = {
   'new-promotion': 'Nova promoção',
   'new-combo': 'Novo combo',
   'combo-detail': 'Detalhes do combo',
+  'new-customer': 'Novo Cliente',
   'new-daily': 'Registrar Diária',
   'shift-detail': 'Agendamento',
   'new-freelancer': 'Novo Freelancer',
@@ -822,6 +824,8 @@ export function AppModal() {
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
+        ) : modal.type === 'new-customer' ? (
+          <CustomerForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
         ) : modal.type === 'new-promotion' ? (
           <PromotionForm
             items={modal.payload?.items || []}

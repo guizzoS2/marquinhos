@@ -16,6 +16,9 @@ import {
   createProduction,
   createPromotion,
   createCombo,
+  getCustomers,
+  createCustomer,
+  registerSale,
   deleteInventoryItem,
   createInventoryItem,
   updateInventoryItem,
@@ -121,6 +124,18 @@ export function addPromotion(payload) {
 
 export function addCombo(payload) {
   return createCombo(payload);
+}
+
+export function fetchCustomers() {
+  return getCustomers();
+}
+
+export function addCustomer(payload) {
+  return createCustomer(payload);
+}
+
+export function checkoutSale(payload) {
+  return registerSale(payload);
 }
 
 export function addInventoryProduct(payload) {
