@@ -11,6 +11,7 @@ const allNavItems = [
   { to: '/', label: 'Visão Geral', icon: 'dashboard', end: true, admin: true },
   { to: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: 'payments', admin: true },
   { to: '/estoque', label: 'Estoque', icon: 'inventory_2' },
+  { to: '/catalogo', label: 'Catálogo', icon: 'storefront' },
   { to: '/fornecedores', label: 'Fornecedores', icon: 'local_shipping', admin: true },
   { to: '/freelancers', label: 'Freelancers', icon: 'group', admin: true },
   { to: '/equipe', label: 'Equipe da casa', icon: 'badge', admin: true },

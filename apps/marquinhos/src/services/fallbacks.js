@@ -61,6 +61,8 @@ export const inventoryFallback = {
   items: [],
   entries: [],
   productions: [],
+  promotions: [],
+  comboItems: [],
   metrics: [
     {
       id: 'low-stock',

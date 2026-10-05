@@ -14,6 +14,8 @@ import {
   createIncome,
   registerStockEntry,
   createProduction,
+  createPromotion,
+  createCombo,
   deleteInventoryItem,
   createInventoryItem,
   updateInventoryItem,
@@ -111,6 +113,14 @@ export function addStockEntry(payload) {
 
 export function addProduction(payload) {
   return createProduction(payload);
+}
+
+export function addPromotion(payload) {
+  return createPromotion(payload);
+}
+
+export function addCombo(payload) {
+  return createCombo(payload);
 }
 
 export function addInventoryProduct(payload) {

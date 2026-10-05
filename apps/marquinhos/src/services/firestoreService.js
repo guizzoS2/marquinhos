@@ -24,6 +24,7 @@ import {
   nextProductCode,
   normalizeMedida,
 } from './inventoryProduct';
+import { assertPrice, assertPromotionWindow } from './catalogRules';
 
 const TENANT_ID = 'marquinhos';
 const OPS_COLLECTION = ['tenants', TENANT_ID, 'data', 'ops'];
@@ -401,6 +402,8 @@ function normalizeInventory(raw) {
     items,
     entries: Array.isArray(current.entries) ? current.entries : [],
     productions: Array.isArray(current.productions) ? current.productions : [],
+    promotions: Array.isArray(current.promotions) ? current.promotions : [],
+    comboItems: Array.isArray(current.comboItems) ? current.comboItems : [],
     metrics: recomputeInventoryMetrics(items),
   };
 }
@@ -670,6 +673,7 @@ function presentProduct(item, codigo) {
     category: categoria,
     volume_peso: volumePeso,
     medida,
+    tipo: item.tipo === 'combo' ? 'combo' : 'simples',
     estoque_atual: estoqueAtual,
     estoque_sugerido: estoqueSugerido,
     valor_unitario: cost,
@@ -707,6 +711,7 @@ function persistProduct(item) {
     category: categoria,
     volume_peso: Number.isFinite(Number(item.volume_peso)) ? Number(item.volume_peso) : 0,
     medida: normalizeMedida(item.medida) || 'UN',
+    tipo: item.tipo === 'combo' ? 'combo' : 'simples',
     estoque_atual: Number.isFinite(Number(item.estoque_atual)) ? Number(item.estoque_atual) : 0,
     estoque_sugerido: Number.isFinite(Number(item.estoque_sugerido)) ? Number(item.estoque_sugerido) : 0,
     valor_unitario: valor,
@@ -971,6 +976,111 @@ export async function createProduction(payload) {
     items
   );
   return { production, inventory: next };
+}
+
+export async function createPromotion(payload) {
+  const current = await getInventory();
+  const produtoId = String(payload.produto_id || '').trim();
+  const produto = (current.items || []).find((item) => String(item.id) === produtoId);
+  if (!produto) throw new Error('Produto não encontrado. Cadastre em Estoque.');
+
+  const preco = assertPrice(payload.preco_promocional);
+  const janela = assertPromotionWindow(payload.data_inicio, payload.data_termino);
+  const promotion = {
+    id: `promo-${Date.now()}`,
+    produto_id: produtoId,
+    preco_promocional: preco,
+    data_inicio: janela.data_inicio,
+    data_termino: janela.data_termino,
+  };
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  const next = await saveInventory(
+    { ...current, promotions: [promotion, ...(current.promotions || [])] },
+    stored
+  );
+  return { promotion, inventory: next };
+}
+
+export async function createCombo(payload) {
+  const current = await getInventory();
+  const nome = String(payload.nome || '').trim();
+  if (!nome) throw new Error('Informe o nome do combo.');
+  const preco = assertPrice(payload.valor ?? payload.valor_unitario);
+  const linhas = Array.isArray(payload.itens) ? payload.itens : [];
+  if (!linhas.length) throw new Error('Adicione ao menos um produto ao combo.');
+
+  const simples = (current.items || []).filter((item) => item.tipo !== 'combo');
+  const seen = new Set();
+  const linhasOk = linhas.map((linha) => {
+    const produtoId = String(linha.produto_associado_id || '').trim();
+    if (!simples.some((item) => String(item.id) === produtoId)) {
+      throw new Error('Produto não encontrado. Cadastre em Estoque.');
+    }
+    if (seen.has(produtoId)) throw new Error('Produto repetido no combo.');
+    seen.add(produtoId);
+    const quantidade = Number(linha.quantidade);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+    if (typeof linha.deduz_estoque_integral !== 'boolean') {
+      throw new Error('Informe se o item deduz o estoque integral.');
+    }
+    return {
+      produto_associado_id: produtoId,
+      quantidade,
+      deduz_estoque_integral: linha.deduz_estoque_integral,
+    };
+  });
+
+  const now = new Date().toISOString();
+  const actor = await actorId();
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  let max = maxProductCode(stored);
+  const coded = stored.map((item) => {
+    if (item.codigo) return item;
+    max += 1;
+    return { ...item, codigo: formatProductCode(max) };
+  });
+  const codigo = formatProductCode(max + 1);
+  const comboId = `combo-${Date.now()}`;
+  const primeiro = simples.find((item) => String(item.id) === linhasOk[0].produto_associado_id);
+  const draft = presentProduct(
+    {
+      id: comboId,
+      codigo,
+      nome,
+      marca: '',
+      descricao: '',
+      categoria: 'Combos',
+      volume_peso: 1,
+      medida: 'UN',
+      tipo: 'combo',
+      estoque_atual: 0,
+      estoque_sugerido: 0,
+      valor_unitario: preco,
+      foto: primeiro?.foto || primeiro?.image || '',
+      stock: formatStockLabel(0, 'un'),
+      minStock: formatStockLabel(0, 'un'),
+      created_at: now,
+      updated_at: now,
+      created_by: actor,
+      updated_by: actor,
+    },
+    codigo
+  );
+  const rows = linhasOk.map((linha, index) => ({
+    id: `combo-item-${comboId}-${index}`,
+    combo_id: comboId,
+    produto_associado_id: linha.produto_associado_id,
+    quantidade: linha.quantidade,
+    deduz_estoque_integral: linha.deduz_estoque_integral,
+  }));
+  const filters = current.filters?.includes('Combos')
+    ? current.filters
+    : [...(current.filters || ['Todos']), 'Combos'];
+  const next = await saveInventory(
+    { ...current, filters, comboItems: [...rows, ...(current.comboItems || [])] },
+    [...coded, persistProduct(draft)]
+  );
+  return { item: presentProduct(draft, codigo), inventory: next };
 }
 
 export async function importStatementRows(rows) {

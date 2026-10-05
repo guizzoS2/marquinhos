@@ -24,6 +24,9 @@ import { ProductForm } from '../inventory/ProductForm';
 import { ProductDetail } from '../inventory/ProductDetail';
 import { CategoryForm } from '../inventory/CategoryForm';
 import { ProductionForm } from '../inventory/ProductionForm';
+import { ComboForm } from '../catalog/ComboForm';
+import { ComboDetail } from '../catalog/ComboDetail';
+import { PromotionForm } from '../catalog/PromotionForm';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { PAYMENT_OPTIONS } from '../../services/inventoryProduct';
 
@@ -35,6 +38,9 @@ const titles = {
   'product-detail': 'Detalhes do Produto',
   'new-category': 'Nova categoria',
   'new-production': 'Registrar Produção',
+  'new-promotion': 'Nova promoção',
+  'new-combo': 'Novo combo',
+  'combo-detail': 'Detalhes do combo',
   'new-daily': 'Registrar Diária',
   'shift-detail': 'Agendamento',
   'new-freelancer': 'Novo Freelancer',
@@ -722,7 +728,10 @@ export function AppModal() {
     modal.type === 'import-statement' ||
     modal.type === 'new-product' ||
     modal.type === 'edit-product' ||
-    modal.type === 'product-detail';
+    modal.type === 'product-detail' ||
+    modal.type === 'new-combo' ||
+    modal.type === 'combo-detail' ||
+    modal.type === 'new-promotion';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -812,6 +821,24 @@ export function AppModal() {
             items={modal.payload?.items || []}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'new-promotion' ? (
+          <PromotionForm
+            items={modal.payload?.items || []}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'new-combo' ? (
+          <ComboForm
+            items={modal.payload?.items || []}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'combo-detail' ? (
+          <ComboDetail
+            combo={modal.payload?.combo}
+            parts={modal.payload?.parts || []}
+            onCancel={closeModal}
           />
         ) : modal.type === 'new-product' || modal.type === 'edit-product' ? (
           <ProductForm
