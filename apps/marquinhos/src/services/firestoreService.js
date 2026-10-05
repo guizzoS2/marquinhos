@@ -398,9 +398,21 @@ export async function getInventory() {
   return normalizeInventory((await readDocument(DOCS.inventory)) || inventoryFallback);
 }
 
+function normalizeFreelancers(raw) {
+  const current = raw && typeof raw === 'object' ? raw : freelancersFallback;
+  return {
+    ...freelancersFallback,
+    ...current,
+    roles: current.roles?.length ? current.roles : freelancersFallback.roles,
+    people: Array.isArray(current.people) ? current.people : [],
+    dailies: Array.isArray(current.dailies) ? current.dailies : [],
+    summary: current.summary || freelancersFallback.summary,
+  };
+}
+
 export async function getFreelancers() {
   await ensureDashboardSeed();
-  return (await readDocument(DOCS.freelancers)) || freelancersFallback;
+  return normalizeFreelancers((await readDocument(DOCS.freelancers)) || freelancersFallback);
 }
 
 export async function getSuppliers() {
@@ -814,9 +826,18 @@ export async function deleteFreelancer(freelancerId) {
 
 export async function registerDaily(payload) {
   const current = await getFreelancers();
+  const entry = {
+    id: payload.id || `daily-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    freelancerId: payload.freelancerId,
+    date: payload.date,
+    role: payload.role,
+    value: payload.value,
+    status: payload.status || 'pending_payment',
+    createdAt: new Date().toISOString(),
+  };
   const next = {
     ...current,
-    dailies: [...(current.dailies || []), { ...payload, createdAt: new Date().toISOString() }],
+    dailies: [...(current.dailies || []), entry],
   };
   await writeDocument(DOCS.freelancers, next);
 
@@ -850,14 +871,10 @@ export async function addFreelancer(payload) {
     id: nextId,
     name: payload.name.trim(),
     role: payload.role.trim(),
+    contact: String(payload.contact || '').trim(),
     status,
     statusLabel: STATUS_MAP[status] || STATUS_MAP.available,
-    dailyRate: String(payload.dailyRate).startsWith('R$')
-      ? String(payload.dailyRate)
-      : `R$ ${Number(payload.dailyRate).toLocaleString('pt-BR', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`,
+    dailyRate: formatDailyRate(payload.dailyRate),
     image: payload.image?.trim() || DEFAULT_AVATAR,
   };
 
@@ -867,6 +884,38 @@ export async function addFreelancer(payload) {
   };
   await writeDocument(DOCS.freelancers, next);
   return person;
+}
+
+function formatDailyRate(value) {
+  if (value == null || value === '') return 'R$ 0,00';
+  const text = String(value).trim();
+  if (text.startsWith('R$')) return text;
+  const amount = Number(text);
+  if (!Number.isFinite(amount)) return 'R$ 0,00';
+  return `R$ ${amount.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export async function updateFreelancer(freelancerId, payload) {
+  const current = await getFreelancers();
+  const people = (current.people || []).map((person) => {
+    if (String(person.id) !== String(freelancerId)) return person;
+    const status = payload.status || person.status;
+    return {
+      ...person,
+      name: payload.name.trim(),
+      role: payload.role.trim(),
+      contact: String(payload.contact || '').trim(),
+      status,
+      statusLabel: STATUS_MAP[status] || person.statusLabel,
+      image: payload.image === undefined ? person.image : payload.image?.trim() || DEFAULT_AVATAR,
+    };
+  });
+  const next = { ...current, people };
+  await writeDocument(DOCS.freelancers, next);
+  return people.find((person) => String(person.id) === String(freelancerId));
 }
 
 export async function addSupplier(payload) {

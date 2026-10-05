@@ -16,6 +16,7 @@ import {
   createInventoryItem,
   updateInventoryItem,
   updateFreelancerStatus,
+  updateFreelancer,
   deleteFreelancer,
   importStatementRows,
   listStaff,
@@ -70,6 +71,11 @@ export function createDaily(payload) {
 export function createFreelancer(payload) {
   requireAdmin();
   return addFreelancer(payload);
+}
+
+export function editFreelancer(freelancerId, payload) {
+  requireAdmin();
+  return updateFreelancer(freelancerId, payload);
 }
 
 export function createCashExpense(payload) {

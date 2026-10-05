@@ -9,13 +9,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   createCashExpense,
   createCashIncome,
-  createFreelancer,
   createSupplier,
   fetchCashFlow,
   fetchInventory,
   fetchSuppliers,
   addStockEntry,
 } from '../../services/dashboardService';
+import { NewFreelancerForm } from '../freelancers/NewFreelancerForm';
+import { DailyForm } from '../freelancers/DailyForm';
 import { expenseCategories } from '../../services/fallbacks';
 import { isStockRole } from '../../services/roles';
 import { ProductForm } from '../inventory/ProductForm';
@@ -25,7 +26,7 @@ const titles = {
   'stock-entry': 'Entrada de Mercadoria',
   'new-product': 'Novo produto',
   'edit-product': 'Editar produto',
-  'new-daily': 'Nova Diária',
+  'new-daily': 'Registrar Diária',
   'new-freelancer': 'Novo Freelancer',
   'new-supplier': 'Novo Fornecedor',
   'supplier-detail': 'Histórico do fornecedor',
@@ -33,94 +34,6 @@ const titles = {
   'import-statement': 'Importar Extrato',
   confirm: 'Confirmar ação',
 };
-
-function NewFreelancerForm({ onSuccess, onCancel }) {
-  const toast = useToast();
-  const [form, setForm] = useState({
-    name: '',
-    role: 'Barman',
-    dailyRate: '',
-    status: 'available',
-    image: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      await createFreelancer(form);
-      toast.success('Freelancer cadastrado com sucesso.');
-      onSuccess?.();
-      onCancel();
-    } catch {
-      setError('Não foi possível cadastrar o freelancer.');
-      toast.error('Falha ao cadastrar freelancer.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
-      <Input
-        label="Nome completo"
-        name="name"
-        value={form.name}
-        onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-        required
-      />
-      <Input
-        label="Função / especialidade"
-        name="role"
-        value={form.role}
-        onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
-        required
-      />
-      <Input
-        label="Valor da diária (R$)"
-        name="dailyRate"
-        type="number"
-        min="0"
-        step="0.01"
-        value={form.dailyRate}
-        onChange={(e) => setForm((prev) => ({ ...prev, dailyRate: e.target.value }))}
-        required
-      />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-          Status inicial
-        </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-          value={form.status}
-          onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
-        >
-          <option value="available">Disponível</option>
-          <option value="on_shift">Em turno</option>
-          <option value="pending_payment">Pendente pagamento</option>
-        </select>
-      </div>
-      <Input
-        label="URL da foto (opcional)"
-        name="image"
-        value={form.image}
-        onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
-      />
-      {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
-      <div className="flex flex-wrap gap-3 justify-end">
-        <Button variant="secondary" type="button" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? 'Salvando...' : 'Adicionar freelancer'}
-        </Button>
-      </div>
-    </form>
-  );
-}
 
 function NewSupplierForm({ onSuccess, onCancel }) {
   const toast = useToast();
@@ -761,10 +674,15 @@ export function AppModal() {
 
   if (!isOpen) return null;
 
-  const title = titles[modal.type] || 'Confirmação';
+  const title =
+    modal.type === 'new-freelancer' && modal.payload?.person
+      ? 'Editar Freelancer'
+      : titles[modal.type] || 'Confirmação';
   const iconName =
     modal.type === 'new-freelancer'
       ? 'person_add'
+      : modal.type === 'new-daily'
+        ? 'assignment_add'
       : modal.type === 'new-supplier'
         ? 'local_shipping'
         : modal.type === 'supplier-detail'
@@ -814,7 +732,19 @@ export function AppModal() {
         </div>
 
         {modal.type === 'new-freelancer' ? (
-          <NewFreelancerForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
+          <NewFreelancerForm
+            person={modal.payload?.person}
+            roles={modal.payload?.roles || ['Barman', 'Garçom', 'Cozinha']}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'new-daily' ? (
+          <DailyForm
+            people={modal.payload?.people || []}
+            roles={modal.payload?.roles || ['Barman', 'Garçom', 'Cozinha']}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
         ) : modal.type === 'new-supplier' ? (
           <NewSupplierForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
         ) : modal.type === 'supplier-detail' ? (
