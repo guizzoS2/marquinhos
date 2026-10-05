@@ -42,7 +42,7 @@ const titles = {
   '/bar/caixa': 'Fluxo de caixa',
   '/bar/estoque': 'Estoque',
   '/bar/fornecedores': 'Fornecedores',
-  '/bar/equipe': 'Equipe',
+  '/bar/equipe': 'Equipe da casa',
   '/bar/vitrine': 'Vitrine de freelas',
   '/bar/propostas': 'Propostas e chat',
   '/bar/perfil': 'Perfil público',

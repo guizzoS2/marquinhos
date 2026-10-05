@@ -10,7 +10,7 @@ import {
   patchTenantOpsSection,
   subscribeTenantOpsStore,
 } from '../store/tenantOpsStore';
-import { DEFAULT_STAFF_PERMISSIONS } from './staffPermissions';
+import { assertStaffInfo, normalizeStaffPerson, syncStaffPayrollExpenses } from './staffPayroll';
 
 const CATEGORY_NATURE_FALLBACK = {
   Bebidas: 'variable',
@@ -518,77 +518,166 @@ export function createTenantOpsApi(tenantId) {
     return next;
   }
 
+  function writePayroll(people) {
+    const current = migrateCashFlow(state().cashFlow || {});
+    const category =
+      (current.categories || expenseCategories).find((item) => item.id === 'salarios') ||
+      expenseCategories.find((item) => item.id === 'salarios');
+    const expenses = syncStaffPayrollExpenses(people, current.expenses || [], ({ person, iso, amount, key, prev }) => ({
+      ...prev,
+      id: prev?.id || key,
+      payrollKey: key,
+      staffId: String(person.id),
+      date: formatExpenseDate(iso),
+      isoDate: iso,
+      supplier: person.name || 'Funcionário',
+      supplierId: null,
+      category: category?.name || 'Salários',
+      categoryId: category?.id || 'salarios',
+      categoryIcon: category?.icon || 'badge',
+      nature: 'fixed',
+      value: formatCents(amount),
+      amount,
+      recurrence: 'monthly',
+      source: 'staff_payroll',
+      proposalId: null,
+      createdAt: prev?.createdAt || new Date().toISOString(),
+    }));
+    saveCashFlow(current, { expenses });
+  }
+
+  function storeStaff(people) {
+    const next = { people: people.map((person, index) => normalizeStaffPerson(person, index)) };
+    patchTenantOpsSection(id, 'staff', next);
+    writePayroll(next.people);
+    return next;
+  }
+
   async function fetchStaff() {
     const staff = state().staff || { people: [] };
     return {
-      people: (staff.people || []).map((person) => {
-        const { password: _ignored, ...safe } = person;
-        return safe;
-      }),
+      people: (staff.people || []).map((person, index) => normalizeStaffPerson(person, index)),
     };
   }
 
   async function createStaff(payload) {
-    const email = String(payload.email || '').trim().toLowerCase();
-    const name = String(payload.name || '').trim();
-    const title = String(payload.title || 'Equipe').trim();
-    if (!email || !name) {
-      throw new Error('Preencha nome e e-mail.');
+    const info = assertStaffInfo(payload);
+    if (String(payload.monthlyCost ?? '').trim() === '') {
+      throw new Error('Informe o custo mensal.');
     }
-    if (!payload.uid && !payload.password) {
-      throw new Error('Conta da equipe precisa ser criada no Firebase Auth.');
-    }
-    if (listStaffAccounts().some((item) => item.email === email)) {
-      throw new Error('E-mail já cadastrado.');
+    const monthlyCostCents = parseMoneyToCents(payload.monthlyCost);
+    if (!Number.isFinite(monthlyCostCents) || monthlyCostCents < 0) {
+      throw new Error('Informe o custo mensal.');
     }
     const current = await fetchStaff();
     const nextId =
       (current.people || []).reduce((max, person) => Math.max(max, Number(person.id) || 0), 0) + 1;
-    const person = {
+    const person = normalizeStaffPerson({
       id: nextId,
-      uid: payload.uid || null,
-      name,
-      email,
-      title,
-      permissions: Array.isArray(payload.permissions)
-        ? payload.permissions
-        : DEFAULT_STAFF_PERMISSIONS,
+      name: info.name,
+      title: info.title,
+      contractType: info.contractType,
+      contractStart: info.contractStart,
+      contractEnd: info.contractEnd,
+      monthlyCostCents,
+      permissions: [],
       createdAt: new Date().toISOString(),
-    };
-    const next = { people: [...(current.people || []), person] };
-    patchTenantOpsSection(id, 'staff', next);
+    });
+    storeStaff([...(current.people || []), person]);
     return person;
   }
 
   async function updateStaff(staffId, payload) {
     const current = await fetchStaff();
-    const email = payload.email != null ? String(payload.email).trim().toLowerCase() : null;
-    if (email && listStaffAccounts().some((item) => item.email === email && String(item.id) !== String(staffId))) {
+    const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+    if (!existing) throw new Error('Funcionário não encontrado.');
+    const info = assertStaffInfo({
+      name: payload.name ?? existing.name,
+      title: payload.title ?? existing.title,
+      contractType: payload.contractType ?? existing.contractType,
+      contractStart: payload.contractStart ?? existing.contractStart,
+      contractEnd: payload.contractEnd ?? existing.contractEnd,
+      monthlyCostCents: existing.monthlyCostCents,
+    });
+    if (payload.monthlyCost != null && String(payload.monthlyCost).trim() === '') {
+      throw new Error('Informe o custo mensal.');
+    }
+    const monthlyCostCents =
+      payload.monthlyCost != null
+        ? parseMoneyToCents(payload.monthlyCost)
+        : existing.monthlyCostCents;
+    if (!Number.isFinite(monthlyCostCents) || monthlyCostCents < 0) {
+      throw new Error('Informe o custo mensal.');
+    }
+    const people = (current.people || []).map((person) => {
+      if (String(person.id) !== String(staffId)) return person;
+      return normalizeStaffPerson({
+        ...person,
+        ...info,
+        monthlyCostCents,
+        accountStatus: person.accountStatus === 'active' && person.uid ? 'active' : person.accountStatus,
+      });
+    });
+    const next = storeStaff(people);
+    return next.people.find((person) => String(person.id) === String(staffId));
+  }
+
+  async function inviteStaff(staffId, payload) {
+    const current = await fetchStaff();
+    const email = String(payload.email || '').trim().toLowerCase();
+    const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+    if (!email) throw new Error('Informe o e-mail.');
+    if (!permissions.length) throw new Error('Marque ao menos uma permissão.');
+    if (!payload.uid) throw new Error('Não foi possível criar a conta.');
+    if (
+      listStaffAccounts().some(
+        (item) => item.email === email && String(item.id) !== String(staffId)
+      )
+    ) {
       throw new Error('E-mail já cadastrado.');
     }
     const people = (current.people || []).map((person) => {
       if (String(person.id) !== String(staffId)) return person;
-      return {
+      return normalizeStaffPerson({
         ...person,
-        name: payload.name != null ? String(payload.name).trim() : person.name,
-        email: email || person.email,
-        uid: payload.uid || person.uid || null,
-        title: payload.title != null ? String(payload.title).trim() : person.title,
-        permissions: Array.isArray(payload.permissions) ? payload.permissions : person.permissions,
-      };
+        email,
+        uid: payload.uid,
+        permissions,
+        accountStatus: payload.accountStatus || 'invited',
+        disabled: false,
+      });
     });
-    const next = { people };
-    patchTenantOpsSection(id, 'staff', next);
-    return people.find((person) => String(person.id) === String(staffId));
+    if (!people.some((person) => String(person.id) === String(staffId))) {
+      throw new Error('Funcionário não encontrado.');
+    }
+    const next = storeStaff(people);
+    return next.people.find((person) => String(person.id) === String(staffId));
+  }
+
+  async function saveStaffAccess(staffId, payload) {
+    const current = await fetchStaff();
+    const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+    if (!permissions.length) throw new Error('Marque ao menos uma permissão.');
+    const people = (current.people || []).map((person) => {
+      if (String(person.id) !== String(staffId)) return person;
+      return normalizeStaffPerson({
+        ...person,
+        permissions,
+        disabled: payload.disabled != null ? Boolean(payload.disabled) : person.disabled,
+        accountStatus: payload.accountStatus || person.accountStatus,
+      });
+    });
+    const next = storeStaff(people);
+    return next.people.find((person) => String(person.id) === String(staffId));
   }
 
   async function removeStaff(staffId) {
     const current = await fetchStaff();
-    const next = {
-      people: (current.people || []).filter((person) => String(person.id) !== String(staffId)),
-    };
-    patchTenantOpsSection(id, 'staff', next);
-    return next;
+    const removed =
+      (current.people || []).find((person) => String(person.id) === String(staffId)) || null;
+    const people = (current.people || []).filter((person) => String(person.id) !== String(staffId));
+    storeStaff(people);
+    return removed;
   }
 
   async function createSupplier(payload) {
@@ -634,6 +723,8 @@ export function createTenantOpsApi(tenantId) {
     fetchStaff,
     createStaff,
     updateStaff,
+    inviteStaff,
+    saveStaffAccess,
     removeStaff,
     addStockEntry,
     createInventoryItem,

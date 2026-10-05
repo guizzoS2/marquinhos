@@ -36,6 +36,10 @@ async function mapFirebaseUser(firebaseUser) {
     await signOut(auth);
     throw new Error('Este login não tem acesso a este bar.');
   }
+  if (profile.disabled) {
+    await signOut(auth);
+    throw new Error('Conta desativada.');
+  }
   const barRole = profile.barRole || profile.role || ROLE_ADMIN;
   return {
     uid: firebaseUser.uid,
@@ -45,9 +49,10 @@ async function mapFirebaseUser(firebaseUser) {
     phone: profile.phone || '',
     company: profile.company || "Marquinho's",
     role: barRole,
+    roles,
+    permissions: profile.permissions || [],
     photoURL: profile.photoURL || firebaseUser.photoURL || '',
     tenantId: profile.tenantId,
-    roles,
   };
 }
 

@@ -14,7 +14,7 @@ import {
   writeEmailLock,
   writeUserDoc,
 } from './cloud';
-import { createAuthUserRest, mapAuthError } from './identity';
+import { createAuthUserRest, mapAuthError, randomStaffPassword, sendStaffPasswordReset } from './identity';
 import { listFreelaProfiles } from './freelaStore';
 import { loadOwnerStore } from './ownerStore';
 import { loadPlatformStore } from './platformStore';
@@ -185,6 +185,76 @@ export async function registerStaffAccount({
   return { ...profile, uid: created.uid, role: 'staff' };
 }
 
+export async function inviteStaffAccount({
+  email,
+  name,
+  tenantId,
+  permissions,
+  title,
+  uid,
+}) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) throw new Error('Informe o e-mail.');
+  if (!isFirebaseConfigured() || !auth) throw new Error('Firebase não configurado.');
+  let nextUid = uid || null;
+  if (!nextUid) {
+    await assertEmailAvailable(normalized);
+    const created = await createAuthUserRest({
+      email: normalized,
+      password: randomStaffPassword(),
+    });
+    nextUid = created.uid;
+    await persistUser(nextUid, {
+      email: normalized,
+      name: String(name || '').trim() || 'Funcionário',
+      roles: ['staff'],
+      tenantId,
+      title: title || 'Equipe',
+      permissions: permissions || [],
+      barRole: 'staff',
+      disabled: false,
+      createdAt: new Date().toISOString(),
+    });
+  } else {
+    await writeUserDoc(
+      nextUid,
+      {
+        name: String(name || '').trim() || 'Funcionário',
+        title: title || 'Equipe',
+        permissions: permissions || [],
+        disabled: false,
+      },
+      { merge: true }
+    );
+  }
+  try {
+    await sendStaffPasswordReset(normalized);
+    return { uid: nextUid, emailed: true };
+  } catch (error) {
+    return {
+      uid: nextUid,
+      emailed: false,
+      message: error?.message || 'Não foi possível enviar o e-mail.',
+    };
+  }
+}
+
+export async function updateStaffAccess({ uid, name, title, permissions }) {
+  if (!uid) throw new Error('Esta pessoa ainda não tem conta.');
+  const patch = {
+    name: String(name || '').trim() || 'Funcionário',
+    title: title || 'Equipe',
+    disabled: false,
+  };
+  if (Array.isArray(permissions) && permissions.length) patch.permissions = permissions;
+  await writeUserDoc(uid, patch, { merge: true });
+}
+
+export async function disableStaffAccess(uid) {
+  if (!uid) return;
+  await writeUserDoc(uid, { disabled: true }, { merge: true });
+}
+
 export function readSession() {
   try {
     return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
@@ -215,6 +285,10 @@ export async function authenticate({ email, password, role }) {
     if (!profile) {
       throw new Error('Conta sem perfil.');
     }
+    if (profile.disabled) {
+      await signOut(auth);
+      throw new Error('Conta desativada.');
+    }
     const roles = profile.roles || [];
     const hit = acceptedRoles.find((item) => roles.includes(item));
     if (!hit) {
@@ -228,7 +302,8 @@ export async function authenticate({ email, password, role }) {
   } catch (error) {
     if (
       error.message === 'Este login não tem acesso a esta área.' ||
-      error.message === 'Conta sem perfil.'
+      error.message === 'Conta sem perfil.' ||
+      error.message === 'Conta desativada.'
     ) {
       throw error;
     }
@@ -260,6 +335,12 @@ export function subscribeSession(callback) {
       const profile = await readUserDoc(firebaseUser.uid);
       if (!profile) {
         callback(readSession());
+        return;
+      }
+      if (profile.disabled) {
+        writeSession(null);
+        await signOut(auth);
+        callback(null);
         return;
       }
 
