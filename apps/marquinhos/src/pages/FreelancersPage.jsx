@@ -1,14 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchFreelancers, removeFreelancer, settleFreelancer } from '../services/dashboardService';
-import { formatCents, parseMoneyToCents } from '../services/cashFlowUtils';
 import {
   filterShifts,
   formatPeriodLabel,
   parseIsoDate,
   sameRole,
   shiftAnchor,
-  toIsoDate,
 } from '../services/freelancerSchedule';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
@@ -93,11 +91,6 @@ export function FreelancersPage() {
   );
 
   const profile = people.find((person) => String(person.id) === String(profileId)) || null;
-
-  const costsToday = dailies
-    .filter((item) => item.date === toIsoDate(new Date()))
-    .reduce((sum, item) => sum + parseMoneyToCents(item.value), 0);
-  const activeNow = people.filter((person) => person.status === 'on_shift').length;
 
   const openProfile = useCallback((freelancerId) => {
     setProfileId(freelancerId);
@@ -198,23 +191,6 @@ export function FreelancersPage() {
           </div>
         </div>
       </header>
-
-      <section className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-primary rounded-2xl p-4">
-          <span className="text-[10px] font-bold text-on-surface uppercase tracking-wider block mb-1">
-            Custos Hoje
-          </span>
-          <p className="text-2xl font-headline font-extrabold text-on-surface">{formatCents(costsToday)}</p>
-        </div>
-        <div className="bg-secondary/5 rounded-2xl p-4 border border-secondary/10">
-          <span className="text-[10px] font-bold text-secondary uppercase tracking-wider block mb-1">
-            Ativos Agora
-          </span>
-          <p className="text-2xl font-headline font-extrabold text-secondary">
-            {String(activeNow).padStart(2, '0')}
-          </p>
-        </div>
-      </section>
 
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
