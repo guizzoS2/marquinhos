@@ -163,11 +163,24 @@ async function readOps() {
   return opsCache;
 }
 
+function omitUndefined(value) {
+  if (Array.isArray(value)) return value.map(omitUndefined);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, entry]) => entry !== undefined)
+        .map(([key, entry]) => [key, omitUndefined(entry)])
+    );
+  }
+  return value;
+}
+
 async function writeOps(next) {
   requireDb();
-  opsCache = next;
-  await setDoc(doc(db, ...OPS_COLLECTION), next);
-  return next;
+  const payload = omitUndefined(next);
+  opsCache = payload;
+  await setDoc(doc(db, ...OPS_COLLECTION), payload);
+  return payload;
 }
 
 async function writeEmailLock(email, uid) {
@@ -660,31 +673,36 @@ async function actorId() {
 }
 
 function persistProduct(item) {
+  const nome = item.nome || '';
+  const descricao = item.descricao || '';
+  const categoria = item.categoria || '';
+  const foto = item.foto || '';
+  const valor = item.valor_unitario ?? '';
   return {
     id: item.id,
-    codigo: item.codigo,
-    nome: item.nome,
-    name: item.nome,
-    marca: item.marca,
-    descricao: item.descricao,
-    subtitle: item.descricao,
-    categoria: item.categoria,
-    category: item.categoria,
-    unidade: item.unidade,
-    estoque_atual: item.estoque_atual,
-    estoque_sugerido: item.estoque_sugerido,
-    valor_unitario: item.valor_unitario,
-    cost: item.valor_unitario,
-    foto: item.foto,
-    image: item.foto,
-    stock: item.stock,
-    minStock: item.minStock,
-    status: item.status,
-    statusLabel: item.statusLabel,
-    created_at: item.created_at,
-    updated_at: item.updated_at,
-    created_by: item.created_by,
-    updated_by: item.updated_by,
+    codigo: item.codigo || '',
+    nome,
+    name: nome,
+    marca: item.marca || '',
+    descricao,
+    subtitle: descricao,
+    categoria,
+    category: categoria,
+    unidade: item.unidade || 'un',
+    estoque_atual: Number.isFinite(Number(item.estoque_atual)) ? Number(item.estoque_atual) : 0,
+    estoque_sugerido: Number.isFinite(Number(item.estoque_sugerido)) ? Number(item.estoque_sugerido) : 0,
+    valor_unitario: valor,
+    cost: valor,
+    foto,
+    image: foto,
+    stock: item.stock || '',
+    minStock: item.minStock || '',
+    status: item.status || 'stable',
+    statusLabel: item.statusLabel || 'Estável',
+    created_at: item.created_at || null,
+    updated_at: item.updated_at || null,
+    created_by: item.created_by || null,
+    updated_by: item.updated_by || null,
   };
 }
 
