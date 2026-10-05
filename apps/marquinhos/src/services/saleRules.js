@@ -15,6 +15,11 @@ export function assertComanda(value) {
   return numero;
 }
 
+export function optionalComanda(value) {
+  if (value == null || value === '') return null;
+  return assertComanda(value);
+}
+
 export function normalizeSale(sale) {
   const numero = Number(sale?.numero_comanda);
   return {

@@ -28,6 +28,7 @@ import {
 import { assertPrice, assertPromotionWindow, promotionStatus, saleUnitPrice } from './catalogRules';
 import {
   assertComanda,
+  optionalComanda,
   normalizeSale,
   paidSalesOnDay,
   shiftAlreadyClosed,
@@ -1455,7 +1456,7 @@ export async function saveOpenSale(payload) {
 
 export async function registerSale(payload) {
   const forma = assertPaymentMethod(payload.forma_pagamento);
-  const numero = assertComanda(payload.numero_comanda);
+  const numero = optionalComanda(payload.numero_comanda);
   const usuarioId = await actorId();
   await ensureDashboardSeed();
   const now = await readServerNow();
@@ -1473,7 +1474,7 @@ export async function registerSale(payload) {
     }
     if (forma === 'cartao_credito') parcelas = assertInstallments(payload.parcelas);
     const cliente = customerFromOps(ops, payload.cliente_id);
-    assertOpenComandaFree(inventory.sales, numero, payload.sale_id);
+    if (numero != null) assertOpenComandaFree(inventory.sales, numero, payload.sale_id);
     const existing = payload.sale_id
       ? (inventory.sales || []).find((sale) => String(sale.id) === String(payload.sale_id))
       : null;
@@ -1505,7 +1506,7 @@ export async function registerSale(payload) {
     const income = {
       id: `inc-${sale.id}`,
       date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
-      description: `PDV · comanda ${numero} · ${cliente.nome}`,
+      description: numero != null ? `PDV · comanda ${numero} · ${cliente.nome}` : `PDV · ${cliente.nome}`,
       category: 'Varejo',
       categoryIcon: 'payments',
       categoryTone: 'secondary',

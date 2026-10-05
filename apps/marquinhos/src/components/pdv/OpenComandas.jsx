@@ -14,6 +14,7 @@ export function OpenComandas({ sales = [] }) {
       saleId: sale.id,
       numeroComanda: sale.numero_comanda,
       clienteId: sale.cliente_id ? String(sale.cliente_id) : '',
+      clienteNome: sale.cliente_nome || '',
       lines: (sale.itens || []).map((item) => ({
         produto_id: String(item.produto_id),
         nome: item.nome,

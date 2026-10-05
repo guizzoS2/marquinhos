@@ -23,6 +23,7 @@ function initialCart() {
     valorRecebido: '',
     parcelas: '1',
     numeroComanda: '',
+    identificacao: '',
     saleId: '',
   };
 }
@@ -64,14 +65,26 @@ function cartReducer(state, action) {
       return { ...state, parcelas: action.parcelas };
     case 'set-comanda':
       return { ...state, numeroComanda: action.numeroComanda };
-    case 'load':
+    case 'set-identity':
+      return {
+        ...state,
+        identificacao: action.identificacao ?? '',
+        numeroComanda: action.numeroComanda ?? '',
+        clienteId: action.clienteId || '',
+      };
+    case 'load': {
+      const numero =
+        action.numeroComanda != null && action.numeroComanda !== '' ? String(action.numeroComanda) : '';
+      const nome = action.clienteNome && action.clienteNome !== 'Consumidor' ? action.clienteNome : '';
       return {
         ...initialCart(),
         lines: (action.lines || []).map((line) => withQty(line, line.quantidade)),
         clienteId: action.clienteId || '',
-        numeroComanda: action.numeroComanda != null ? String(action.numeroComanda) : '',
+        numeroComanda: numero,
+        identificacao: numero || nome,
         saleId: action.saleId || '',
       };
+    }
     case 'clear':
       return initialCart();
     default:

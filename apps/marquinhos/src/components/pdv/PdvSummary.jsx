@@ -32,15 +32,47 @@ export function PdvSummary({ customers = [] }) {
       ? Math.round((recebido - total) * 100) / 100
       : null;
 
-  const options = useMemo(() => {
-    const list = customers.map((item) => ({ value: String(item.id), label: item.nome }));
-    if (created && !list.some((item) => item.value === String(created.id))) {
-      list.unshift({ value: String(created.id), label: created.nome });
+  const people = useMemo(() => {
+    const list = customers.map((item) => ({ id: String(item.id), nome: item.nome }));
+    if (created && !list.some((item) => item.id === String(created.id))) {
+      list.unshift({ id: String(created.id), nome: created.nome });
     }
-    return [{ value: '', label: 'Consumidor' }, ...list];
+    return list;
   }, [customers, created]);
 
-  const numero = Number(state.numeroComanda);
+  const identityText = state.identificacao || '';
+  const identityTerm = identityText.trim();
+  const identityIsNumber = /^\d+$/.test(identityTerm);
+  const suggestions = useMemo(() => {
+    if (!identityTerm || identityIsNumber) return [];
+    const term = identityTerm.toLowerCase();
+    if (people.some((item) => item.nome.toLowerCase() === term && item.id === String(state.clienteId || ''))) {
+      return [];
+    }
+    return people.filter((item) => item.nome.toLowerCase().includes(term)).slice(0, 6);
+  }, [people, identityTerm, identityIsNumber, state.clienteId]);
+  const namedCustomer = people.find((item) => item.id === String(state.clienteId || ''));
+
+  const numero = state.numeroComanda ? Number(state.numeroComanda) : null;
+
+  function applyIdentity(text) {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      dispatch({ type: 'set-identity', identificacao: text, numeroComanda: '', clienteId: '' });
+      return;
+    }
+    if (/^\d+$/.test(trimmed)) {
+      dispatch({ type: 'set-identity', identificacao: text, numeroComanda: trimmed, clienteId: '' });
+      return;
+    }
+    const match = people.find((item) => item.nome.toLowerCase() === trimmed.toLowerCase());
+    dispatch({
+      type: 'set-identity',
+      identificacao: text,
+      numeroComanda: '',
+      clienteId: match ? match.id : '',
+    });
+  }
 
   function salePayload() {
     return {
@@ -61,15 +93,20 @@ export function PdvSummary({ customers = [] }) {
       toast.error('O carrinho está vazio.');
       return false;
     }
+    return true;
+  }
+
+  function guardComanda() {
+    if (!guardCart()) return false;
     if (!Number.isInteger(numero) || numero <= 0) {
-      toast.error('Informe o número da comanda.');
+      toast.error('Para salvar a comanda, informe o número.');
       return false;
     }
     return true;
   }
 
   async function saveOpen() {
-    if (!guardCart()) return;
+    if (!guardComanda()) return;
     setSavingTab(true);
     try {
       await saveOpenTab(salePayload());
@@ -111,16 +148,49 @@ export function PdvSummary({ customers = [] }) {
   return (
     <section className="bg-surface-container-lowest rounded-2xl p-4 md:p-6 space-y-4">
       <h3 className="font-headline text-xl font-bold text-on-surface">Carrinho</h3>
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-        <div className="flex-1">
-          <RoleSelect
-            id="pdv-cliente"
-            label="Cliente"
-            options={options}
-            value={state.clienteId}
-            onChange={(clienteId) => dispatch({ type: 'set-customer', clienteId })}
-          />
-        </div>
+      <div className="space-y-2">
+        <Input
+          id="pdv-identificacao"
+          label="Identificação (Comanda ou Cliente)"
+          value={identityText}
+          onChange={(event) => applyIdentity(event.target.value)}
+          autoComplete="off"
+        />
+        {identityIsNumber && numero ? (
+          <p className="text-sm text-on-surface-variant">Comanda {numero}</p>
+        ) : namedCustomer ? (
+          <p className="text-sm text-on-surface-variant">Cliente {namedCustomer.nome}</p>
+        ) : identityTerm && !identityIsNumber ? (
+          <p className="text-sm text-on-surface-variant">
+            Nome não cadastrado. Use Novo Cliente ou deixe em branco para Consumidor.
+          </p>
+        ) : (
+          <p className="text-sm text-on-surface-variant">Consumidor</p>
+        )}
+        {namedCustomer && numero ? (
+          <p className="text-sm text-on-surface">Cliente {namedCustomer.nome}</p>
+        ) : null}
+        {suggestions.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {suggestions.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() =>
+                  dispatch({
+                    type: 'set-identity',
+                    identificacao: item.nome,
+                    numeroComanda: '',
+                    clienteId: item.id,
+                  })
+                }
+                className="w-full text-left px-4 min-h-11 rounded-2xl bg-surface-container-low text-on-surface font-medium"
+              >
+                {item.nome}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <Button
           type="button"
           variant="secondary"
@@ -128,7 +198,12 @@ export function PdvSummary({ customers = [] }) {
             openModal('new-customer', {
               onSuccess: (customer) => {
                 setCreated(customer);
-                dispatch({ type: 'set-customer', clienteId: String(customer.id) });
+                dispatch({
+                  type: 'set-identity',
+                  identificacao: state.numeroComanda || customer.nome,
+                  numeroComanda: state.numeroComanda,
+                  clienteId: String(customer.id),
+                });
                 queryClient.invalidateQueries({ queryKey: ['customers'] });
               },
             })
@@ -203,16 +278,6 @@ export function PdvSummary({ customers = [] }) {
       )}
 
       <p className="text-2xl font-headline font-extrabold text-on-surface">Total {money(total)}</p>
-
-      <Input
-        id="pdv-comanda"
-        label="Número da comanda"
-        inputMode="numeric"
-        value={state.numeroComanda}
-        onChange={(event) =>
-          dispatch({ type: 'set-comanda', numeroComanda: event.target.value.replace(/\D/g, '') })
-        }
-      />
 
       <RoleSelect
         id="pdv-pagamento"
