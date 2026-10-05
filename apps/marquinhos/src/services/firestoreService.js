@@ -433,6 +433,7 @@ function normalizeInventory(raw) {
     comboItems: Array.isArray(current.comboItems) ? current.comboItems : [],
     sales: (Array.isArray(current.sales) ? current.sales : []).map(normalizeSale),
     closings: Array.isArray(current.closings) ? current.closings : [],
+    purchases: Array.isArray(current.purchases) ? current.purchases : [],
     metrics: recomputeInventoryMetrics(items),
   };
 }
@@ -1002,6 +1003,154 @@ export async function registerStockEntry(payload) {
   }
 
   return items[index];
+}
+
+export async function registerPurchase(payload) {
+  await ensureDashboardSeed();
+  const date = String(payload.date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Informe a data.');
+  const linhas = Array.isArray(payload.itens) ? payload.itens : [];
+  if (!linhas.length) throw new Error('Adicione ao menos um produto.');
+
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const cash = migrateCashFlow(ops.cashFlow || cashFlowFallback);
+    const suppliersWrap =
+      ops.suppliers && Array.isArray(ops.suppliers.suppliers) ? ops.suppliers : { suppliers: [] };
+    const supplier = (suppliersWrap.suppliers || []).find(
+      (item) => String(item.id) === String(payload.supplierId)
+    );
+    if (!supplier) throw new Error('Selecione o fornecedor.');
+    const categories = cash.categories?.length ? cash.categories : expenseCategories;
+    const category = categories.find((item) => item.id === payload.categoryId);
+    if (!category) throw new Error('Selecione a categoria.');
+
+    const grouped = new Map();
+    linhas.forEach((linha) => {
+      const produtoId = String(linha.produto_id || '').trim();
+      const quantidade = Number(linha.quantidade);
+      if (!produtoId) throw new Error('Selecione o produto.');
+      if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+      const produto = (inventory.items || []).find(
+        (item) => String(item.id) === produtoId && item.tipo !== 'combo'
+      );
+      if (!produto) throw new Error('Produto não encontrado.');
+      const prev = grouped.get(produtoId);
+      if (prev) prev.quantidade += quantidade;
+      else {
+        grouped.set(produtoId, {
+          produto_id: produtoId,
+          nome: produto.nome || produto.name,
+          quantidade,
+          valor_unitario: parseMoneyToCents(produto.valor_unitario || produto.cost || 0) / 100,
+        });
+      }
+    });
+    const itens = [...grouped.values()].map((linha) => ({
+      ...linha,
+      valor_total: Math.round(linha.valor_unitario * linha.quantidade * 100) / 100,
+    }));
+    const calculado = Math.round(itens.reduce((sum, linha) => sum + linha.valor_total, 0) * 100) / 100;
+    const total =
+      payload.valor_total == null || payload.valor_total === ''
+        ? calculado
+        : assertPrice(payload.valor_total);
+    if (!Number.isFinite(total) || total <= 0) throw new Error('Informe o valor total.');
+
+    let items = [...(inventory.items || [])];
+    itens.forEach((linha) => {
+      const item = items.find((row) => String(row.id) === linha.produto_id);
+      if (!item) throw new Error('Produto não encontrado.');
+      items = replaceItem(items, linha.produto_id, applyStockDelta(item, linha.quantidade));
+    });
+    const stored = items.map((item) => persistProduct(presentProduct(item, item.codigo)));
+
+    const now = new Date().toISOString();
+    const purchaseId = `purchase-${Date.now()}`;
+    const expenseId = `exp-${purchaseId}`;
+    const purchase = {
+      id: purchaseId,
+      date,
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      categoryId: category.id,
+      categoryName: category.name,
+      total,
+      itens,
+      expenseId,
+      created_at: now,
+    };
+    const entries = itens.map((linha, index) => ({
+      id: `buy-${purchaseId}-${index}`,
+      itemId: linha.produto_id,
+      quantity: linha.quantidade,
+      purchaseId,
+      date,
+      created_at: now,
+    }));
+    const amountCents = Math.round(total * 100);
+    const expense = {
+      id: expenseId,
+      date: formatExpenseDate(date),
+      supplier: supplier.name,
+      supplierId: supplier.id,
+      category: category.name,
+      categoryId: category.id,
+      categoryIcon: category.icon,
+      nature: category.defaultNature || 'variable',
+      value: formatCents(amountCents),
+      amount: amountCents,
+      source: 'purchase',
+      importKey: null,
+      createdAt: now,
+    };
+    const expenses = [expense, ...(cash.expenses || [])];
+    const summary = buildCashFlowSummary(cash.incomes || [], expenses, {
+      revenueDelta: cash.summary?.revenueDelta,
+      expensesDelta: cash.summary?.expensesDelta,
+    });
+    const displayDate = expense.date;
+    const suppliers = (suppliersWrap.suppliers || []).map((item) => {
+      if (String(item.id) !== String(supplier.id)) return item;
+      return {
+        ...item,
+        lastPurchase: displayDate,
+        lastValue: expense.value,
+        lastAmount: amountCents,
+        history: [
+          {
+            id: expenseId,
+            date: displayDate,
+            category: category.name,
+            value: expense.value,
+            amount: amountCents,
+            purchaseId,
+          },
+          ...(item.history || []),
+        ],
+      };
+    });
+
+    return {
+      ops: {
+        ...ops,
+        inventory: {
+          ...inventory,
+          items: stored,
+          entries: [...entries, ...(inventory.entries || [])],
+          purchases: [purchase, ...(inventory.purchases || [])],
+          metrics: recomputeInventoryMetrics(stored),
+        },
+        cashFlow: {
+          ...cash,
+          expenses,
+          summary: { ...cash.summary, ...summary },
+        },
+        suppliers: { ...suppliersWrap, suppliers },
+      },
+      value: purchase,
+    };
+  });
 }
 
 export async function createProduction(payload) {
@@ -1873,6 +2022,23 @@ export async function addSupplier(payload) {
   };
   await writeDocument(DOCS.suppliers, next);
   return supplier;
+}
+
+export async function updateSupplier(supplierId, payload) {
+  const current = await getSuppliers();
+  const name = String(payload.name || '').trim();
+  const contact = String(payload.contact || '').trim();
+  const cnpj = String(payload.cnpj || '').trim();
+  if (!name || !contact || !cnpj) throw new Error('Informe nome, contato e CNPJ.');
+  let found = false;
+  const suppliers = (current.suppliers || []).map((item) => {
+    if (String(item.id) !== String(supplierId)) return item;
+    found = true;
+    return { ...item, name, contact, cnpj };
+  });
+  if (!found) throw new Error('Fornecedor não encontrado.');
+  await writeDocument(DOCS.suppliers, { ...current, suppliers });
+  return suppliers.find((item) => String(item.id) === String(supplierId));
 }
 
 export async function recordSupplierPurchase({

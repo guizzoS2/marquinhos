@@ -7,8 +7,10 @@ import {
   updateDaily,
   addFreelancer,
   addSupplier,
+  updateSupplier,
   getSuppliers,
   deleteSupplier,
+  registerPurchase,
   createExpense,
   deleteExpense,
   createIncome,
@@ -73,6 +75,16 @@ export function fetchSuppliers() {
 export function createSupplier(payload) {
   requireAdmin();
   return addSupplier(payload);
+}
+
+export function editSupplier(supplierId, payload) {
+  requireAdmin();
+  return updateSupplier(supplierId, payload);
+}
+
+export function addPurchase(payload) {
+  requireAdmin();
+  return registerPurchase(payload);
 }
 
 export function removeSupplier(supplierId) {

@@ -10,6 +10,7 @@ import {
   createCashExpense,
   createCashIncome,
   createSupplier,
+  editSupplier,
   fetchCashFlow,
   fetchInventory,
   fetchSuppliers,
@@ -29,6 +30,7 @@ import { ComboDetail } from '../catalog/ComboDetail';
 import { PromotionForm } from '../catalog/PromotionForm';
 import { CustomerForm } from '../pdv/CustomerForm';
 import { CloseShiftReport } from '../caixa/CloseShiftReport';
+import { PurchaseForm } from '../suppliers/PurchaseForm';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { PAYMENT_OPTIONS } from '../../services/inventoryProduct';
 
@@ -52,18 +54,21 @@ const titles = {
   'shift-detail': 'Agendamento',
   'new-freelancer': 'Novo Freelancer',
   'new-supplier': 'Novo Fornecedor',
+  'edit-supplier': 'Editar fornecedor',
+  'new-purchase': 'Nova compra',
   'supplier-detail': 'Histórico do fornecedor',
   'new-expense': 'Nova Despesa',
   'import-statement': 'Importar Extrato',
   confirm: 'Confirmar ação',
 };
 
-function NewSupplierForm({ onSuccess, onCancel }) {
+function NewSupplierForm({ supplier = null, onSuccess, onCancel }) {
   const toast = useToast();
+  const editing = Boolean(supplier?.id);
   const [form, setForm] = useState({
-    name: '',
-    contact: '',
-    cnpj: '',
+    name: supplier?.name || '',
+    contact: supplier?.contact || '',
+    cnpj: supplier?.cnpj || '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -73,13 +78,15 @@ function NewSupplierForm({ onSuccess, onCancel }) {
     setSaving(true);
     setError('');
     try {
-      await createSupplier(form);
-      toast.success('Fornecedor cadastrado.');
+      if (editing) await editSupplier(supplier.id, form);
+      else await createSupplier(form);
+      toast.success(editing ? 'Fornecedor atualizado.' : 'Fornecedor cadastrado.');
       onSuccess?.();
       onCancel();
-    } catch {
-      setError('Não foi possível cadastrar o fornecedor.');
-      toast.error('Falha ao cadastrar fornecedor.');
+    } catch (err) {
+      const message = err?.message || 'Não foi possível salvar o fornecedor.';
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -114,7 +121,7 @@ function NewSupplierForm({ onSuccess, onCancel }) {
           Cancelar
         </Button>
         <Button type="submit" disabled={saving}>
-          {saving ? 'Salvando...' : 'Adicionar fornecedor'}
+          {saving ? 'Salvando...' : editing ? 'Salvar fornecedor' : 'Adicionar fornecedor'}
         </Button>
       </div>
     </form>
@@ -745,6 +752,7 @@ export function AppModal() {
     modal.type === 'combo-detail' ||
     modal.type === 'new-promotion' ||
     modal.type === 'edit-promotion' ||
+    modal.type === 'new-purchase' ||
     modal.type === 'close-register';
 
   return (
@@ -798,8 +806,19 @@ export function AppModal() {
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
-        ) : modal.type === 'new-supplier' ? (
-          <NewSupplierForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
+        ) : modal.type === 'new-supplier' || modal.type === 'edit-supplier' ? (
+          <NewSupplierForm
+            supplier={modal.payload?.supplier}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'new-purchase' ? (
+          <PurchaseForm
+            items={modal.payload?.items || []}
+            suppliers={modal.payload?.suppliers || []}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
         ) : modal.type === 'supplier-detail' ? (
           <SupplierDetailView
             supplierId={modal.payload?.supplierId}
