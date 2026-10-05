@@ -41,7 +41,10 @@ export function FreelancersPage() {
 
   const people = useMemo(() => data?.people || [], [data]);
   const dailies = useMemo(() => data?.dailies || [], [data]);
-  const roles = data?.roles?.length ? data.roles : ['Barman', 'Garçom', 'Cozinha'];
+  const roles = useMemo(
+    () => (data?.roles?.length ? data.roles : ['Barman', 'Garçom', 'Cozinha']),
+    [data]
+  );
 
   const period = calendarView === 'week' ? 'Semana' : 'Mês';
 
@@ -82,7 +85,7 @@ export function FreelancersPage() {
             start,
             end,
             allDay: true,
-            resource: { freelancerId: shift.freelancerId },
+            resource: { shift },
           },
         ];
       }),
@@ -99,6 +102,18 @@ export function FreelancersPage() {
   const openProfile = useCallback((freelancerId) => {
     setProfileId(freelancerId);
   }, []);
+
+  const openShift = useCallback(
+    (shift) => {
+      openModal('shift-detail', {
+        shift,
+        people,
+        roles,
+        onSuccess: refreshFreelancers,
+      });
+    },
+    [openModal, people, roles, refreshFreelancers]
+  );
 
   const movePeriod = useCallback(
     (direction) => {
@@ -280,10 +295,10 @@ export function FreelancersPage() {
           events={events}
           date={anchor}
           view={calendarView}
-          onSelectFreelancer={openProfile}
+          onSelectShift={openShift}
         />
       ) : (
-        <ShiftTable shifts={shifts} people={people} onSelectFreelancer={openProfile} />
+        <ShiftTable shifts={shifts} people={people} onSelectShift={openShift} />
       )}
 
       <section className="mt-8 space-y-4">

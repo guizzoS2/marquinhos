@@ -17,6 +17,7 @@ import {
 } from '../../services/dashboardService';
 import { NewFreelancerForm } from '../freelancers/NewFreelancerForm';
 import { DailyForm } from '../freelancers/DailyForm';
+import { ShiftDetailForm } from '../freelancers/ShiftDetailForm';
 import { expenseCategories } from '../../services/fallbacks';
 import { isStockRole } from '../../services/roles';
 import { ProductForm } from '../inventory/ProductForm';
@@ -27,6 +28,7 @@ const titles = {
   'new-product': 'Novo produto',
   'edit-product': 'Editar produto',
   'new-daily': 'Registrar Diária',
+  'shift-detail': 'Agendamento',
   'new-freelancer': 'Novo Freelancer',
   'new-supplier': 'Novo Fornecedor',
   'supplier-detail': 'Histórico do fornecedor',
@@ -681,7 +683,7 @@ export function AppModal() {
   const iconName =
     modal.type === 'new-freelancer'
       ? 'person_add'
-      : modal.type === 'new-daily'
+      : modal.type === 'new-daily' || modal.type === 'shift-detail'
         ? 'assignment_add'
       : modal.type === 'new-supplier'
         ? 'local_shipping'
@@ -740,6 +742,14 @@ export function AppModal() {
           />
         ) : modal.type === 'new-daily' ? (
           <DailyForm
+            people={modal.payload?.people || []}
+            roles={modal.payload?.roles || ['Barman', 'Garçom', 'Cozinha']}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'shift-detail' ? (
+          <ShiftDetailForm
+            shift={modal.payload?.shift}
             people={modal.payload?.people || []}
             roles={modal.payload?.roles || ['Barman', 'Garçom', 'Cozinha']}
             onCancel={closeModal}

@@ -17,7 +17,7 @@ const messages = {
   noEventsInRange: 'Nenhum turno neste período.',
 };
 
-function FreelancerCalendarComponent({ events, date, view, onSelectFreelancer }) {
+function FreelancerCalendarComponent({ events, date, view, onSelectShift }) {
   return (
     <section className="bg-surface-container-lowest rounded-2xl p-4 md:p-6">
       <div className="overflow-x-auto">
@@ -35,7 +35,7 @@ function FreelancerCalendarComponent({ events, date, view, onSelectFreelancer })
             popup
             onNavigate={() => {}}
             onView={() => {}}
-            onSelectEvent={(event) => onSelectFreelancer(event.resource.freelancerId)}
+            onSelectEvent={(event) => onSelectShift(event.resource.shift)}
             eventPropGetter={() => ({ className: '!bg-primary !text-on-primary' })}
           />
         </div>

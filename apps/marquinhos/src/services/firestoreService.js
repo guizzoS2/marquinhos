@@ -824,32 +824,30 @@ export async function deleteFreelancer(freelancerId) {
   return next;
 }
 
+function dailyAmountCents(value, fallbackRate) {
+  if (value != null && value !== '') return Math.round(Number(value) * 100);
+  return parseMoneyToCents(fallbackRate);
+}
+
+function sameDaily(row, target) {
+  if (!row || !target) return false;
+  if (target.id && row.id) return String(row.id) === String(target.id);
+  if (target.id || row.id) return false;
+  return (
+    String(row.freelancerId) === String(target.freelancerId) &&
+    row.date === target.date &&
+    row.createdAt === target.createdAt &&
+    String(row.value) === String(target.value)
+  );
+}
+
 export async function registerDaily(payload) {
   const current = await getFreelancers();
-  const entry = {
-    id: payload.id || `daily-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    freelancerId: payload.freelancerId,
-    date: payload.date,
-    role: payload.role,
-    value: payload.value,
-    status: payload.status || 'pending_payment',
-    createdAt: new Date().toISOString(),
-  };
-  const next = {
-    ...current,
-    dailies: [...(current.dailies || []), entry],
-  };
-  await writeDocument(DOCS.freelancers, next);
-
   const person = (current.people || []).find(
     (item) => String(item.id) === String(payload.freelancerId)
   );
-  const amountCents =
-    payload.value != null
-      ? Math.round(Number(payload.value) * 100)
-      : parseMoneyToCents(person?.dailyRate);
-
-  await createExpense({
+  const amountCents = dailyAmountCents(payload.value, person?.dailyRate);
+  const expense = await createExpense({
     date: payload.date,
     supplier: person?.name || `Freelancer #${payload.freelancerId}`,
     categoryId: 'freelancer',
@@ -857,8 +855,96 @@ export async function registerDaily(payload) {
     amount: amountCents,
     source: 'freelancer_daily',
   });
-
+  const entry = {
+    id: payload.id || `daily-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    freelancerId: payload.freelancerId,
+    date: payload.date,
+    role: payload.role,
+    value: payload.value,
+    status: payload.status || 'pending_payment',
+    expenseId: expense.id,
+    createdAt: new Date().toISOString(),
+  };
+  const next = {
+    ...current,
+    dailies: [...(current.dailies || []), entry],
+  };
+  await writeDocument(DOCS.freelancers, next);
   return next;
+}
+
+export async function updateDaily(target, payload) {
+  const current = await getFreelancers();
+  const existing = (current.dailies || []).find((row) => sameDaily(row, target));
+  if (!existing) throw new Error('Diária não encontrada.');
+
+  const person = (current.people || []).find(
+    (item) => String(item.id) === String(payload.freelancerId)
+  );
+  const previousPerson = (current.people || []).find(
+    (item) => String(item.id) === String(existing.freelancerId)
+  );
+  const amountCents = dailyAmountCents(payload.value, person?.dailyRate);
+  const previousCents = dailyAmountCents(existing.value, previousPerson?.dailyRate);
+  const cash = await getCashFlow();
+  const expenses = [...(cash.expenses || [])];
+  let matchIndex = expenses.findIndex(
+    (row) => existing.expenseId && String(row.id) === String(existing.expenseId)
+  );
+  if (matchIndex < 0) {
+    const previousName = previousPerson?.name || '';
+    const previousDate = formatExpenseDate(existing.date);
+    matchIndex = expenses.findIndex(
+      (row) =>
+        row.source === 'freelancer_daily' &&
+        row.supplier === previousName &&
+        row.date === previousDate &&
+        row.amount === previousCents
+    );
+  }
+
+  let expenseId = existing.expenseId;
+  if (matchIndex >= 0) {
+    const row = expenses[matchIndex];
+    expenseId = row.id;
+    expenses[matchIndex] = {
+      ...row,
+      date: formatExpenseDate(payload.date),
+      supplier: person?.name || row.supplier,
+      value: formatCents(amountCents),
+      amount: amountCents,
+      source: 'freelancer_daily',
+      categoryId: row.categoryId || 'freelancer',
+    };
+    await saveCashFlow(cash, { expenses });
+  } else {
+    const expense = await createExpense({
+      date: payload.date,
+      supplier: person?.name || `Freelancer #${payload.freelancerId}`,
+      categoryId: 'freelancer',
+      nature: 'variable',
+      amount: amountCents,
+      source: 'freelancer_daily',
+    });
+    expenseId = expense.id;
+  }
+
+  const updated = {
+    ...existing,
+    id: existing.id || target?.id || `daily-${Date.now()}`,
+    freelancerId: payload.freelancerId,
+    date: payload.date,
+    role: payload.role,
+    value: payload.value,
+    status: payload.status || existing.status || 'pending_payment',
+    expenseId,
+  };
+  const next = {
+    ...current,
+    dailies: (current.dailies || []).map((row) => (sameDaily(row, existing) ? updated : row)),
+  };
+  await writeDocument(DOCS.freelancers, next);
+  return updated;
 }
 
 export async function addFreelancer(payload) {

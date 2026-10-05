@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { formatCents, parseMoneyToCents } from '../../services/cashFlowUtils';
 import { formatShiftDate, shiftStatusLabel } from '../../services/freelancerSchedule';
 
-function ShiftTableComponent({ shifts, people, onSelectFreelancer }) {
+function ShiftTableComponent({ shifts, people, onSelectShift }) {
   if (!shifts.length) {
     return (
       <section className="bg-surface-container-lowest rounded-2xl p-6 md:p-8">
@@ -33,11 +33,11 @@ function ShiftTableComponent({ shifts, people, onSelectFreelancer }) {
                   tabIndex={0}
                   role="button"
                   className="border-t border-outline-variant/20 cursor-pointer hover:bg-surface-container-low focus:bg-surface-container-low"
-                  onClick={() => onSelectFreelancer(shift.freelancerId)}
+                  onClick={() => onSelectShift(shift)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      onSelectFreelancer(shift.freelancerId);
+                      onSelectShift(shift);
                     }
                   }}
                 >

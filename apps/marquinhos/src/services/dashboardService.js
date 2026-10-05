@@ -4,6 +4,7 @@ import {
   getInventory,
   getFreelancers,
   registerDaily,
+  updateDaily,
   addFreelancer,
   addSupplier,
   getSuppliers,
@@ -66,6 +67,11 @@ export function removeSupplier(supplierId) {
 export function createDaily(payload) {
   requireAdmin();
   return registerDaily(payload);
+}
+
+export function editDaily(target, payload) {
+  requireAdmin();
+  return updateDaily(target, payload);
 }
 
 export function createFreelancer(payload) {
