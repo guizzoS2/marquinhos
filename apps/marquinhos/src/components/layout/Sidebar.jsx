@@ -1,10 +1,7 @@
 import { NavLink } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../ui/Icon';
-import { Button } from '../ui/Button';
 import { BrandLogo } from './BrandLogo';
 import { useAuth } from '../../contexts/AuthContext';
-import { useModal } from '../../contexts/ModalContext';
 import { isStockRole } from '../../services/roles';
 
 const allNavItems = [
@@ -19,8 +16,6 @@ const allNavItems = [
 
 export function Sidebar({ open = false, onNavigate }) {
   const { logout, user } = useAuth();
-  const { openModal } = useModal();
-  const queryClient = useQueryClient();
   const stockOnly = isStockRole(user?.role);
   const navItems = allNavItems.filter((item) => !item.admin || !stockOnly);
 
@@ -63,20 +58,6 @@ export function Sidebar({ open = false, onNavigate }) {
       </nav>
 
       <div className="pt-4 border-t border-outline-variant/20 space-y-1">
-        {stockOnly ? null : (
-          <Button
-            className="w-full"
-            onClick={() =>
-              openModal('new-order', {
-                onSuccess: () =>
-                  queryClient.invalidateQueries({ queryKey: ['cash-flow'] }),
-              })
-            }
-          >
-            <Icon name="add" />
-            Novo Pedido
-          </Button>
-        )}
         <button
           type="button"
           onClick={logout}
