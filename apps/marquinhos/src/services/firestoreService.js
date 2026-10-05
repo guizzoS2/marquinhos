@@ -14,6 +14,7 @@ import {
   formatCents,
   parseMoneyToCents,
 } from './cashFlowUtils';
+import { formatProductCode, isLowStock, maxProductCode, nextProductCode } from './inventoryProduct';
 
 const TENANT_ID = 'marquinhos';
 const OPS_COLLECTION = ['tenants', TENANT_ID, 'data', 'ops'];
@@ -364,15 +365,19 @@ function buildOverview(rawOverview, rawCash, rawInventory, rawFreelancers) {
 
 function normalizeInventory(raw) {
   const current = raw && typeof raw === 'object' ? raw : inventoryFallback;
-  const items = Array.isArray(current.items) ? current.items : [];
+  const source = Array.isArray(current.items) ? current.items : [];
+  let max = maxProductCode(source);
+  const items = source.map((item) => {
+    const codigo = item.codigo || formatProductCode(max + 1);
+    if (!item.codigo) max += 1;
+    return presentProduct(item, codigo);
+  });
   return {
     ...inventoryFallback,
     ...current,
     filters: current.filters?.length ? current.filters : inventoryFallback.filters,
     items,
-    metrics: Array.isArray(current.metrics) && current.metrics.length
-      ? current.metrics
-      : recomputeInventoryMetrics(items),
+    metrics: recomputeInventoryMetrics(items),
   };
 }
 
@@ -605,64 +610,189 @@ async function saveInventory(current, items) {
   return next;
 }
 
+function presentProduct(item, codigo) {
+  const parsed = parseStockLabel(item.stock);
+  const minParsed = parseStockLabel(item.minStock);
+  const unidade = String(item.unidade || parsed.unit || minParsed.unit || 'un').trim() || 'un';
+  const estoqueAtual = item.stock ? parsed.qty : Number(item.estoque_atual) || 0;
+  const estoqueSugerido =
+    item.estoque_sugerido != null && item.estoque_sugerido !== ''
+      ? Number(item.estoque_sugerido)
+      : minParsed.qty;
+  const lowStock = isLowStock(estoqueAtual, estoqueSugerido);
+  const nome = String(item.nome || item.name || '').trim();
+  const categoria = String(item.categoria || item.category || 'Insumos').trim() || 'Insumos';
+  const descricao = String(item.descricao || item.subtitle || '').trim();
+  const foto = item.foto || item.image || DEFAULT_PRODUCT_IMAGE;
+  const valor =
+    item.valor_unitario != null && item.valor_unitario !== ''
+      ? item.valor_unitario
+      : item.cost || formatCents(0);
+  const cost = String(valor).includes('R$') ? String(valor) : formatCents(parseMoneyToCents(valor));
+  return {
+    ...item,
+    codigo: formatProductCode(item.codigo || codigo),
+    nome,
+    name: nome,
+    marca: String(item.marca || '').trim(),
+    descricao,
+    subtitle: descricao,
+    categoria,
+    category: categoria,
+    unidade,
+    estoque_atual: estoqueAtual,
+    estoque_sugerido: estoqueSugerido,
+    valor_unitario: cost,
+    cost,
+    foto,
+    image: foto,
+    stock: formatStockLabel(estoqueAtual, unidade),
+    minStock: formatStockLabel(estoqueSugerido, unidade),
+    lowStock,
+    status: lowStock ? 'low' : 'stable',
+    statusLabel: lowStock ? 'Estoque Baixo' : 'Estável',
+  };
+}
+
+async function actorId() {
+  const { getCurrentUser } = await import('./authService');
+  return getCurrentUser()?.uid || null;
+}
+
+function persistProduct(item) {
+  return {
+    id: item.id,
+    codigo: item.codigo,
+    nome: item.nome,
+    name: item.nome,
+    marca: item.marca,
+    descricao: item.descricao,
+    subtitle: item.descricao,
+    categoria: item.categoria,
+    category: item.categoria,
+    unidade: item.unidade,
+    estoque_atual: item.estoque_atual,
+    estoque_sugerido: item.estoque_sugerido,
+    valor_unitario: item.valor_unitario,
+    cost: item.valor_unitario,
+    foto: item.foto,
+    image: item.foto,
+    stock: item.stock,
+    minStock: item.minStock,
+    status: item.status,
+    statusLabel: item.statusLabel,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+    created_by: item.created_by,
+    updated_by: item.updated_by,
+  };
+}
+
+export async function peekNextProductCode() {
+  const current = await getInventory();
+  return nextProductCode(current.items || []);
+}
+
 export async function createInventoryItem(payload) {
   const current = await getInventory();
-  const name = String(payload.name || '').trim();
-  if (!name) throw new Error('Informe o nome do produto.');
+  const nome = String(payload.nome || payload.name || '').trim();
+  if (!nome) throw new Error('Informe o nome do produto.');
 
-  const unit = String(payload.unit || 'un').trim() || 'un';
-  const qty = Number(payload.qty);
-  const minQty = Number(payload.minQty);
-  if (!Number.isFinite(qty) || qty < 0) throw new Error('Quantidade inválida.');
-  if (!Number.isFinite(minQty) || minQty < 0) throw new Error('Estoque mínimo inválido.');
+  const unidade = String(payload.unidade || payload.unit || 'un').trim() || 'un';
+  const estoqueAtual = Number(payload.estoque_atual ?? payload.qty);
+  const estoqueSugerido = Number(payload.estoque_sugerido ?? payload.minQty);
+  if (!Number.isFinite(estoqueAtual) || estoqueAtual < 0) throw new Error('Estoque atual inválido.');
+  if (!Number.isFinite(estoqueSugerido) || estoqueSugerido < 0) {
+    throw new Error('Estoque sugerido inválido.');
+  }
 
-  const category = String(payload.category || 'Insumos').trim() || 'Insumos';
-  const costCents = payload.cost ? parseMoneyToCents(payload.cost) : 0;
-  const status = qty < minQty ? 'low' : 'stable';
-  const item = {
-    id: `inv-${Date.now()}`,
-    name,
-    subtitle: String(payload.subtitle || '').trim(),
-    category,
-    stock: formatStockLabel(qty, unit),
-    minStock: formatStockLabel(minQty, unit),
-    cost: formatCents(costCents),
-    status,
-    statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
-    image: payload.image || DEFAULT_PRODUCT_IMAGE,
-  };
+  const categoria = String(payload.categoria || payload.category || 'Insumos').trim() || 'Insumos';
+  const now = new Date().toISOString();
+  const actor = await actorId();
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  let max = maxProductCode(stored);
+  const coded = stored.map((item) => {
+    if (item.codigo) return item;
+    max += 1;
+    return { ...item, codigo: formatProductCode(max) };
+  });
+  const codigo = formatProductCode(max + 1);
+  const draft = presentProduct(
+    {
+      id: `inv-${Date.now()}`,
+      codigo,
+      nome,
+      marca: payload.marca,
+      descricao: payload.descricao,
+      categoria,
+      unidade,
+      estoque_atual: estoqueAtual,
+      estoque_sugerido: estoqueSugerido,
+      valor_unitario: payload.valor_unitario ?? payload.cost,
+      foto: payload.foto || payload.image || '',
+      stock: formatStockLabel(estoqueAtual, unidade),
+      minStock: formatStockLabel(estoqueSugerido, unidade),
+      created_at: now,
+      updated_at: now,
+      created_by: actor,
+      updated_by: actor,
+    },
+    codigo
+  );
 
-  const filters = current.filters?.includes(category)
+  const filters = current.filters?.includes(categoria)
     ? current.filters
-    : [...(current.filters || ['Todos']), category];
-  const next = await saveInventory({ ...current, filters }, [...(current.items || []), item]);
-  return { item, inventory: next };
+    : [...(current.filters || ['Todos']), categoria];
+  const next = await saveInventory({ ...current, filters }, [...coded, persistProduct(draft)]);
+  return { item: presentProduct(draft, codigo), inventory: next };
 }
 
 export async function updateInventoryItem(itemId, payload) {
   const current = await getInventory();
-  const items = [...(current.items || [])];
+  const items = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
   const index = items.findIndex((item) => String(item.id) === String(itemId));
   if (index < 0) throw new Error('Item não encontrado.');
 
   const currentItem = items[index];
-  const parsed = parseStockLabel(payload.stock || currentItem.stock);
-  const minParsed = parseStockLabel(payload.minStock || currentItem.minStock);
-  const status = parsed.qty < minParsed.qty ? 'low' : 'stable';
-  items[index] = {
-    ...currentItem,
-    name: String(payload.name || currentItem.name).trim(),
-    subtitle: String(payload.subtitle ?? currentItem.subtitle).trim(),
-    category: String(payload.category || currentItem.category).trim(),
-    stock: formatStockLabel(parsed.qty, parsed.unit),
-    minStock: formatStockLabel(minParsed.qty, minParsed.unit || parsed.unit),
-    cost: payload.cost ? formatCents(parseMoneyToCents(payload.cost)) : currentItem.cost,
-    status,
-    statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
-    image: payload.image || currentItem.image,
-  };
+  const nome = String(payload.nome || payload.name || currentItem.nome).trim();
+  if (!nome) throw new Error('Informe o nome do produto.');
+  const unidade = String(payload.unidade || payload.unit || currentItem.unidade || 'un').trim() || 'un';
+  const estoqueAtual = Number(payload.estoque_atual ?? payload.qty ?? currentItem.estoque_atual);
+  const estoqueSugerido = Number(
+    payload.estoque_sugerido ?? payload.minQty ?? currentItem.estoque_sugerido
+  );
+  if (!Number.isFinite(estoqueAtual) || estoqueAtual < 0) throw new Error('Estoque atual inválido.');
+  if (!Number.isFinite(estoqueSugerido) || estoqueSugerido < 0) {
+    throw new Error('Estoque sugerido inválido.');
+  }
+
+  const now = new Date().toISOString();
+  const actor = await actorId();
+  const draft = presentProduct(
+    {
+      ...currentItem,
+      nome,
+      marca: payload.marca ?? currentItem.marca,
+      descricao: payload.descricao ?? currentItem.descricao,
+      categoria: payload.categoria || payload.category || currentItem.categoria,
+      unidade,
+      estoque_atual: estoqueAtual,
+      estoque_sugerido: estoqueSugerido,
+      valor_unitario: payload.valor_unitario ?? payload.cost ?? currentItem.valor_unitario,
+      foto: payload.foto || payload.image || currentItem.foto,
+      stock: formatStockLabel(estoqueAtual, unidade),
+      minStock: formatStockLabel(estoqueSugerido, unidade),
+      codigo: currentItem.codigo,
+      created_at: currentItem.created_at || now,
+      created_by: currentItem.created_by || actor,
+      updated_at: now,
+      updated_by: actor,
+    },
+    currentItem.codigo
+  );
+  items[index] = persistProduct(draft);
   const next = await saveInventory(current, items);
-  return { item: items[index], inventory: next };
+  return { item: draft, inventory: next };
 }
 
 export async function registerStockEntry(payload) {

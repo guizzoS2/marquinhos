@@ -33,6 +33,8 @@ const metricTone = {
 
 export function InventoryPage() {
   const [filter, setFilter] = useState('Todos');
+  const [query, setQuery] = useState('');
+  const [view, setView] = useState('list');
   const { openModal } = useModal();
   const { user } = useAuth();
   const canAdmin = isAdminRole(user?.role);
@@ -44,9 +46,16 @@ export function InventoryPage() {
 
   const items = useMemo(() => {
     if (!data?.items) return [];
-    if (filter === 'Todos') return data.items;
-    return data.items.filter((item) => item.category === filter);
-  }, [data, filter]);
+    const term = query.trim().toLowerCase();
+    return data.items.filter((item) => {
+      const categoryOk = filter === 'Todos' || item.category === filter || item.categoria === filter;
+      if (!categoryOk) return false;
+      if (!term) return true;
+      const nome = String(item.nome || item.name || '').toLowerCase();
+      const codigo = String(item.codigo || '').toLowerCase();
+      return nome.includes(term) || codigo.includes(term);
+    });
+  }, [data, filter, query]);
 
   function refreshInventory() {
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -65,8 +74,13 @@ export function InventoryPage() {
     openModal('new-product', { onSuccess: refreshInventory });
   }
 
-  function openEditProduct(item) {
-    openModal('edit-product', { item, onSuccess: refreshInventory });
+  function openProduct(item) {
+    openModal('product-detail', {
+      item,
+      canDelete: canAdmin,
+      onEdit: () => openModal('edit-product', { item, onSuccess: refreshInventory }),
+      onDelete: () => confirmDeleteItem(item),
+    });
   }
 
   function confirmDeleteItem(item) {
@@ -111,114 +125,195 @@ export function InventoryPage() {
           </div>
         </section>
 
-        <section className="flex flex-wrap items-center gap-3">
-          {(data.filters || []).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setFilter(item)}
-              className={
-                filter === item
-                  ? 'px-5 py-2 min-h-11 bg-primary text-on-primary rounded-full text-sm font-semibold transition-all'
-                  : 'px-5 py-2 min-h-11 bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high rounded-full text-sm font-medium transition-all'
-              }
-            >
-              {item}
-            </button>
-          ))}
+        <section className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            {(data.filters || []).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setFilter(item)}
+                className={
+                  filter === item
+                    ? 'px-5 py-2 min-h-11 bg-primary text-on-primary rounded-full text-sm font-semibold transition-all'
+                    : 'px-5 py-2 min-h-11 bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high rounded-full text-sm font-medium transition-all'
+                }
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="relative w-full sm:w-64">
+              <Icon
+                name="search"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant"
+              />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Buscar por nome ou código"
+                aria-label="Buscar produto por nome ou código"
+                className="w-full pl-11 pr-4 min-h-11 bg-surface-container-low border-none rounded-full text-sm text-on-surface focus:ring-2 focus:ring-primary-container"
+              />
+            </div>
+            <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl">
+              <button
+                type="button"
+                onClick={() => setView('list')}
+                className={
+                  view === 'list'
+                    ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
+                    : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
+                }
+              >
+                Lista
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('cards')}
+                className={
+                  view === 'cards'
+                    ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
+                    : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
+                }
+              >
+                Cards
+              </button>
+            </div>
+          </div>
         </section>
 
-        <div className="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
-                  <th className="px-6 py-4">Item</th>
-                  <th className="px-6 py-4">Categoria</th>
-                  <th className="px-6 py-4">Estoque Atual</th>
-                  <th className="px-6 py-4">Estoque Mínimo</th>
-                  <th className="px-6 py-4 text-right">Preço de Custo</th>
-                  <th className="px-6 py-4 text-center">Status</th>
-                  <th className="px-6 py-4 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-variant/30">
-                {items.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="bg-surface-container-lowest hover:bg-surface-bright transition-colors"
-                  >
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-lg bg-surface flex items-center justify-center overflow-hidden">
-                          <img
-                            className="w-full h-full object-cover"
-                            alt={item.name}
-                            src={item.image}
-                          />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-on-surface">{item.name}</span>
-                          <span className="text-xs text-on-surface-variant">{item.subtitle}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-container text-on-secondary-container">
-                        {item.category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span
-                        className={`font-semibold ${item.status === 'low' ? 'text-error' : 'text-on-surface'}`}
-                      >
-                        {item.stock}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="text-on-surface-variant">{item.minStock}</span>
-                    </td>
-                    <td className="px-6 py-5 text-right font-medium">{item.cost}</td>
-                    <td className="px-6 py-5 text-center">
-                      {item.status === 'low' ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-error-container/10 text-error-dim border border-error/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" />
-                          {item.statusLabel}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-secondary-container/20 text-on-secondary-fixed-variant">
-                          {item.statusLabel}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-5 text-right">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          type="button"
-                          className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-surface-container"
-                          onClick={() => openEditProduct(item)}
-                          aria-label={`Editar ${item.name}`}
-                        >
-                          <Icon name="edit" />
-                        </button>
-                        {canAdmin ? (
-                          <button
-                            type="button"
-                            className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors"
-                            onClick={() => confirmDeleteItem(item)}
-                            aria-label={`Excluir ${item.name}`}
-                          >
-                            <Icon name="delete" />
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
+        {items.length === 0 ? (
+          <p className="text-on-surface-variant">Nenhum produto encontrado.</p>
+        ) : view === 'list' ? (
+          <div className="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
+                    <th className="px-6 py-4">Item</th>
+                    <th className="px-6 py-4">Código</th>
+                    <th className="px-6 py-4">Categoria</th>
+                    <th className="px-6 py-4">Estoque Atual</th>
+                    <th className="px-6 py-4">Estoque Sugerido</th>
+                    <th className="px-6 py-4 text-right">Valor unitário</th>
+                    <th className="px-6 py-4 text-center">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-surface-variant/30">
+                  {items.map((item) => (
+                    <tr
+                      key={item.id}
+                      tabIndex={0}
+                      className="bg-surface-container-lowest hover:bg-surface-bright transition-colors cursor-pointer"
+                      onClick={() => openProduct(item)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openProduct(item);
+                        }
+                      }}
+                    >
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-lg bg-surface flex items-center justify-center overflow-hidden">
+                            <img
+                              className="w-full h-full object-cover"
+                              alt=""
+                              src={item.image}
+                            />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="font-bold text-on-surface">{item.nome || item.name}</span>
+                            <span className="text-xs text-on-surface-variant">{item.marca}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 text-on-surface-variant">{item.codigo}</td>
+                      <td className="px-6 py-5">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-container text-on-secondary-container">
+                          {item.category}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span
+                          className={`font-semibold ${item.lowStock ? 'text-error' : 'text-on-surface'}`}
+                        >
+                          {item.stock}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-on-surface-variant">{item.minStock}</span>
+                      </td>
+                      <td className="px-6 py-5 text-right font-medium">{item.cost}</td>
+                      <td className="px-6 py-5 text-center">
+                        {item.lowStock ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-error-container/10 text-error-dim border border-error/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" />
+                            Estoque Baixo
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-secondary-container/20 text-on-secondary-fixed-variant">
+                            Estável
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {items.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => openProduct(item)}
+                className="w-full text-left bg-surface-container-lowest rounded-2xl p-6 min-h-11 transition-all hover:shadow-xl hover:shadow-on-surface/5"
+              >
+                <div className="flex justify-between items-start mb-6 gap-3">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <img
+                      alt=""
+                      className="w-14 h-14 rounded-2xl object-cover shrink-0"
+                      src={item.image}
+                    />
+                    <div className="min-w-0">
+                      <h4 className="font-headline font-bold text-lg text-on-surface truncate">
+                        {item.nome || item.name}
+                      </h4>
+                      <p className="text-sm text-on-surface-variant font-label">
+                        {item.codigo} · {item.category}
+                      </p>
+                      {item.marca ? (
+                        <p className="text-sm text-on-surface-variant">{item.marca}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  {item.lowStock ? (
+                    <span className="px-3 py-1 rounded-full bg-error-container/20 text-on-error-container text-[11px] font-bold uppercase tracking-wider shrink-0">
+                      Estoque Baixo
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase tracking-wider shrink-0">
+                      Estável
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-on-surface-variant font-label mb-1">Estoque atual</p>
+                    <p className="text-xl font-headline font-extrabold text-on-surface">{item.stock}</p>
+                  </div>
+                  <p className="text-sm font-semibold text-on-surface">{item.cost}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {(data.metrics || []).map((metric) => {

@@ -1,65 +1,83 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
-import { addInventoryProduct, editInventoryProduct } from '../../services/dashboardService';
+import {
+  addInventoryProduct,
+  editInventoryProduct,
+  peekInventoryCode,
+} from '../../services/dashboardService';
 import { inventoryFallback } from '../../services/fallbacks';
+import { moneyInputValue, parseReaisInput } from '../../services/inventoryProduct';
+import { readLocalImage } from '../../services/readLocalImage';
 
 const categories = inventoryFallback.filters.filter((item) => item !== 'Todos');
 
 export function ProductForm({ item, onSuccess, onCancel }) {
   const toast = useToast();
   const isEdit = Boolean(item);
+  const { data: nextCode } = useQuery({
+    queryKey: ['inventory', 'next-code'],
+    queryFn: peekInventoryCode,
+    enabled: !isEdit,
+  });
+  const categoryOptions = categories.includes(item?.categoria || item?.category)
+    ? categories
+    : [...categories, item?.categoria || item?.category].filter(Boolean);
+
   const [form, setForm] = useState({
-    name: item?.name || '',
-    subtitle: item?.subtitle || '',
-    category: item?.category || categories[0],
-    qty: item ? String(item.stock).replace(/[^\d.,]/g, '') : '0',
-    minQty: item ? String(item.minStock).replace(/[^\d.,]/g, '') : '0',
-    unit: (item?.stock || 'un').replace(/^[\d.,\s]+/, '').trim() || 'un',
-    cost: item?.cost || '',
-    image: item?.image || '',
+    nome: item?.nome || item?.name || '',
+    marca: item?.marca || '',
+    descricao: item?.descricao || item?.subtitle || '',
+    categoria: item?.categoria || item?.category || categoryOptions[0],
+    unidade: item?.unidade || 'un',
+    estoque_atual: item ? String(item.estoque_atual ?? 0) : '0',
+    estoque_sugerido: item ? String(item.estoque_sugerido ?? 0) : '0',
+    valor_unitario: item ? moneyInputValue(item.valor_unitario || item.cost) : '',
+    foto: item?.foto || item?.image || '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  function handlePhoto(event) {
+  async function handlePhoto(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setForm((prev) => ({ ...prev, image: String(reader.result || '') }));
-    };
-    reader.readAsDataURL(file);
+    try {
+      const foto = await readLocalImage(file);
+      setForm((prev) => ({ ...prev, foto }));
+    } catch (err) {
+      toast.error(err?.message || 'Não foi possível ler a foto.');
+    }
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
     setSaving(true);
     setError('');
+    const valor = parseReaisInput(form.valor_unitario);
+    if (!Number.isFinite(valor) || valor < 0) {
+      setSaving(false);
+      setError('Valor unitário inválido.');
+      return;
+    }
+    const payload = {
+      nome: form.nome,
+      marca: form.marca,
+      descricao: form.descricao,
+      categoria: form.categoria,
+      unidade: form.unidade,
+      estoque_atual: form.estoque_atual,
+      estoque_sugerido: form.estoque_sugerido,
+      valor_unitario: valor,
+      foto: form.foto,
+    };
     try {
       if (isEdit) {
-        await editInventoryProduct(item.id, {
-          name: form.name,
-          subtitle: form.subtitle,
-          category: form.category,
-          stock: `${form.qty} ${form.unit}`,
-          minStock: `${form.minQty} ${form.unit}`,
-          cost: form.cost,
-          image: form.image,
-        });
+        await editInventoryProduct(item.id, payload);
         toast.success('Produto atualizado.');
       } else {
-        await addInventoryProduct({
-          name: form.name,
-          subtitle: form.subtitle,
-          category: form.category,
-          qty: form.qty,
-          minQty: form.minQty,
-          unit: form.unit,
-          cost: form.cost,
-          image: form.image,
-        });
+        await addInventoryProduct(payload);
         toast.success('Produto cadastrado.');
       }
       onSuccess?.();
@@ -73,30 +91,54 @@ export function ProductForm({ item, onSuccess, onCancel }) {
     }
   }
 
+  const codigo = isEdit ? item?.codigo || '' : nextCode || '';
+
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
-      <Input
-        label="Nome"
-        value={form.name}
-        onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-        required
-      />
-      <Input
-        label="Detalhe"
-        value={form.subtitle}
-        onChange={(event) => setForm((prev) => ({ ...prev, subtitle: event.target.value }))}
-      />
+      <Input label="Código" value={codigo} readOnly disabled />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Input
+          label="Nome"
+          value={form.nome}
+          onChange={(event) => setForm((prev) => ({ ...prev, nome: event.target.value }))}
+          required
+        />
+        <Input
+          label="Marca"
+          value={form.marca}
+          onChange={(event) => setForm((prev) => ({ ...prev, marca: event.target.value }))}
+        />
+      </div>
+      <div className="space-y-2">
+        <label
+          htmlFor="produto-descricao"
+          className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+        >
+          Descrição
+        </label>
+        <textarea
+          id="produto-descricao"
+          value={form.descricao}
+          onChange={(event) => setForm((prev) => ({ ...prev, descricao: event.target.value }))}
+          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all"
+          rows={3}
+        />
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-2">
-          <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+          <label
+            htmlFor="produto-categoria"
+            className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+          >
             Categoria
           </label>
           <select
+            id="produto-categoria"
             className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11"
-            value={form.category}
-            onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
+            value={form.categoria}
+            onChange={(event) => setForm((prev) => ({ ...prev, categoria: event.target.value }))}
           >
-            {categories.map((category) => (
+            {categoryOptions.map((category) => (
               <option key={category} value={category}>
                 {category}
               </option>
@@ -105,33 +147,37 @@ export function ProductForm({ item, onSuccess, onCancel }) {
         </div>
         <Input
           label="Unidade"
-          value={form.unit}
-          onChange={(event) => setForm((prev) => ({ ...prev, unit: event.target.value }))}
+          value={form.unidade}
+          onChange={(event) => setForm((prev) => ({ ...prev, unidade: event.target.value }))}
           required
         />
         <Input
-          label="Estoque inicial"
+          label="Estoque atual"
           type="number"
           min="0"
           step="1"
-          value={form.qty}
-          onChange={(event) => setForm((prev) => ({ ...prev, qty: event.target.value }))}
+          value={form.estoque_atual}
+          onChange={(event) => setForm((prev) => ({ ...prev, estoque_atual: event.target.value }))}
           required
         />
         <Input
-          label="Estoque mínimo"
+          label="Estoque sugerido"
           type="number"
           min="0"
           step="1"
-          value={form.minQty}
-          onChange={(event) => setForm((prev) => ({ ...prev, minQty: event.target.value }))}
+          value={form.estoque_sugerido}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, estoque_sugerido: event.target.value }))
+          }
           required
         />
       </div>
       <Input
-        label="Custo (R$)"
-        value={form.cost}
-        onChange={(event) => setForm((prev) => ({ ...prev, cost: event.target.value }))}
+        label="Valor unitário (R$)"
+        inputMode="decimal"
+        value={form.valor_unitario}
+        onChange={(event) => setForm((prev) => ({ ...prev, valor_unitario: event.target.value }))}
+        required
       />
       <label className="block space-y-2">
         <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
@@ -143,6 +189,9 @@ export function ProductForm({ item, onSuccess, onCancel }) {
           onChange={handlePhoto}
           className="block w-full text-sm min-h-11"
         />
+        {form.foto ? (
+          <img alt="" src={form.foto} className="w-16 h-16 rounded-xl object-cover" />
+        ) : null}
       </label>
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">

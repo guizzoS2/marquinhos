@@ -21,12 +21,14 @@ import { ShiftDetailForm } from '../freelancers/ShiftDetailForm';
 import { expenseCategories } from '../../services/fallbacks';
 import { isStockRole } from '../../services/roles';
 import { ProductForm } from '../inventory/ProductForm';
+import { ProductDetail } from '../inventory/ProductDetail';
 
 const titles = {
   'new-order': 'Nova Venda',
   'stock-entry': 'Entrada de Mercadoria',
   'new-product': 'Novo produto',
   'edit-product': 'Editar produto',
+  'product-detail': 'Detalhes do Produto',
   'new-daily': 'Registrar Diária',
   'shift-detail': 'Agendamento',
   'new-freelancer': 'Novo Freelancer',
@@ -702,7 +704,8 @@ export function AppModal() {
   const wide =
     modal.type === 'import-statement' ||
     modal.type === 'new-product' ||
-    modal.type === 'edit-product';
+    modal.type === 'edit-product' ||
+    modal.type === 'product-detail';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -776,6 +779,14 @@ export function AppModal() {
             items={modal.payload?.items}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'product-detail' ? (
+          <ProductDetail
+            item={modal.payload?.item}
+            canDelete={Boolean(modal.payload?.canDelete)}
+            onEdit={modal.payload?.onEdit}
+            onDelete={modal.payload?.onDelete}
+            onCancel={closeModal}
           />
         ) : modal.type === 'new-product' || modal.type === 'edit-product' ? (
           <ProductForm
