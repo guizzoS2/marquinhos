@@ -3,7 +3,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Icon } from '../ui/Icon';
 import { useToast } from '../../contexts/ToastContext';
-import { editDaily } from '../../services/dashboardService';
+import { editDaily, removeDaily } from '../../services/dashboardService';
 import { SHIFT_STATUSES, peopleByRole } from '../../services/freelancerSchedule';
 import { RoleSelect } from './RoleSelect';
 
@@ -68,6 +68,23 @@ export function ShiftDetailForm({ shift, people = [], roles = [], onSuccess, onC
     } catch {
       setError('Não foi possível alterar a diária.');
       toast.error('Falha ao alterar a diária.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm('Excluir este agendamento?')) return;
+    setSaving(true);
+    setError('');
+    try {
+      await removeDaily(shift);
+      toast.success('Agendamento excluído.');
+      onSuccess?.();
+      onCancel();
+    } catch (err) {
+      setError(err?.message || 'Não foi possível excluir o agendamento.');
+      toast.error(err?.message || 'Não foi possível excluir o agendamento.');
     } finally {
       setSaving(false);
     }
@@ -175,14 +192,18 @@ export function ShiftDetailForm({ shift, people = [], roles = [], onSuccess, onC
 
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
 
-      <div className="pt-2">
-        <Button type="submit" className="w-full" disabled={saving}>
+      <div className="pt-2 flex flex-col sm:flex-row gap-3">
+        <Button type="submit" className="w-full sm:flex-1" disabled={saving}>
           {saving ? 'Salvando...' : 'Salvar diária'}
         </Button>
-        <p className="text-center text-[11px] text-on-surface-variant mt-4 leading-relaxed">
-          A alteração atualiza esta diária e a saída correspondente no fluxo de caixa.
-        </p>
+        <Button type="button" variant="danger" className="w-full sm:w-auto" onClick={handleDelete} disabled={saving}>
+          <Icon name="delete" />
+          Excluir
+        </Button>
       </div>
+      <p className="text-center text-[11px] text-on-surface-variant leading-relaxed">
+        A alteração atualiza esta diária e a saída correspondente no fluxo de caixa.
+      </p>
     </form>
   );
 }

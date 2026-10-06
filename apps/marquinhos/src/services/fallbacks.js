@@ -66,35 +66,6 @@ export const inventoryFallback = {
   sales: [],
   closings: [],
   purchases: [],
-  metrics: [
-    {
-      id: 'low-stock',
-      tone: 'error',
-      badge: 'Ação',
-      icon: 'warning',
-      label: 'Itens em estoque baixo',
-      value: '0',
-      progress: 0,
-    },
-    {
-      id: 'inventory-value',
-      tone: 'secondary',
-      badge: 'Ativo',
-      icon: 'inventory',
-      label: 'Valor do inventário',
-      value: 'R$ 0',
-      progress: 0,
-    },
-    {
-      id: 'turnover',
-      tone: 'tertiary',
-      badge: 'Giro',
-      icon: 'trending_up',
-      label: 'Giro de estoque (mês)',
-      value: '—',
-      progress: 0,
-    },
-  ],
 };
 
 export const freelancersFallback = {

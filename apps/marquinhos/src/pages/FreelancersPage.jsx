@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchFreelancers, removeFreelancer, settleFreelancer } from '../services/dashboardService';
+import { fetchFreelancers, removeDaily, removeFreelancer, settleFreelancer } from '../services/dashboardService';
 import {
   filterShifts,
   formatPeriodLabel,
@@ -15,10 +15,12 @@ import { FreelancerProfile } from '../components/freelancers/FreelancerProfile';
 import { FreelancerRoster } from '../components/freelancers/FreelancerRoster';
 import { ShiftTable } from '../components/freelancers/ShiftTable';
 import { useModal } from '../contexts/ModalContext';
+import { useToast } from '../contexts/ToastContext';
 
 export function FreelancersPage() {
   const queryClient = useQueryClient();
   const { openModal } = useModal();
+  const toast = useToast();
   const [anchor, setAnchor] = useState(() => new Date());
   const [roleFilter, setRoleFilter] = useState(null);
   const [query, setQuery] = useState('');
@@ -140,6 +142,17 @@ export function FreelancersPage() {
         refreshFreelancers();
       },
     });
+  }
+
+  async function deleteShift(shift) {
+    if (!confirm('Excluir este agendamento?')) return;
+    try {
+      await removeDaily(shift);
+      toast.success('Agendamento excluído.');
+      refreshFreelancers();
+    } catch (err) {
+      toast.error(err?.message || 'Não foi possível excluir o agendamento.');
+    }
   }
 
   function confirmDelete() {
@@ -274,7 +287,7 @@ export function FreelancersPage() {
           onSelectShift={openShift}
         />
       ) : (
-        <ShiftTable shifts={shifts} people={people} onSelectShift={openShift} />
+        <ShiftTable shifts={shifts} people={people} onEdit={openShift} onDelete={deleteShift} />
       )}
 
       <section className="mt-8 space-y-4">

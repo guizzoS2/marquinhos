@@ -5,6 +5,7 @@ import {
   getFreelancers,
   registerDaily,
   updateDaily,
+  deleteDaily,
   addFreelancer,
   addSupplier,
   updateSupplier,
@@ -106,6 +107,11 @@ export function createDaily(payload) {
 export function editDaily(target, payload) {
   requireAdmin();
   return updateDaily(target, payload);
+}
+
+export function removeDaily(target) {
+  requireAdmin();
+  return deleteDaily(target);
 }
 
 export function createFreelancer(payload) {

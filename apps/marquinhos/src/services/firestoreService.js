@@ -414,7 +414,8 @@ function buildOverview(rawOverview, rawCash, rawInventory, rawFreelancers) {
 }
 
 function normalizeInventory(raw) {
-  const current = raw && typeof raw === 'object' ? raw : inventoryFallback;
+  const sourceDoc = raw && typeof raw === 'object' ? raw : inventoryFallback;
+  const { metrics: _metrics, ...current } = sourceDoc;
   const source = Array.isArray(current.items) ? current.items : [];
   let max = maxProductCode(source);
   const items = source.map((item) => {
@@ -434,7 +435,6 @@ function normalizeInventory(raw) {
     sales: (Array.isArray(current.sales) ? current.sales : []).map(normalizeSale),
     closings: Array.isArray(current.closings) ? current.closings : [],
     purchases: Array.isArray(current.purchases) ? current.purchases : [],
-    metrics: recomputeInventoryMetrics(items),
   };
 }
 
@@ -628,44 +628,6 @@ function formatStockLabel(qty, unit) {
   return `${qty} ${unit}`.trim();
 }
 
-function recomputeInventoryMetrics(items) {
-  const lowCount = items.filter((item) => item.status === 'low').length;
-  const totalValueCents = items.reduce((sum, item) => {
-    const { qty } = parseStockLabel(item.stock);
-    return sum + qty * parseMoneyToCents(item.cost);
-  }, 0);
-
-  return [
-    {
-      id: 'low-stock',
-      tone: 'error',
-      badge: 'Ação Necessária',
-      icon: 'warning',
-      label: 'Itens em Estoque Baixo',
-      value: String(lowCount),
-      progress: Math.min(100, lowCount * 10),
-    },
-    {
-      id: 'inventory-value',
-      tone: 'secondary',
-      badge: 'Ativo',
-      icon: 'inventory',
-      label: 'Valor Total do Inventário',
-      value: formatCents(totalValueCents),
-      progress: 45,
-    },
-    {
-      id: 'turnover',
-      tone: 'tertiary',
-      badge: 'Eficiência',
-      icon: 'trending_up',
-      label: 'Giro de Estoque (Mês)',
-      value: '4.2x',
-      progress: 80,
-    },
-  ];
-}
-
 function promotionRecord(row) {
   return {
     id: row.id,
@@ -682,7 +644,6 @@ async function saveInventory(current, items) {
     ...rest,
     items,
     promotions: (rest.promotions || []).map(promotionRecord),
-    metrics: recomputeInventoryMetrics(items),
   };
   await writeDocument(DOCS.inventory, next);
   return next;
@@ -1139,7 +1100,6 @@ export async function registerPurchase(payload) {
           items: stored,
           entries: [...entries, ...(inventory.entries || [])],
           purchases: [purchase, ...(inventory.purchases || [])],
-          metrics: recomputeInventoryMetrics(stored),
         },
         cashFlow: {
           ...cash,
@@ -1224,7 +1184,6 @@ export async function cancelPurchase(purchaseId) {
           items: stored,
           entries: (inventory.entries || []).filter((row) => String(row.purchaseId) !== id),
           purchases,
-          metrics: recomputeInventoryMetrics(stored),
         },
         cashFlow: {
           ...cash,
@@ -1762,7 +1721,6 @@ export async function registerSale(payload) {
           ...inventory,
           items: stored,
           sales,
-          metrics: recomputeInventoryMetrics(stored),
         },
         cashFlow: {
           ...cash,
@@ -1871,10 +1829,10 @@ function stockCategoryToExpense(category) {
 export async function deleteInventoryItem(itemId) {
   const current = await getInventory();
   const items = (current.items || []).filter((item) => String(item.id) !== String(itemId));
+  const { metrics: _metrics, serverNow: _serverNow, ...rest } = current;
   const next = {
-    ...current,
+    ...rest,
     items,
-    metrics: recomputeInventoryMetrics(items),
   };
   await writeDocument(DOCS.inventory, next);
   return next;
@@ -2026,6 +1984,57 @@ export async function updateDaily(target, payload) {
   };
   await writeDocument(DOCS.freelancers, next);
   return updated;
+}
+
+export async function deleteDaily(target) {
+  await ensureDashboardSeed();
+  return commitOps((ops) => {
+    const current = normalizeFreelancers(ops.freelancers);
+    const existing = (current.dailies || []).find((row) => sameDaily(row, target));
+    if (!existing) throw new Error('Diária não encontrada.');
+
+    const person = (current.people || []).find(
+      (item) => String(item.id) === String(existing.freelancerId)
+    );
+    const previousCents = dailyAmountCents(existing.value, person?.dailyRate);
+    const cash = migrateCashFlow(ops.cashFlow || cashFlowFallback);
+    const expenses = [...(cash.expenses || [])];
+    let matchIndex = expenses.findIndex(
+      (row) => existing.expenseId && String(row.id) === String(existing.expenseId)
+    );
+    if (matchIndex < 0) {
+      const previousDate = formatExpenseDate(existing.date);
+      matchIndex = expenses.findIndex(
+        (row) =>
+          row.source === 'freelancer_daily' &&
+          row.supplier === (person?.name || '') &&
+          row.date === previousDate &&
+          row.amount === previousCents
+      );
+    }
+    const nextExpenses =
+      matchIndex >= 0 ? expenses.filter((_, index) => index !== matchIndex) : expenses;
+    const summary = buildCashFlowSummary(cash.incomes || [], nextExpenses, {
+      revenueDelta: cash.summary?.revenueDelta,
+      expensesDelta: cash.summary?.expensesDelta,
+    });
+
+    return {
+      ops: {
+        ...ops,
+        freelancers: {
+          ...current,
+          dailies: (current.dailies || []).filter((row) => !sameDaily(row, existing)),
+        },
+        cashFlow: {
+          ...cash,
+          expenses: nextExpenses,
+          summary: { ...cash.summary, ...summary },
+        },
+      },
+      value: existing,
+    };
+  });
 }
 
 export async function addFreelancer(payload) {

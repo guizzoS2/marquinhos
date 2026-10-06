@@ -1,8 +1,10 @@
 import { memo } from 'react';
 import { formatCents, parseMoneyToCents } from '../../services/cashFlowUtils';
 import { formatShiftDate, shiftStatusLabel } from '../../services/freelancerSchedule';
+import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
 
-function ShiftTableComponent({ shifts, people, onSelectShift }) {
+function ShiftTableComponent({ shifts, people, onEdit, onDelete }) {
   if (!shifts.length) {
     return (
       <section className="bg-surface-container-lowest rounded-2xl p-6 md:p-8">
@@ -22,6 +24,7 @@ function ShiftTableComponent({ shifts, people, onSelectShift }) {
               <th className="p-4 font-bold">Função</th>
               <th className="p-4 font-bold">Valor</th>
               <th className="p-4 font-bold">Status</th>
+              <th className="p-4 font-bold">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -30,16 +33,7 @@ function ShiftTableComponent({ shifts, people, onSelectShift }) {
               return (
                 <tr
                   key={shift.id || `${shift.freelancerId}-${shift.date}`}
-                  tabIndex={0}
-                  role="button"
-                  className="border-t border-outline-variant/20 cursor-pointer hover:bg-surface-container-low focus:bg-surface-container-low"
-                  onClick={() => onSelectShift(shift)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onSelectShift(shift);
-                    }
-                  }}
+                  className="border-t border-outline-variant/20"
                 >
                   <td className="p-4 text-on-surface">{formatShiftDate(shift.date)}</td>
                   <td className="p-4 font-semibold text-on-surface">{person?.name || 'Freelancer'}</td>
@@ -48,6 +42,18 @@ function ShiftTableComponent({ shifts, people, onSelectShift }) {
                     {formatCents(parseMoneyToCents(shift.value))}
                   </td>
                   <td className="p-4 text-on-surface-variant">{shiftStatusLabel(shift.status)}</td>
+                  <td className="p-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="secondary" onClick={() => onEdit(shift)}>
+                        <Icon name="edit" />
+                        Editar
+                      </Button>
+                      <Button type="button" variant="danger" onClick={() => onDelete(shift)}>
+                        <Icon name="delete" />
+                        Excluir
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               );
             })}

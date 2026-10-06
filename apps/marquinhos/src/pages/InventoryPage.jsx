@@ -7,30 +7,6 @@ import { useModal } from '../contexts/ModalContext';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdminRole } from '../services/roles';
 
-const progressWidth = {
-  45: 'w-[45%]',
-  65: 'w-[65%]',
-  80: 'w-[80%]',
-};
-
-const metricTone = {
-  error: {
-    iconWrap: 'bg-error-container/10 text-error',
-    badge: 'text-error',
-    bar: 'bg-error',
-  },
-  secondary: {
-    iconWrap: 'bg-primary/20 text-on-surface',
-    badge: 'text-on-surface',
-    bar: 'bg-primary',
-  },
-  tertiary: {
-    iconWrap: 'bg-surface-container text-on-surface',
-    badge: 'text-on-surface-variant',
-    bar: 'bg-on-surface',
-  },
-};
-
 export function InventoryPage() {
   const [filter, setFilter] = useState('Todos');
   const [query, setQuery] = useState('');
@@ -424,37 +400,6 @@ export function InventoryPage() {
             ))}
           </div>
         )}
-
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {(data.metrics || []).map((metric) => {
-            const tone = metricTone[metric.tone] || metricTone.secondary;
-            return (
-              <div
-                key={metric.id}
-                className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm space-y-4"
-              >
-                <div className="flex justify-between items-start">
-                  <Icon
-                    name={metric.icon}
-                    className={`p-3 rounded-xl ${tone.iconWrap}`}
-                  />
-                  <span className={`text-xs font-bold uppercase tracking-wider ${tone.badge}`}>
-                    {metric.badge}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-on-surface-variant">{metric.label}</h3>
-                  <p className="text-3xl font-extrabold text-on-surface">{metric.value}</p>
-                </div>
-                <div className="w-full h-1 bg-surface-variant rounded-full overflow-hidden">
-                  <div
-                    className={`h-full ${tone.bar} ${progressWidth[metric.progress] || 'w-1/2'}`}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </section>
         </>
         ) : (
           <section className="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">
