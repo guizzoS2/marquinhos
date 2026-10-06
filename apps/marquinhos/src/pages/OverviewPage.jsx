@@ -3,7 +3,6 @@ import { fetchOverview } from '../services/dashboardService';
 import { MetricCard } from '../components/ui/MetricCard';
 import { WeeklyChart } from '../components/dashboard/WeeklyChart';
 import { TopSoldList } from '../components/dashboard/TopSoldList';
-import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { useModal } from '../contexts/ModalContext';
 
@@ -71,21 +70,6 @@ export function OverviewPage() {
       <footer className="mt-auto p-4 md:p-8 text-center text-xs text-on-surface-variant/60 font-medium">
         © {new Date().getFullYear()} Marquinho's. Bar e petiscos.
       </footer>
-
-      <button
-        type="button"
-        onClick={() =>
-          openModal('new-order', {
-            onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cash-flow'] }),
-          })
-        }
-        className="fixed bottom-6 right-4 md:bottom-8 md:right-8 w-14 h-14 min-h-14 min-w-14 bg-primary text-on-primary rounded-full flex items-center justify-center active:scale-90 transition-transform z-50 group"
-      >
-        <Icon name="add_circle" className="text-3xl" />
-        <span className="absolute right-16 bg-on-surface text-white px-3 py-1.5 rounded-lg text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-          Nova venda
-        </span>
-      </button>
     </>
   );
 }
