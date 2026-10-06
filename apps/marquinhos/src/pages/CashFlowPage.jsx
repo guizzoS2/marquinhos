@@ -71,13 +71,6 @@ export function CashFlowPage() {
     toast.success('Relatório CSV exportado.');
   }
 
-  function openNewExpense() {
-    openModal('new-expense', {
-      categories: data?.categories,
-      onSuccess: refreshCashFlow,
-    });
-  }
-
   function confirmDeleteExpense(row) {
     openModal('confirm', {
       message: `Excluir a despesa "${row.supplier}" (${row.value})?`,
@@ -384,15 +377,6 @@ export function CashFlowPage() {
           </div>
         </div>
       </div>
-
-      <button
-        type="button"
-        onClick={openNewExpense}
-        className="fixed bottom-36 right-4 md:bottom-28 md:right-8 w-14 h-14 min-h-14 min-w-14 bg-secondary text-on-secondary rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition-transform duration-150 z-50"
-        aria-label="Nova despesa"
-      >
-        <Icon name="add" className="text-3xl" />
-      </button>
     </div>
   );
 }
