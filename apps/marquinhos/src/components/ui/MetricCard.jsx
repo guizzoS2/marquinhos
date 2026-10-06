@@ -12,7 +12,7 @@ const iconWrapClasses = {
   warning: 'bg-error/10 text-error',
 };
 
-export function MetricCard({ label, value, badge, badgeTone = 'neutral', icon }) {
+export function MetricCard({ label, value, badge, badgeTone = 'neutral', icon, valueTone }) {
   return (
     <div className="bg-surface-container-lowest p-5 md:p-6 rounded-xl shadow-sm border-none flex flex-col justify-between min-h-40 group hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start">
@@ -27,7 +27,17 @@ export function MetricCard({ label, value, badge, badgeTone = 'neutral', icon })
         <p className="text-on-surface-variant text-xs font-medium uppercase tracking-wider">
           {label}
         </p>
-        <h3 className="text-3xl font-black text-on-surface mt-1 tracking-tight">{value}</h3>
+        <h3
+          className={`text-3xl font-black mt-1 tracking-tight ${
+            valueTone === 'negative'
+              ? 'text-error'
+              : valueTone === 'positive'
+                ? 'text-secondary'
+                : 'text-on-surface'
+          }`}
+        >
+          {value}
+        </h3>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 const heightMap = {
+  0: 'h-1',
   30: 'h-[30%]',
   35: 'h-[35%]',
   40: 'h-[40%]',
@@ -13,12 +14,12 @@ const heightMap = {
   98: 'h-[98%]',
 };
 
-export function WeeklyChart({ data = [] }) {
+export function WeeklyChart({ data = [], title = 'Performance Semanal' }) {
   return (
     <section className="lg:col-span-2 bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm space-y-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
         <div>
-          <h2 className="text-xl font-extrabold tracking-tight">Performance Semanal</h2>
+          <h2 className="text-xl font-extrabold tracking-tight">{title}</h2>
           <p className="text-sm text-on-surface-variant">
             Comparativo de Receita vs. Despesas
           </p>

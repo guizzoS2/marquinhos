@@ -52,8 +52,8 @@ function requireAdmin() {
   }
 }
 
-export function fetchOverview() {
-  return getOverview();
+export function fetchOverview(period) {
+  return getOverview(period);
 }
 
 export function fetchCashFlow() {

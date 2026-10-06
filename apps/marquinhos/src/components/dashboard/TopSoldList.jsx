@@ -11,10 +11,10 @@ export function TopSoldList({ items = [] }) {
     <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm">
       <div className="flex items-center justify-between mb-6 md:mb-8">
         <h2 className="text-xl font-extrabold tracking-tight">Top 5 Vendidos</h2>
-        <button type="button" className="text-xs font-bold text-on-surface hover:underline min-h-11 px-2">
-          Ver todos
-        </button>
       </div>
+      {!items.length ? (
+        <p className="text-sm text-on-surface-variant">Nenhuma venda no período.</p>
+      ) : null}
       <div className="space-y-6">
         {items.map((item, index) => (
           <div
@@ -46,7 +46,7 @@ export function TopSoldList({ items = [] }) {
             <div className="text-right">
               <p className="text-sm font-black">{item.orders}</p>
               <p className="text-[10px] text-on-surface-variant uppercase font-bold">
-                Pedidos
+                Unidades
               </p>
             </div>
           </div>

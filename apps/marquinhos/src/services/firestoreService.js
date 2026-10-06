@@ -27,6 +27,7 @@ import {
   normalizeMedida,
 } from './inventoryProduct';
 import { assertPrice, assertPromotionWindow, promotionStatus, saleUnitPrice } from './catalogRules';
+import { aggregateOverview } from './overviewAggregate';
 import {
   assertComanda,
   optionalComanda,
@@ -358,69 +359,6 @@ export async function ensureDashboardSeed() {
   }
 }
 
-function unwrapOverview(raw) {
-  if (!raw || typeof raw !== 'object') return {};
-  if (Array.isArray(raw.metrics) || Array.isArray(raw.weeklyPerformance) || 'topSold' in raw) {
-    return raw;
-  }
-  if (raw.overview && typeof raw.overview === 'object') {
-    return raw.overview;
-  }
-  return raw;
-}
-
-function buildOverview(rawOverview, rawCash, rawInventory, rawFreelancers) {
-  const source = unwrapOverview(rawOverview);
-  const cash = migrateCashFlow(rawCash || cashFlowFallback);
-  const items = Array.isArray(rawInventory?.items) ? rawInventory.items : [];
-  const people = Array.isArray(rawFreelancers?.people) ? rawFreelancers.people : [];
-  const low = items.filter((item) => item.status === 'low').length;
-  const freelaCents = (cash.expenses || [])
-    .filter(
-      (row) =>
-        row.categoryId === 'freelancer' ||
-        row.source === 'freelancer_daily' ||
-        row.source === 'platform_daily'
-    )
-    .reduce((sum, row) => sum + (row.amount || 0), 0);
-
-  return {
-    ...overviewFallback,
-    ...source,
-    metrics: [
-      {
-        id: 'revenue',
-        label: 'Faturamento Diário',
-        value: cash.summary?.totalRevenue || 'R$ 0',
-        badge: cash.summary?.revenueDelta || '',
-        badgeTone: 'positive',
-        icon: 'payments',
-      },
-      {
-        id: 'freela-cost',
-        label: 'Custo de Freelas Hoje',
-        value: formatCents(freelaCents),
-        badge: `${people.filter((p) => p.status === 'on_shift').length} em turno`,
-        badgeTone: 'neutral',
-        icon: 'engineering',
-      },
-      {
-        id: 'stock-alert',
-        label: 'Alerta de Estoque',
-        value: `${low} ${low === 1 ? 'Item' : 'Itens'}`,
-        badge: low ? 'ATENÇÃO' : '',
-        badgeTone: low ? 'critical' : 'neutral',
-        icon: 'warning',
-      },
-    ],
-    weeklyPerformance: Array.isArray(source.weeklyPerformance)
-      ? source.weeklyPerformance
-      : overviewFallback.weeklyPerformance,
-    topSold: Array.isArray(source.topSold) ? source.topSold : [],
-    suggestion: source.suggestion ?? overviewFallback.suggestion,
-  };
-}
-
 function normalizeInventory(raw) {
   const sourceDoc = raw && typeof raw === 'object' ? raw : inventoryFallback;
   const { metrics: _metrics, ...current } = sourceDoc;
@@ -446,15 +384,16 @@ function normalizeInventory(raw) {
   };
 }
 
-export async function getOverview() {
+export async function getOverview(period = 'mes') {
   await ensureDashboardSeed();
-  const [overview, cashFlow, inventory, freelancers] = await Promise.all([
-    readDocument(DOCS.overview),
+  const [cashFlow, inventory] = await Promise.all([
     readDocument(DOCS.cashFlow),
     readDocument(DOCS.inventory),
-    readDocument(DOCS.freelancers),
   ]);
-  return buildOverview(overview, cashFlow, inventory, freelancers);
+  return aggregateOverview(period, {
+    cash: migrateCashFlow(cashFlow || cashFlowFallback),
+    inventory: normalizeInventory(inventory),
+  });
 }
 
 export async function getCashFlow() {
