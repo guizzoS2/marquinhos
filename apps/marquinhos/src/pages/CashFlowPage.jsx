@@ -286,11 +286,7 @@ export function CashFlowPage() {
           </table>
         </div>
       </div>
-      <Pagination
-        page={movementPage.current}
-        pageCount={movementPage.pageCount}
-        onPage={movementPage.setPage}
-      />
+      <Pagination state={movementPage} />
     </div>
   );
 }

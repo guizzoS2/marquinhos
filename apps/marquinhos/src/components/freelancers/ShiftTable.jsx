@@ -65,7 +65,7 @@ function ShiftTableComponent({ shifts, people, onEdit, onDelete }) {
         </table>
       </div>
       <div className="p-4">
-        <Pagination page={page.current} pageCount={page.pageCount} onPage={page.setPage} />
+        <Pagination state={page} />
       </div>
     </section>
   );

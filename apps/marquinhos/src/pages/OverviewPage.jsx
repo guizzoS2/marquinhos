@@ -79,11 +79,7 @@ export function OverviewPage() {
                   <p className="text-sm text-on-surface-variant">Nenhum alerta.</p>
                 )}
                 <div className="mt-6">
-                  <Pagination
-                    page={alertPage.current}
-                    pageCount={alertPage.pageCount}
-                    onPage={alertPage.setPage}
-                  />
+                  <Pagination state={alertPage} />
                 </div>
               </section>
               <TopSoldList items={data.topSold} />

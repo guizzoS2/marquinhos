@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { compareDesc, parseISO } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { fetchInventory } from '../../services/dashboardService';
-import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
+import { Pagination } from '../ui/Pagination';
+import { usePagedList } from '../ui/usePagedList';
 import { useAuth } from '../../contexts/AuthContext';
 import { isAdminRole } from '../../services/roles';
 import {
@@ -14,8 +15,6 @@ import {
   totalsByPayment,
 } from '../../services/saleRules';
 import { CloseShiftReport } from './CloseShiftReport';
-
-const PAGE_SIZE = 8;
 
 const STATUS_LABEL = {
   aberta: 'Aberta',
@@ -29,7 +28,6 @@ function money(value) {
 
 export default function CaixaModal({ onClose }) {
   const { user } = useAuth();
-  const [page, setPage] = useState(0);
   const inventory = useQuery({ queryKey: ['caixa-shift'], queryFn: fetchInventory });
 
   const today = useMemo(() => {
@@ -40,9 +38,8 @@ export default function CaixaModal({ onClose }) {
       .sort((a, b) => compareDesc(parseISO(String(a.created_at || '')), parseISO(String(b.created_at || ''))));
   }, [inventory.data]);
 
-  const pageCount = Math.max(1, Math.ceil(today.length / PAGE_SIZE));
-  const current = Math.min(page, pageCount - 1);
-  const rows = today.slice(current * PAGE_SIZE, current * PAGE_SIZE + PAGE_SIZE);
+  const page = usePagedList(today, String(today.length));
+  const rows = page.rows;
 
   if (!isAdminRole(user?.role)) return null;
 
@@ -123,27 +120,7 @@ export default function CaixaModal({ onClose }) {
               </div>
             </section>
 
-            <div className="flex items-center justify-between gap-3">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={current === 0}
-                onClick={() => setPage(current - 1)}
-              >
-                Anterior
-              </Button>
-              <p className="text-on-surface-variant">
-                {current + 1} / {pageCount}
-              </p>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={current >= pageCount - 1}
-                onClick={() => setPage(current + 1)}
-              >
-                Próxima
-              </Button>
-            </div>
+            <Pagination state={page} />
 
             <CloseShiftReport
               payload={{

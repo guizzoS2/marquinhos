@@ -105,11 +105,7 @@ export const PdvCatalog = memo(function PdvCatalog({
               </button>
             ))}
           </div>
-          <Pagination
-            page={catalogPage.current}
-            pageCount={catalogPage.pageCount}
-            onPage={catalogPage.setPage}
-          />
+          <Pagination state={catalogPage} />
           </div>
         )}
       </div>

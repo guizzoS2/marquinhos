@@ -1,21 +1,17 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchSuppliers } from '../../services/dashboardService';
-import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
-
-const PAGE_SIZE = 8;
+import { Pagination } from '../ui/Pagination';
+import { usePagedList } from '../ui/usePagedList';
 
 export function SuppliersList({ onEdit, onDelete, onOpen }) {
   const { data, isLoading } = useQuery({
     queryKey: ['suppliers'],
     queryFn: fetchSuppliers,
   });
-  const [page, setPage] = useState(0);
   const suppliers = data?.suppliers || [];
-  const pageCount = Math.max(1, Math.ceil(suppliers.length / PAGE_SIZE));
-  const current = Math.min(page, pageCount - 1);
-  const rows = suppliers.slice(current * PAGE_SIZE, current * PAGE_SIZE + PAGE_SIZE);
+  const page = usePagedList(suppliers, String(suppliers.length));
+  const rows = page.rows;
 
   if (isLoading) {
     return <p className="text-on-surface-variant">Carregando fornecedores...</p>;
@@ -86,22 +82,7 @@ export function SuppliersList({ onEdit, onDelete, onOpen }) {
           </table>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-3">
-        <Button type="button" variant="secondary" disabled={current === 0} onClick={() => setPage(current - 1)}>
-          Anterior
-        </Button>
-        <p className="text-on-surface-variant">
-          {current + 1} / {pageCount}
-        </p>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={current >= pageCount - 1}
-          onClick={() => setPage(current + 1)}
-        >
-          Próxima
-        </Button>
-      </div>
+      <Pagination state={page} />
     </div>
   );
 }

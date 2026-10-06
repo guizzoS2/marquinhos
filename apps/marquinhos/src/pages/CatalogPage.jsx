@@ -193,11 +193,7 @@ export function CatalogPage() {
             </table>
           </div>
           <div className="p-4">
-            <Pagination
-              page={promotionPage.current}
-              pageCount={promotionPage.pageCount}
-              onPage={promotionPage.setPage}
-            />
+            <Pagination state={promotionPage} />
           </div>
         </section>
       ) : combos.length === 0 ? (
@@ -276,7 +272,7 @@ export function CatalogPage() {
             );
           })}
         </div>
-        <Pagination page={comboPage.current} pageCount={comboPage.pageCount} onPage={comboPage.setPage} />
+        <Pagination state={comboPage} />
         </div>
       )}
     </div>

@@ -101,7 +101,7 @@ function History({ title, items }) {
         <p className="text-sm text-on-surface-variant">Nenhuma data.</p>
       )}
       <div className="mt-3">
-        <Pagination page={page.current} pageCount={page.pageCount} onPage={page.setPage} />
+        <Pagination state={page} />
       </div>
     </section>
   );

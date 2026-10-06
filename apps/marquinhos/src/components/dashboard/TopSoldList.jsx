@@ -1,6 +1,6 @@
 import { Icon } from '../ui/Icon';
 import { Pagination } from '../ui/Pagination';
-import { PAGE_SIZE, usePagedList } from '../ui/usePagedList';
+import { usePagedList } from '../ui/usePagedList';
 
 const rankToneClass = {
   secondary: 'bg-primary text-on-primary',
@@ -21,7 +21,7 @@ export function TopSoldList({ items = [] }) {
       ) : null}
       <div className="space-y-6">
         {page.rows.map((item, index) => {
-          const rank = page.current * PAGE_SIZE + index;
+          const rank = page.current * page.pageSize + index;
           return (
           <div
             key={item.id}
@@ -60,7 +60,7 @@ export function TopSoldList({ items = [] }) {
         })}
       </div>
       <div className="mt-6">
-        <Pagination page={page.current} pageCount={page.pageCount} onPage={page.setPage} />
+        <Pagination state={page} />
       </div>
     </section>
   );

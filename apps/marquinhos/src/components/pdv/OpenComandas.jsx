@@ -51,7 +51,7 @@ export function OpenComandas({ sales = [] }) {
             </button>
           ))}
         </div>
-        <Pagination page={page.current} pageCount={page.pageCount} onPage={page.setPage} />
+        <Pagination state={page} />
         </div>
       )}
     </section>

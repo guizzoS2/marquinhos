@@ -116,7 +116,7 @@ export function StaffPage() {
           </li>
         ))}
       </ul>
-      <Pagination page={memberPage.current} pageCount={memberPage.pageCount} onPage={memberPage.setPage} />
+      <Pagination state={memberPage} />
     </div>
   );
 }

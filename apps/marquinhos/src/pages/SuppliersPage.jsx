@@ -183,11 +183,7 @@ export function SuppliersPage() {
           </table>
         </div>
         <div className="p-4">
-          <Pagination
-            page={purchasePage.current}
-            pageCount={purchasePage.pageCount}
-            onPage={purchasePage.setPage}
-          />
+          <Pagination state={purchasePage} />
         </div>
       </section>
     </div>

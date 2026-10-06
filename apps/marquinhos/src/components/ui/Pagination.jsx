@@ -1,22 +1,160 @@
-import { Button } from './Button';
+import { useEffect, useState } from 'react';
+import { Icon } from './Icon';
+import { PAGE_SIZES } from './usePagedList';
 
-export function Pagination({ page, pageCount, onPage }) {
+function pageWindow(currentIndex, pageCount) {
+  const current = currentIndex + 1;
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
+  }
+
+  const keep = new Set([
+    1,
+    2,
+    3,
+    pageCount - 2,
+    pageCount - 1,
+    pageCount,
+    current - 1,
+    current,
+    current + 1,
+  ]);
+  const sorted = [...keep].filter((page) => page >= 1 && page <= pageCount).sort((a, b) => a - b);
+  const items = [];
+  sorted.forEach((page, index) => {
+    if (index > 0 && page - sorted[index - 1] > 1) items.push(`ellipsis-${sorted[index - 1]}`);
+    items.push(page);
+  });
+  return items;
+}
+
+function commitPage(value, page, pageCount, onPage) {
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed)) return page;
+  const next = Math.min(pageCount, Math.max(1, parsed)) - 1;
+  if (next !== page) onPage(next);
+  return next;
+}
+
+function NavButton({ label, icon, disabled, onClick }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <Button type="button" variant="secondary" disabled={page <= 0} onClick={() => onPage(page - 1)}>
-        Anterior
-      </Button>
-      <p className="text-sm text-on-surface-variant">
-        {page + 1} / {pageCount}
-      </p>
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={page >= pageCount - 1}
-        onClick={() => onPage(page + 1)}
-      >
-        Próxima
-      </Button>
-    </div>
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex shrink-0 items-center justify-center min-h-11 min-w-11 rounded-lg border border-outline bg-surface text-on-surface disabled:opacity-40"
+    >
+      <Icon name={icon} />
+    </button>
+  );
+}
+
+export function Pagination({ state }) {
+  const page = state.current;
+  const { pageCount, setPage, pageSize, setPageSize } = state;
+  const [draft, setDraft] = useState(String(page + 1));
+
+  useEffect(() => {
+    setDraft(String(page + 1));
+  }, [page]);
+
+  const items = pageWindow(page, pageCount);
+
+  return (
+    <nav
+      aria-label="Paginação"
+      className="flex max-w-full min-w-0 flex-col gap-3 rounded-2xl border border-outline bg-surface px-3 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between"
+    >
+      <div className="flex flex-wrap items-center gap-2 text-sm text-on-surface">
+        <span>Página</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          aria-label="Número da página"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value.replace(/\D/g, ''))}
+          onBlur={() => setDraft(String(commitPage(draft, page, pageCount, setPage) + 1))}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            setDraft(String(commitPage(draft, page, pageCount, setPage) + 1));
+          }}
+          className="w-12 min-h-11 rounded-lg border border-outline bg-surface text-center text-sm font-semibold text-on-surface"
+        />
+        <span>de {pageCount}</span>
+      </div>
+
+      <div className="flex w-full min-w-0 items-center gap-1 overflow-x-auto lg:w-auto">
+        <NavButton
+          label="Primeira página"
+          icon="first_page"
+          disabled={page <= 0}
+          onClick={() => setPage(0)}
+        />
+        <NavButton
+          label="Página anterior"
+          icon="chevron_left"
+          disabled={page <= 0}
+          onClick={() => setPage(page - 1)}
+        />
+        {items.map((item) =>
+          typeof item === 'string' ? (
+            <span key={item} className="px-1 text-sm text-on-surface-variant" aria-hidden="true">
+              …
+            </span>
+          ) : (
+            <button
+              key={item}
+              type="button"
+              aria-label={`Página ${item}`}
+              aria-current={item === page + 1 ? 'page' : undefined}
+              onClick={() => setPage(item - 1)}
+              className={`inline-flex shrink-0 items-center justify-center min-h-11 min-w-11 rounded-lg text-sm ${
+                item === page + 1
+                  ? 'bg-primary font-semibold text-on-primary'
+                  : 'text-on-surface'
+              }`}
+            >
+              {item}
+            </button>
+          ),
+        )}
+        <NavButton
+          label="Próxima página"
+          icon="chevron_right"
+          disabled={page >= pageCount - 1}
+          onClick={() => setPage(page + 1)}
+        />
+        <NavButton
+          label="Última página"
+          icon="last_page"
+          disabled={page >= pageCount - 1}
+          onClick={() => setPage(pageCount - 1)}
+        />
+      </div>
+
+      <label className="flex flex-wrap items-center gap-2 text-sm text-on-surface">
+        Linhas por página
+        <span className="relative">
+          <select
+            aria-label="Linhas por página"
+            value={pageSize}
+            onChange={(event) => setPageSize(event.target.value)}
+            className="min-h-11 appearance-none rounded-lg border border-outline bg-surface py-2 pl-3 pr-9 text-sm font-semibold text-on-surface"
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <Icon
+            name="expand_more"
+            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm"
+          />
+        </span>
+      </label>
+    </nav>
   );
 }

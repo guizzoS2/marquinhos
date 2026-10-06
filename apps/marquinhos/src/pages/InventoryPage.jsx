@@ -319,7 +319,7 @@ export function InventoryPage() {
               </table>
             </div>
             <div className="p-4">
-              <Pagination page={stockPage.current} pageCount={stockPage.pageCount} onPage={stockPage.setPage} />
+              <Pagination state={stockPage} />
             </div>
           </div>
         ) : (
@@ -371,7 +371,7 @@ export function InventoryPage() {
               </button>
             ))}
           </div>
-          <Pagination page={stockPage.current} pageCount={stockPage.pageCount} onPage={stockPage.setPage} />
+          <Pagination state={stockPage} />
           </div>
         )}
         </>
@@ -428,11 +428,7 @@ export function InventoryPage() {
               </table>
             </div>
             <div className="p-4">
-              <Pagination
-                page={productionPage.current}
-                pageCount={productionPage.pageCount}
-                onPage={productionPage.setPage}
-              />
+              <Pagination state={productionPage} />
             </div>
           </section>
         )}
