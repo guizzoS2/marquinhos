@@ -1,32 +1,47 @@
-function coords(points, key, width, height, max) {
-  const count = points.length;
-  return points.map((point, index) => {
-    const x = count === 1 ? width / 2 : (index / (count - 1)) * width;
-    const y = height - (point[key] / max) * height;
-    return { x, y };
-  });
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+
+const RECEITA = '#FFDB15';
+const DESPESA = '#B31B25';
+const AXIS = '#5C5C5C';
+const GRID = '#E5E5E5';
+
+function axisReais(value) {
+  const number = Number(value) || 0;
+  if (Math.abs(number) >= 1000) {
+    return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(number / 1000)} mil`;
+  }
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(number);
 }
 
-function linePath(points) {
-  return points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
-    .join(' ');
-}
-
-function areaPath(points, baseline) {
-  if (!points.length) return '';
-  const first = points[0];
-  const last = points[points.length - 1];
-  return `${linePath(points)} L${last.x.toFixed(2)} ${baseline} L${first.x.toFixed(2)} ${baseline} Z`;
+function TrendTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0].payload;
+  return (
+    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2 shadow-sm">
+      <p className="text-xs font-bold text-on-surface mb-1">{row.label}</p>
+      <p className="text-xs text-on-surface">Receitas {row.revenueLabel}</p>
+      <p className="text-xs text-error">Despesas {row.expenseLabel}</p>
+    </div>
+  );
 }
 
 export function TrendChart({ points = [], unit = 'dia' }) {
-  const width = 640;
-  const height = 200;
-  const max = Math.max(1, ...points.map((point) => Math.max(point.revenue || 0, point.expense || 0)));
-  const revenue = coords(points, 'revenue', width, height, max);
-  const expense = coords(points, 'expense', width, height, max);
   const hasMovement = points.some((point) => point.revenue > 0 || point.expense > 0);
+  const data = points.map((point) => ({
+    label: point.label,
+    Receitas: (point.revenue || 0) / 100,
+    Despesas: (point.expense || 0) / 100,
+    revenueLabel: point.revenueLabel,
+    expenseLabel: point.expenseLabel,
+  }));
 
   return (
     <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm lg:col-span-2 min-w-0">
@@ -49,32 +64,55 @@ export function TrendChart({ points = [], unit = 'dia' }) {
       {!hasMovement ? (
         <p className="text-sm text-on-surface-variant">Sem movimentação neste período.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <div className="min-w-[36rem] lg:min-w-0">
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-40 md:h-56" role="img" aria-label="Receitas e despesas no período">
-              <path d={areaPath(revenue, height)} className="fill-primary/40" />
-              <path d={areaPath(expense, height)} className="fill-error/25" />
-              <path d={linePath(revenue)} className="fill-none stroke-primary stroke-2" />
-              <path d={linePath(expense)} className="fill-none stroke-error stroke-2" />
-              {revenue.map((point, index) => (
-                <circle key={`r-${points[index].label}-${index}`} cx={point.x} cy={point.y} r="4" className="fill-primary">
-                  <title>{`${points[index].label}: Receitas ${points[index].revenueLabel}`}</title>
-                </circle>
-              ))}
-              {expense.map((point, index) => (
-                <circle key={`e-${points[index].label}-${index}`} cx={point.x} cy={point.y} r="4" className="fill-error">
-                  <title>{`${points[index].label}: Despesas ${points[index].expenseLabel}`}</title>
-                </circle>
-              ))}
-            </svg>
-            <div className="flex justify-between gap-1 mt-2">
-              {points.map((point, index) => (
-                <span key={`${point.label}-${index}`} className="text-[10px] text-on-surface-variant text-center flex-1 truncate">
-                  {point.label}
-                </span>
-              ))}
-            </div>
-          </div>
+        <div className="h-64 w-full min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="overview-receita" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={RECEITA} stopOpacity={0.9} />
+                  <stop offset="100%" stopColor={RECEITA} stopOpacity={0.05} />
+                </linearGradient>
+                <linearGradient id="overview-despesa" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={DESPESA} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={DESPESA} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke={GRID} vertical={false} />
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                minTickGap={24}
+                tick={{ fill: AXIS, fontSize: 12 }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                width={56}
+                tickFormatter={axisReais}
+                tick={{ fill: AXIS, fontSize: 12 }}
+              />
+              <Tooltip content={<TrendTooltip />} cursor={{ stroke: GRID }} />
+              <Area
+                type="monotone"
+                dataKey="Receitas"
+                stroke="#E6C400"
+                strokeWidth={2.5}
+                fill="url(#overview-receita)"
+                dot={false}
+                activeDot={{ r: 5, fill: RECEITA, stroke: '#111111', strokeWidth: 1 }}
+              />
+              <Area
+                type="monotone"
+                dataKey="Despesas"
+                stroke={DESPESA}
+                strokeWidth={2.5}
+                fill="url(#overview-despesa)"
+                dot={false}
+                activeDot={{ r: 5, fill: DESPESA, stroke: '#FFFFFF', strokeWidth: 1 }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       )}
     </section>
