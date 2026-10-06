@@ -11,6 +11,7 @@ import {
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Tabs } from '../components/ui/Tabs';
 import { FreelancerCalendar } from '../components/freelancers/FreelancerCalendar';
 import { FreelancerProfile } from '../components/freelancers/FreelancerProfile';
 import { FreelancerRoster } from '../components/freelancers/FreelancerRoster';
@@ -198,54 +199,22 @@ export function FreelancersPage() {
 
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl">
-            <button
-              type="button"
-              onClick={() => setPanel('calendar')}
-              className={
-                panel === 'calendar'
-                  ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                  : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
-              }
-            >
-              Calendário
-            </button>
-            <button
-              type="button"
-              onClick={() => setPanel('list')}
-              className={
-                panel === 'list'
-                  ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                  : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
-              }
-            >
-              Lista
-            </button>
-          </div>
-          <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl">
-            <button
-              type="button"
-              onClick={() => setCalendarView('month')}
-              className={
-                calendarView === 'month'
-                  ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                  : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
-              }
-            >
-              Mensal
-            </button>
-            <button
-              type="button"
-              onClick={() => setCalendarView('week')}
-              className={
-                calendarView === 'week'
-                  ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                  : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
-              }
-            >
-              Semanal
-            </button>
-          </div>
+          <Tabs
+            items={[
+              { id: 'calendar', label: 'Calendário' },
+              { id: 'list', label: 'Lista' },
+            ]}
+            value={panel}
+            onChange={setPanel}
+          />
+          <Tabs
+            items={[
+              { id: 'month', label: 'Mensal' },
+              { id: 'week', label: 'Semanal' },
+            ]}
+            value={calendarView}
+            onChange={setCalendarView}
+          />
         </div>
         <div className="flex items-center gap-2">
           <button

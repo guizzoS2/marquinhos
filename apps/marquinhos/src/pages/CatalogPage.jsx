@@ -4,6 +4,7 @@ import { fetchInventory, removeCombo, removePromotion } from '../services/dashbo
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Tabs } from '../components/ui/Tabs';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
@@ -75,30 +76,14 @@ export function CatalogPage() {
         )}
       </PageHeader>
 
-      <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl w-full sm:w-auto">
-        <button
-          type="button"
-          onClick={() => setTab('promocoes')}
-          className={
-            tab === 'promocoes'
-              ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-              : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
-          }
-        >
-          Promoções
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('combos')}
-          className={
-            tab === 'combos'
-              ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-              : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
-          }
-        >
-          Combos
-        </button>
-      </div>
+      <Tabs
+        items={[
+          { id: 'promocoes', label: 'Promoções' },
+          { id: 'combos', label: 'Combos' },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {tab === 'promocoes' ? (
         <section className="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">

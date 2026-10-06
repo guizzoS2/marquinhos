@@ -4,6 +4,7 @@ import { fetchInventory, removeInventoryItem, removeProduction } from '../servic
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Tabs } from '../components/ui/Tabs';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
@@ -175,30 +176,14 @@ export function InventoryPage() {
           </div>
         </PageHeader>
 
-        <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setSection('stock')}
-            className={
-              section === 'stock'
-                ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
-            }
-          >
-            Estoque
-          </button>
-          <button
-            type="button"
-            onClick={() => setSection('production')}
-            className={
-              section === 'production'
-                ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
-            }
-          >
-            Produção
-          </button>
-        </div>
+        <Tabs
+          items={[
+            { id: 'stock', label: 'Estoque' },
+            { id: 'production', label: 'Produção' },
+          ]}
+          value={section}
+          onChange={setSection}
+        />
 
         {section === 'stock' ? (
         <>
@@ -242,30 +227,14 @@ export function InventoryPage() {
                 className="w-full pl-11 pr-4 min-h-11 bg-surface-container-low border-none rounded-full text-sm text-on-surface focus:ring-2 focus:ring-primary-container"
               />
             </div>
-            <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl">
-              <button
-                type="button"
-                onClick={() => setView('list')}
-                className={
-                  view === 'list'
-                    ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                    : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
-                }
-              >
-                Lista
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('cards')}
-                className={
-                  view === 'cards'
-                    ? 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                    : 'flex-1 sm:flex-none px-4 min-h-11 rounded-xl text-on-surface-variant'
-                }
-              >
-                Cards
-              </button>
-            </div>
+            <Tabs
+              items={[
+                { id: 'list', label: 'Lista' },
+                { id: 'cards', label: 'Cards' },
+              ]}
+              value={view}
+              onChange={setView}
+            />
           </div>
         </section>
 

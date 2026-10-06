@@ -5,6 +5,7 @@ import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { MetricCard } from '../components/ui/MetricCard';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Tabs } from '../components/ui/Tabs';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
@@ -183,22 +184,7 @@ export function CashFlowPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap gap-2">
-          {movementFilters.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setMovementFilter(item.id)}
-              className={
-                movementFilter === item.id
-                  ? 'px-3 py-2 min-h-11 rounded-full text-xs font-semibold bg-primary text-on-primary'
-                  : 'px-3 py-2 min-h-11 rounded-full text-xs font-medium bg-surface-container-lowest text-on-surface-variant'
-              }
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <Tabs items={movementFilters} value={movementFilter} onChange={setMovementFilter} />
         <div className="flex flex-wrap gap-2">
           {natureFilters.map((item) => (
             <button
