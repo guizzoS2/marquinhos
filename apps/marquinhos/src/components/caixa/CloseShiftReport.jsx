@@ -22,6 +22,7 @@ export function CloseShiftReport({ payload, onCancel }) {
     try {
       await closeCashShift();
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['caixa-shift'] });
       toast.success('Turno consolidado.');
       onCancel();
     } catch (err) {
@@ -71,11 +72,8 @@ export function CloseShiftReport({ payload, onCancel }) {
         <p className="text-on-surface-variant">Não há vendas pagas hoje.</p>
       ) : null}
       <div className="flex flex-wrap gap-3 justify-end">
-        <Button variant="secondary" type="button" onClick={onCancel}>
-          Fechar
-        </Button>
         <Button type="button" onClick={consolidate} disabled={!canClose || saving}>
-          {saving ? 'Consolidando...' : 'Consolidar turno'}
+          {saving ? 'Consolidando...' : 'Confirmar Fechamento'}
         </Button>
       </div>
     </div>

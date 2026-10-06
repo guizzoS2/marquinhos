@@ -8,7 +8,6 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { CashFlowPage } from './pages/CashFlowPage';
-import { CaixaPage } from './pages/CaixaPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { CatalogPage } from './pages/CatalogPage';
 import { PdvPage } from './pages/PdvPage';
@@ -39,7 +38,6 @@ function App() {
                   <Route element={<DashboardLayout />}>
                     <Route index element={<OverviewPage />} />
                     <Route path="fluxo-caixa" element={<CashFlowPage />} />
-                    <Route path="caixa" element={<CaixaPage />} />
                     <Route path="estoque" element={<InventoryPage />} />
                     <Route path="catalogo" element={<CatalogPage />} />
                     <Route path="pdv" element={<PdvPage />} />

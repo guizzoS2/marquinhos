@@ -29,7 +29,6 @@ import { ComboForm } from '../catalog/ComboForm';
 import { ComboDetail } from '../catalog/ComboDetail';
 import { PromotionForm } from '../catalog/PromotionForm';
 import { CustomerForm } from '../pdv/CustomerForm';
-import { CloseShiftReport } from '../caixa/CloseShiftReport';
 import { PurchaseForm } from '../suppliers/PurchaseForm';
 import { SuppliersList } from '../suppliers/SuppliersList';
 import { RoleSelect } from '../freelancers/RoleSelect';
@@ -50,7 +49,6 @@ const titles = {
   'edit-combo': 'Editar combo',
   'combo-detail': 'Detalhes do combo',
   'new-customer': 'Novo Cliente',
-  'close-register': 'Fechamento de caixa',
   'new-daily': 'Registrar Diária',
   'shift-detail': 'Agendamento',
   'new-freelancer': 'Novo Freelancer',
@@ -740,9 +738,7 @@ export function AppModal() {
                 ? 'point_of_sale'
                 : modal.type === 'confirm'
                   ? 'warning'
-                  : modal.type === 'close-register'
-                    ? 'account_balance'
-                    : 'info';
+                  : 'info';
 
   const wide =
     modal.type === 'import-statement' ||
@@ -755,8 +751,7 @@ export function AppModal() {
     modal.type === 'new-promotion' ||
     modal.type === 'edit-promotion' ||
     modal.type === 'new-purchase' ||
-    modal.type === 'suppliers-list' ||
-    modal.type === 'close-register';
+    modal.type === 'suppliers-list';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -908,8 +903,6 @@ export function AppModal() {
           />
         ) : modal.type === 'confirm' ? (
           <ConfirmForm payload={modal.payload} onCancel={closeModal} />
-        ) : modal.type === 'close-register' ? (
-          <CloseShiftReport payload={modal.payload} onCancel={closeModal} />
         ) : (
           <div className="space-y-6">
             <p className="text-on-surface-variant font-body leading-relaxed">

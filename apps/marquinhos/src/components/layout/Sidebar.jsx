@@ -10,7 +10,6 @@ import { isStockRole } from '../../services/roles';
 const allNavItems = [
   { to: '/', label: 'Visão Geral', icon: 'dashboard', end: true, admin: true },
   { to: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: 'payments', admin: true },
-  { to: '/caixa', label: 'Caixa', icon: 'account_balance', admin: true },
   { to: '/estoque', label: 'Estoque', icon: 'inventory_2' },
   { to: '/catalogo', label: 'Catálogo', icon: 'storefront' },
   { to: '/pdv', label: 'PDV', icon: 'point_of_sale' },
