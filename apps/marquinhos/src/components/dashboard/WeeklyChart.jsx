@@ -1,22 +1,24 @@
-const heightMap = {
-  0: 'h-1',
-  30: 'h-[30%]',
-  35: 'h-[35%]',
-  40: 'h-[40%]',
-  45: 'h-[45%]',
-  50: 'h-[50%]',
-  65: 'h-[65%]',
-  75: 'h-[75%]',
-  80: 'h-[80%]',
-  85: 'h-[85%]',
-  90: 'h-[90%]',
-  95: 'h-[95%]',
-  98: 'h-[98%]',
-};
+function filledRows(percent) {
+  const count = Math.max(0, Math.min(10, Math.round(Number(percent) / 10)));
+  return Array.from({ length: 10 }, (_, index) => index >= 10 - count);
+}
+
+function Bar({ filled, className, label }) {
+  const top = filled.findIndex(Boolean);
+  return (
+    <div className="w-1/2 h-full grid grid-rows-10" title={label}>
+      {filled.map((on, index) => (
+        <div key={index} className={on ? `${className} ${index === top ? 'rounded-t-sm' : ''}` : ''} />
+      ))}
+    </div>
+  );
+}
 
 export function WeeklyChart({ data = [], title = 'Performance Semanal' }) {
+  const hasValue = data.some((item) => Number(item.revenue) > 0 || Number(item.expense) > 0);
+
   return (
-    <section className="lg:col-span-2 bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm space-y-6">
+    <section className="lg:col-span-2 bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm space-y-6 min-w-0">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
         <div>
           <h2 className="text-xl font-extrabold tracking-tight">{title}</h2>
@@ -35,31 +37,40 @@ export function WeeklyChart({ data = [], title = 'Performance Semanal' }) {
           </div>
         </div>
       </div>
-      <div className="h-52 md:h-64 flex items-end justify-between gap-1 sm:gap-2 md:gap-4 pt-4 px-0 md:px-2">
-        {data.map((item) => (
-          <div key={item.day} className="flex-1 flex flex-col items-center gap-2 group">
-            <div className="w-full flex items-end justify-center gap-1 h-full">
+      {hasValue ? (
+        <div className="overflow-x-auto">
+          <div className="h-52 md:h-64 flex items-stretch gap-1 min-w-max">
+            {data.map((item, index) => (
               <div
-                className={`w-1/3 rounded-t-md transition-all ${
-                  item.highlight
-                    ? 'bg-primary shadow-lg shadow-primary/10'
-                    : 'bg-primary/20 group-hover:bg-primary/30'
-                } ${heightMap[item.revenue] || 'h-1/2'}`}
-              />
-              <div
-                className={`w-1/3 bg-error-container/20 rounded-t-md ${heightMap[item.expense] || 'h-1/3'}`}
-              />
-            </div>
-            <span
-              className={`text-[10px] font-bold ${
-                item.highlight ? 'text-on-surface' : 'text-on-surface-variant'
-              }`}
-            >
-              {item.day}
-            </span>
+                key={`${item.day}-${index}`}
+                className="w-8 sm:w-10 md:w-auto md:flex-1 md:min-w-8 h-full flex flex-col"
+              >
+                <div className="flex-1 min-h-0 flex items-stretch gap-0.5">
+                  <Bar
+                    filled={filledRows(item.revenue)}
+                    label={`Receita ${item.revenueLabel || ''}`}
+                    className={item.highlight ? 'bg-primary' : 'bg-primary/60'}
+                  />
+                  <Bar
+                    filled={filledRows(item.expense)}
+                    label={`Despesa ${item.expenseLabel || ''}`}
+                    className="bg-error-container"
+                  />
+                </div>
+                <span
+                  className={`h-5 text-[10px] font-bold text-center truncate ${
+                    item.highlight ? 'text-on-surface' : 'text-on-surface-variant'
+                  }`}
+                >
+                  {item.day}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <p className="text-sm text-on-surface-variant">Sem movimentação neste período.</p>
+      )}
     </section>
   );
 }

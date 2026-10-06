@@ -172,6 +172,8 @@ export function aggregateOverview(period, sources, now = new Date()) {
     day: bucket.day,
     revenue: snapHeight(bucket.revenue, maxBar),
     expense: snapHeight(bucket.expense, maxBar),
+    revenueLabel: formatCents(bucket.revenue),
+    expenseLabel: formatCents(bucket.expense),
     highlight: bucket.highlight,
   }));
 
