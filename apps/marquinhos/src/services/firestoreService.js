@@ -1153,6 +1153,91 @@ export async function registerPurchase(payload) {
   });
 }
 
+export async function cancelPurchase(purchaseId) {
+  await ensureDashboardSeed();
+  const id = String(purchaseId || '').trim();
+  if (!id) throw new Error('Compra não encontrada.');
+
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const purchase = (inventory.purchases || []).find((row) => String(row.id) === id);
+    if (!purchase) throw new Error('Compra não encontrada.');
+    if (purchase.status === 'cancelada') throw new Error('Esta compra já foi cancelada.');
+
+    const cash = migrateCashFlow(ops.cashFlow || cashFlowFallback);
+    const suppliersWrap =
+      ops.suppliers && Array.isArray(ops.suppliers.suppliers) ? ops.suppliers : { suppliers: [] };
+    let items = [...(inventory.items || [])];
+
+    (purchase.itens || []).forEach((linha) => {
+      const item = items.find((row) => String(row.id) === String(linha.produto_id));
+      if (!item) throw new Error('Produto não encontrado.');
+      const parsed = parseStockLabel(item.stock);
+      const quantidade = Number(linha.quantidade);
+      if (parsed.qty - quantidade < 0) {
+        throw new Error(`Produto já consumido: ${linha.nome || item.nome || item.name}.`);
+      }
+    });
+
+    (purchase.itens || []).forEach((linha) => {
+      const item = items.find((row) => String(row.id) === String(linha.produto_id));
+      items = replaceItem(items, linha.produto_id, applyStockDelta(item, -Number(linha.quantidade)));
+    });
+    const stored = items.map((item) => persistProduct(presentProduct(item, item.codigo)));
+
+    const now = new Date().toISOString();
+    const purchases = inventory.purchases.map((row) =>
+      String(row.id) === id
+        ? {
+            ...row,
+            status: 'cancelada',
+            cancelled_at: now,
+          }
+        : row
+    );
+    const expenses = (cash.expenses || []).filter((row) => String(row.id) !== String(purchase.expenseId));
+    const summary = buildCashFlowSummary(cash.incomes || [], expenses, {
+      revenueDelta: cash.summary?.revenueDelta,
+      expensesDelta: cash.summary?.expensesDelta,
+    });
+    const suppliers = (suppliersWrap.suppliers || []).map((item) => {
+      if (String(item.id) !== String(purchase.supplierId)) return item;
+      const history = (item.history || []).filter(
+        (row) =>
+          String(row.purchaseId) !== id && String(row.id) !== String(purchase.expenseId)
+      );
+      const latest = history[0];
+      return {
+        ...item,
+        history,
+        lastPurchase: latest?.date || '',
+        lastValue: latest?.value || '',
+        lastAmount: latest?.amount || 0,
+      };
+    });
+
+    return {
+      ops: {
+        ...ops,
+        inventory: {
+          ...inventory,
+          items: stored,
+          entries: (inventory.entries || []).filter((row) => String(row.purchaseId) !== id),
+          purchases,
+          metrics: recomputeInventoryMetrics(stored),
+        },
+        cashFlow: {
+          ...cash,
+          expenses,
+          summary: { ...cash.summary, ...summary },
+        },
+        suppliers: { ...suppliersWrap, suppliers },
+      },
+      value: purchases.find((row) => String(row.id) === id),
+    };
+  });
+}
+
 export async function createProduction(payload) {
   const current = await getInventory();
   const produtoId = String(payload.produto_id || '').trim();

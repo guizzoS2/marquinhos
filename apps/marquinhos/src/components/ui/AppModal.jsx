@@ -31,6 +31,7 @@ import { PromotionForm } from '../catalog/PromotionForm';
 import { CustomerForm } from '../pdv/CustomerForm';
 import { CloseShiftReport } from '../caixa/CloseShiftReport';
 import { PurchaseForm } from '../suppliers/PurchaseForm';
+import { SuppliersList } from '../suppliers/SuppliersList';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { PAYMENT_OPTIONS } from '../../services/inventoryProduct';
 
@@ -56,6 +57,7 @@ const titles = {
   'new-supplier': 'Novo Fornecedor',
   'edit-supplier': 'Editar fornecedor',
   'new-purchase': 'Nova compra',
+  'suppliers-list': 'Fornecedores',
   'supplier-detail': 'Histórico do fornecedor',
   'new-expense': 'Nova Despesa',
   'import-statement': 'Importar Extrato',
@@ -670,8 +672,8 @@ function ConfirmForm({ payload, onCancel }) {
       await payload?.onConfirm?.();
       toast.success(payload?.successMessage || 'Ação concluída.');
       onCancel();
-    } catch {
-      toast.error(payload?.errorMessage || 'Não foi possível concluir a ação.');
+    } catch (err) {
+      toast.error(err?.message || payload?.errorMessage || 'Não foi possível concluir a ação.');
     } finally {
       setSaving(false);
     }
@@ -695,7 +697,7 @@ function ConfirmForm({ payload, onCancel }) {
 }
 
 export function AppModal() {
-  const { modal, isOpen, closeModal } = useModal();
+  const { modal, isOpen, closeModal, openModal } = useModal();
   const [categories, setCategories] = useState(expenseCategories);
 
   useEffect(() => {
@@ -753,6 +755,7 @@ export function AppModal() {
     modal.type === 'new-promotion' ||
     modal.type === 'edit-promotion' ||
     modal.type === 'new-purchase' ||
+    modal.type === 'suppliers-list' ||
     modal.type === 'close-register';
 
   return (
@@ -818,6 +821,22 @@ export function AppModal() {
             suppliers={modal.payload?.suppliers || []}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'suppliers-list' ? (
+          <SuppliersList
+            onOpen={(supplier) =>
+              openModal('supplier-detail', {
+                supplierId: supplier.id,
+                supplier,
+              })
+            }
+            onEdit={(supplier) =>
+              openModal('edit-supplier', {
+                supplier,
+                onSuccess: modal.payload?.onChanged,
+              })
+            }
+            onDelete={(supplier) => modal.payload?.onDelete?.(supplier)}
           />
         ) : modal.type === 'supplier-detail' ? (
           <SupplierDetailView

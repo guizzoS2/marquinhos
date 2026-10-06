@@ -11,6 +11,7 @@ import {
   getSuppliers,
   deleteSupplier,
   registerPurchase,
+  cancelPurchase,
   createExpense,
   deleteExpense,
   createIncome,
@@ -85,6 +86,11 @@ export function editSupplier(supplierId, payload) {
 export function addPurchase(payload) {
   requireAdmin();
   return registerPurchase(payload);
+}
+
+export function reversePurchase(purchaseId) {
+  requireAdmin();
+  return cancelPurchase(purchaseId);
 }
 
 export function removeSupplier(supplierId) {
