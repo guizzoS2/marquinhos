@@ -27,8 +27,8 @@ function TrendTooltip({ active, payload }) {
   return (
     <div className="bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2 shadow-sm">
       <p className="text-xs font-bold text-on-surface mb-1">{row.label}</p>
-      <p className="text-xs text-on-surface">Receitas {row.revenueLabel}</p>
-      <p className="text-xs text-error">Despesas {row.expenseLabel}</p>
+      <p className="text-xs text-on-surface">Entradas {row.revenueLabel}</p>
+      <p className="text-xs text-error">Saídas {row.expenseLabel}</p>
     </div>
   );
 }
@@ -47,17 +47,17 @@ export function TrendChart({ points = [], unit = 'dia' }) {
     <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm lg:col-span-2 min-w-0">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
-          <h2 className="text-xl font-extrabold tracking-tight">Receitas vs Despesas</h2>
+          <h2 className="text-xl font-extrabold tracking-tight">Entradas vs Saídas</h2>
           <p className="text-xs text-on-surface-variant">Agrupado por {unit}</p>
         </div>
         <div className="flex flex-wrap gap-4 text-xs font-semibold">
           <span className="inline-flex items-center gap-2 text-on-surface">
             <span className="w-3 h-3 rounded-full bg-primary" />
-            Receitas
+            Entradas
           </span>
           <span className="inline-flex items-center gap-2 text-on-surface">
             <span className="w-3 h-3 rounded-full bg-error" />
-            Despesas
+            Saídas
           </span>
         </div>
       </div>
@@ -95,6 +95,7 @@ export function TrendChart({ points = [], unit = 'dia' }) {
               <Tooltip content={<TrendTooltip />} cursor={{ stroke: GRID }} />
               <Area
                 type="monotone"
+                name="Entradas"
                 dataKey="Receitas"
                 stroke="#E6C400"
                 strokeWidth={2.5}
@@ -104,6 +105,7 @@ export function TrendChart({ points = [], unit = 'dia' }) {
               />
               <Area
                 type="monotone"
+                name="Saídas"
                 dataKey="Despesas"
                 stroke={DESPESA}
                 strokeWidth={2.5}
