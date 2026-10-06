@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchOverview } from '../services/dashboardService';
 import { MetricCard } from '../components/ui/MetricCard';
+import { TrendChart } from '../components/dashboard/TrendChart';
+import { CategoryDonut } from '../components/dashboard/CategoryDonut';
 import { TopSoldList } from '../components/dashboard/TopSoldList';
 import { Icon } from '../components/ui/Icon';
 
@@ -51,11 +53,16 @@ export function OverviewPage() {
           <p className="text-on-surface-variant font-body">Carregando visão geral...</p>
         ) : (
           <>
-            <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6">
               {data.kpis.map((kpi) => (
                 <MetricCard key={kpi.id} {...kpi} />
               ))}
             </section>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+              <TrendChart points={data.series} unit={data.seriesUnit} />
+              <CategoryDonut slices={data.categories} total={data.categoriesTotal} />
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
               <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm">
