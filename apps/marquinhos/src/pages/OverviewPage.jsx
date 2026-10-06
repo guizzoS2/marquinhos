@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchOverview } from '../services/dashboardService';
 import { MetricCard } from '../components/ui/MetricCard';
-import { WeeklyChart } from '../components/dashboard/WeeklyChart';
 import { TopSoldList } from '../components/dashboard/TopSoldList';
 import { Icon } from '../components/ui/Icon';
 
@@ -58,29 +57,26 @@ export function OverviewPage() {
               ))}
             </section>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-              <WeeklyChart data={data.series} title="Receitas vs Despesas" />
-              <div className="space-y-6">
-                <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm">
-                  <h2 className="text-xl font-extrabold tracking-tight mb-6">Alertas do Sistema</h2>
-                  {data.alerts?.length ? (
-                    <ul className="space-y-4">
-                      {data.alerts.map((alert) => (
-                        <li key={alert.id} className="flex items-start gap-3">
-                          <Icon name={alert.icon || 'warning'} className="text-error" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-on-surface truncate">{alert.name}</p>
-                            <p className="text-xs text-on-surface-variant">{alert.detail}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-on-surface-variant">Nenhum alerta.</p>
-                  )}
-                </section>
-                <TopSoldList items={data.topSold} />
-              </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+              <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm">
+                <h2 className="text-xl font-extrabold tracking-tight mb-6">Alertas do Sistema</h2>
+                {data.alerts?.length ? (
+                  <ul className="space-y-4">
+                    {data.alerts.map((alert) => (
+                      <li key={alert.id} className="flex items-start gap-3">
+                        <Icon name={alert.icon || 'warning'} className="text-error" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-on-surface truncate">{alert.name}</p>
+                          <p className="text-xs text-on-surface-variant">{alert.detail}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-on-surface-variant">Nenhum alerta.</p>
+                )}
+              </section>
+              <TopSoldList items={data.topSold} />
             </div>
           </>
         )}

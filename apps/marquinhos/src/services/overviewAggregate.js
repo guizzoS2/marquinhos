@@ -1,13 +1,8 @@
 import {
-  eachDayOfInterval,
-  eachMonthOfInterval,
   endOfDay,
   endOfMonth,
   endOfWeek,
   endOfYear,
-  format,
-  isSameDay,
-  isSameMonth,
   isValid,
   isWithinInterval,
   parseISO,
@@ -16,29 +11,26 @@ import {
   startOfWeek,
   startOfYear,
 } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { formatCents, parseCashFlowDate, parseMoneyToCents } from './cashFlowUtils';
 
 const PERIODS = ['hoje', 'semana', 'mes', 'ano'];
-const HEIGHTS = [0, 30, 35, 40, 45, 50, 65, 75, 80, 85, 90, 95, 98];
 
 export function resolvePeriod(period, now = new Date()) {
   const id = PERIODS.includes(period) ? period : 'mes';
   if (id === 'hoje') {
-    return { id, start: startOfDay(now), end: endOfDay(now), unit: 'day' };
+    return { id, start: startOfDay(now), end: endOfDay(now) };
   }
   if (id === 'semana') {
     return {
       id,
       start: startOfWeek(now, { weekStartsOn: 1 }),
       end: endOfWeek(now, { weekStartsOn: 1 }),
-      unit: 'day',
     };
   }
   if (id === 'ano') {
-    return { id, start: startOfYear(now), end: endOfYear(now), unit: 'month' };
+    return { id, start: startOfYear(now), end: endOfYear(now) };
   }
-  return { id: 'mes', start: startOfMonth(now), end: endOfMonth(now), unit: 'day' };
+  return { id: 'mes', start: startOfMonth(now), end: endOfMonth(now) };
 }
 
 function reaisToCents(value) {
@@ -64,38 +56,6 @@ function rowDate(row) {
 
 function inPeriod(date, range) {
   return date && isWithinInterval(date, { start: range.start, end: range.end });
-}
-
-function bucketsFor(range, now) {
-  if (range.unit === 'month') {
-    return eachMonthOfInterval({ start: range.start, end: range.end }).map((date) => ({
-      key: format(date, 'yyyy-MM'),
-      day: format(date, 'MMM', { locale: ptBR }).replace('.', ''),
-      start: startOfMonth(date),
-      end: endOfMonth(date),
-      revenue: 0,
-      expense: 0,
-      highlight: isSameMonth(date, now),
-    }));
-  }
-  return eachDayOfInterval({ start: range.start, end: range.end }).map((date) => ({
-    key: format(date, 'yyyy-MM-dd'),
-    day:
-      range.id === 'mes'
-        ? format(date, 'dd')
-        : format(date, 'EEE', { locale: ptBR }).replace('.', ''),
-    start: startOfDay(date),
-    end: endOfDay(date),
-    revenue: 0,
-    expense: 0,
-    highlight: isSameDay(date, now),
-  }));
-}
-
-function snapHeight(value, max) {
-  if (!max || !value) return 0;
-  const pct = Math.round((value / max) * 100);
-  return HEIGHTS.reduce((best, key) => (Math.abs(key - pct) < Math.abs(best - pct) ? key : best));
 }
 
 function isProductCost(row) {
@@ -146,36 +106,14 @@ export function aggregateOverview(period, sources, now = new Date()) {
 
   let productCents = 0;
   let freelaCents = 0;
-  let expenseCentsTotal = 0;
   expenses.forEach((row) => {
     const cents = expenseCents(row);
-    expenseCentsTotal += cents;
     if (isProductCost(row)) productCents += cents;
     else if (isFreelaCost(row)) freelaCents += cents;
   });
   const costCents = productCents + freelaCents;
   const profitCents = revenueCents - costCents;
   const ticketCents = sales.length ? Math.round(revenueCents / sales.length) : 0;
-
-  const buckets = bucketsFor(range, now);
-  const bucketOf = (date) => buckets.find((bucket) => inPeriod(date, bucket));
-  sales.forEach((sale) => {
-    const bucket = bucketOf(rowDate(sale));
-    if (bucket) bucket.revenue += reaisToCents(sale.total);
-  });
-  expenses.forEach((row) => {
-    const bucket = bucketOf(rowDate(row));
-    if (bucket) bucket.expense += expenseCents(row);
-  });
-  const maxBar = buckets.reduce((max, bucket) => Math.max(max, bucket.revenue, bucket.expense), 0);
-  const series = buckets.map((bucket) => ({
-    day: bucket.day,
-    revenue: snapHeight(bucket.revenue, maxBar),
-    expense: snapHeight(bucket.expense, maxBar),
-    revenueLabel: formatCents(bucket.revenue),
-    expenseLabel: formatCents(bucket.expense),
-    highlight: bucket.highlight,
-  }));
 
   const sold = new Map();
   sales.forEach((sale) => {
@@ -247,7 +185,6 @@ export function aggregateOverview(period, sources, now = new Date()) {
       },
       { id: 'ticket', label: 'Ticket médio', value: formatCents(ticketCents), icon: 'receipt_long' },
     ],
-    series,
     alerts,
     topSold,
   };
