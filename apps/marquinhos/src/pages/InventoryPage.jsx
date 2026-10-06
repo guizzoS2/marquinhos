@@ -3,6 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchInventory, removeInventoryItem, removeProduction } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Pagination } from '../components/ui/Pagination';
+import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdminRole } from '../services/roles';
@@ -58,6 +61,8 @@ export function InventoryPage() {
       );
     });
   }, [data]);
+  const stockPage = usePagedList(items, `${filter}|${query}`);
+  const productionPage = usePagedList(todayProductions, section);
 
   function productName(produtoId) {
     const item = (data?.items || []).find((row) => String(row.id) === String(produtoId));
@@ -144,17 +149,11 @@ export function InventoryPage() {
 
   return (
     <>
-      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8">
-        <section className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-2">
-            <h2 className="text-3xl font-extrabold text-on-background tracking-tight">
-              Controle de Estoque e Produtos
-            </h2>
-            <p className="text-on-surface-variant max-w-xl font-body">
-              Gerencie seu estoque, defina alertas de estoque mínimo e registre novas entradas
-              com precisão editorial.
-            </p>
-          </div>
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+        <PageHeader
+          title="Controle de Estoque e Produtos"
+          description="Gerencie seu estoque, defina alertas de estoque mínimo e registre novas entradas com precisão editorial."
+        >
           <div className="flex flex-col sm:flex-row gap-3">
             {section === 'production' ? (
               <Button onClick={openProduction}>
@@ -174,7 +173,7 @@ export function InventoryPage() {
               </>
             )}
           </div>
-        </section>
+        </PageHeader>
 
         <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl w-full sm:w-auto">
           <button
@@ -277,7 +276,7 @@ export function InventoryPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
+                  <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase">
                     <th className="px-6 py-4">Item</th>
                     <th className="px-6 py-4">Código</th>
                     <th className="px-6 py-4">Categoria</th>
@@ -288,7 +287,7 @@ export function InventoryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-variant/30">
-                  {items.map((item) => (
+                  {stockPage.rows.map((item) => (
                     <tr
                       key={item.id}
                       tabIndex={0}
@@ -350,10 +349,14 @@ export function InventoryPage() {
                 </tbody>
               </table>
             </div>
+            <div className="p-4">
+              <Pagination page={stockPage.current} pageCount={stockPage.pageCount} onPage={stockPage.setPage} />
+            </div>
           </div>
         ) : (
+          <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {items.map((item) => (
+            {stockPage.rows.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -380,11 +383,11 @@ export function InventoryPage() {
                     </div>
                   </div>
                   {item.lowStock ? (
-                    <span className="px-3 py-1 rounded-full bg-error-container/20 text-on-error-container text-[11px] font-bold uppercase tracking-wider shrink-0">
+                    <span className="px-3 py-1 rounded-full bg-error-container/20 text-on-error-container text-[11px] font-bold uppercase shrink-0">
                       Estoque Baixo
                     </span>
                   ) : (
-                    <span className="px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase tracking-wider shrink-0">
+                    <span className="px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase shrink-0">
                       Estável
                     </span>
                   )}
@@ -399,6 +402,8 @@ export function InventoryPage() {
               </button>
             ))}
           </div>
+          <Pagination page={stockPage.current} pageCount={stockPage.pageCount} onPage={stockPage.setPage} />
+          </div>
         )}
         </>
         ) : (
@@ -406,7 +411,7 @@ export function InventoryPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
+                  <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase">
                     <th className="px-6 py-4">Produto</th>
                     <th className="px-6 py-4">Quantidade Produzida</th>
                     <th className="px-6 py-4">Estoque Atual</th>
@@ -422,7 +427,7 @@ export function InventoryPage() {
                       </td>
                     </tr>
                   ) : (
-                    todayProductions.map((row) => (
+                    productionPage.rows.map((row) => (
                       <tr key={row.id} className="bg-surface-container-lowest">
                         <td className="px-6 py-5 font-bold text-on-surface">
                           {productName(row.produto_id)}
@@ -452,6 +457,13 @@ export function InventoryPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="p-4">
+              <Pagination
+                page={productionPage.current}
+                pageCount={productionPage.pageCount}
+                onPage={productionPage.setPage}
+              />
             </div>
           </section>
         )}

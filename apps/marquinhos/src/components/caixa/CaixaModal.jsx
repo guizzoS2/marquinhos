@@ -87,7 +87,7 @@ export default function CaixaModal({ onClose }) {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
+                    <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase">
                       <th className="px-6 py-4">Data</th>
                       <th className="px-6 py-4">Hora</th>
                       <th className="px-6 py-4">Nº Comanda</th>

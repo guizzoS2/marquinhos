@@ -27,7 +27,7 @@ export function SuppliersList({ onEdit, onDelete, onOpen }) {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
+              <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase">
                 <th className="px-6 py-4">Nome</th>
                 <th className="px-6 py-4">Contato</th>
                 <th className="px-6 py-4">Última compra</th>

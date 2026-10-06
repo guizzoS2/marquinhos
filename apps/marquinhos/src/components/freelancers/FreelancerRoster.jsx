@@ -1,9 +1,11 @@
 import { Icon } from '../ui/Icon';
+import { Pagination } from '../ui/Pagination';
+import { usePagedList } from '../ui/usePagedList';
 
 function StatusBadge({ status, label }) {
   if (status === 'on_shift') {
     return (
-      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase tracking-wider shrink-0">
+      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase shrink-0">
         <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
         {label}
       </span>
@@ -12,27 +14,30 @@ function StatusBadge({ status, label }) {
 
   if (status === 'pending_payment') {
     return (
-      <span className="px-3 py-1 rounded-full bg-error-container/20 text-on-error-container text-[11px] font-bold uppercase tracking-wider shrink-0">
+      <span className="px-3 py-1 rounded-full bg-error-container/20 text-on-error-container text-[11px] font-bold uppercase shrink-0">
         {label}
       </span>
     );
   }
 
   return (
-    <span className="px-3 py-1 rounded-full bg-tertiary-container/20 text-on-tertiary-container text-[11px] font-bold uppercase tracking-wider shrink-0">
+    <span className="px-3 py-1 rounded-full bg-tertiary-container/20 text-on-tertiary-container text-[11px] font-bold uppercase shrink-0">
       {label}
     </span>
   );
 }
 
 export function FreelancerRoster({ people, onOpen }) {
+  const page = usePagedList(people, people.map((person) => person.id).join('|'));
+
   if (!people.length) {
     return <p className="text-on-surface-variant">Nenhum freelancer encontrado.</p>;
   }
 
   return (
+    <div className="space-y-4">
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {people.map((person) => (
+      {page.rows.map((person) => (
         <button
           key={person.id}
           type="button"
@@ -67,6 +72,8 @@ export function FreelancerRoster({ people, onOpen }) {
           </div>
         </button>
       ))}
+    </div>
+    <Pagination page={page.current} pageCount={page.pageCount} onPage={page.setPage} />
     </div>
   );
 }

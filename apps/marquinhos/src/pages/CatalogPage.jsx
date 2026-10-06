@@ -3,6 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchInventory, removeCombo, removePromotion } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Pagination } from '../components/ui/Pagination';
+import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
 import { formatCatalogDate } from '../services/catalogRules';
 
@@ -19,6 +22,8 @@ export function CatalogPage() {
     () => (data?.items || []).filter((item) => item.tipo === 'combo'),
     [data]
   );
+  const promotionPage = usePagedList(data?.promotions || [], 'promocoes');
+  const comboPage = usePagedList(combos, 'combos');
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -49,14 +54,8 @@ export function CatalogPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8">
-      <section className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-2">
-          <h2 className="text-3xl font-extrabold text-on-background tracking-tight">Catálogo</h2>
-          <p className="text-on-surface-variant max-w-xl font-body">
-            Promoções e combos vendidos como produto.
-          </p>
-        </div>
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+      <PageHeader title="Catálogo" description="Promoções e combos vendidos como produto.">
         {tab === 'promocoes' ? (
           <Button
             onClick={() =>
@@ -74,7 +73,7 @@ export function CatalogPage() {
             Novo combo
           </Button>
         )}
-      </section>
+      </PageHeader>
 
       <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl w-full sm:w-auto">
         <button
@@ -106,7 +105,7 @@ export function CatalogPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
+                <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase">
                   <th className="px-6 py-4">Produto</th>
                   <th className="px-6 py-4">Preço promocional</th>
                   <th className="px-6 py-4">Início</th>
@@ -123,7 +122,7 @@ export function CatalogPage() {
                     </td>
                   </tr>
                 ) : (
-                  data.promotions.map((row) => (
+                  promotionPage.rows.map((row) => (
                     <tr key={row.id} className="bg-surface-container-lowest">
                       <td className="px-6 py-5 font-bold text-on-surface">{productName(row.produto_id)}</td>
                       <td className="px-6 py-5 text-on-surface">
@@ -208,12 +207,20 @@ export function CatalogPage() {
               </tbody>
             </table>
           </div>
+          <div className="p-4">
+            <Pagination
+              page={promotionPage.current}
+              pageCount={promotionPage.pageCount}
+              onPage={promotionPage.setPage}
+            />
+          </div>
         </section>
       ) : combos.length === 0 ? (
         <p className="text-on-surface-variant">Nenhum combo cadastrado.</p>
       ) : (
+        <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {combos.map((combo) => {
+          {comboPage.rows.map((combo) => {
             const parts = partsOf(combo);
             return (
               <article
@@ -283,6 +290,8 @@ export function CatalogPage() {
               </article>
             );
           })}
+        </div>
+        <Pagination page={comboPage.current} pageCount={comboPage.pageCount} onPage={comboPage.setPage} />
         </div>
       )}
     </div>

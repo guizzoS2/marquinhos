@@ -6,7 +6,7 @@ export function ComboDetail({ combo, parts = [], onCancel }) {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <p className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest">
+        <p className="text-xs font-label font-bold text-on-surface-variant uppercase">
           Código {combo.codigo || '—'}
         </p>
         <h4 className="font-headline text-2xl font-bold text-on-surface">{combo.nome || combo.name}</h4>

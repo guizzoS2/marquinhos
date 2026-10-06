@@ -1,4 +1,6 @@
 import { Button } from '../ui/Button';
+import { Pagination } from '../ui/Pagination';
+import { usePagedList } from '../ui/usePagedList';
 import { Icon } from '../ui/Icon';
 import { formatCents, parseMoneyToCents } from '../../services/cashFlowUtils';
 import { formatShiftDate, shiftStatusLabel, toIsoDate } from '../../services/freelancerSchedule';
@@ -69,14 +71,16 @@ export function FreelancerProfile({ person, dailies, onClose, onEdit, onDelete, 
 }
 
 function History({ title, items }) {
+  const page = usePagedList(items, `${title}|${items.length}`);
+
   return (
     <section className="mb-6">
-      <h4 className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest mb-3">
+      <h4 className="text-xs font-label font-bold text-on-surface-variant uppercase mb-3">
         {title}
       </h4>
       {items.length ? (
         <ul className="space-y-2">
-          {items.map((item) => (
+          {page.rows.map((item) => (
             <li
               key={item.id || `${item.date}-${item.value}`}
               className="rounded-2xl bg-surface-container-low p-4 flex items-center justify-between gap-3"
@@ -96,6 +100,9 @@ function History({ title, items }) {
       ) : (
         <p className="text-sm text-on-surface-variant">Nenhuma data.</p>
       )}
+      <div className="mt-3">
+        <Pagination page={page.current} pageCount={page.pageCount} onPage={page.setPage} />
+      </div>
     </section>
   );
 }

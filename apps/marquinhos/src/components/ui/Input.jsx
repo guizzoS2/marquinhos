@@ -12,7 +12,7 @@ export function Input({
       {label ? (
         <label
           htmlFor={inputId}
-          className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+          className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
         >
           {label}
         </label>

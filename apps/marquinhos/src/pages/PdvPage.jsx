@@ -6,6 +6,7 @@ import { PdvCatalog } from '../components/pdv/PdvCatalog';
 import { PdvSummary } from '../components/pdv/PdvSummary';
 import { OpenComandas } from '../components/pdv/OpenComandas';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdminRole } from '../services/roles';
 
@@ -24,20 +25,14 @@ export function PdvPage() {
 
   return (
     <CartProvider>
-      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-        <section className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-          <div className="space-y-2">
-            <h2 className="text-3xl font-extrabold text-on-background tracking-tight">PDV</h2>
-            <p className="text-on-surface-variant max-w-xl font-body">
-              Monte a venda e confirme tudo de uma vez.
-            </p>
-          </div>
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+        <PageHeader title="PDV" description="Monte a venda e confirme tudo de uma vez.">
           {canClose ? (
             <Button type="button" className="w-full md:w-auto" onClick={() => setShowCaixa(true)}>
               Fechar Caixa
             </Button>
           ) : null}
-        </section>
+        </PageHeader>
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_24rem] gap-6 items-start">
           <PdvCatalog
             items={inventory.data.items || []}

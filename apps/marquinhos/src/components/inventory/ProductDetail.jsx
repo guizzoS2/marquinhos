@@ -3,7 +3,7 @@ import { Button } from '../ui/Button';
 function Field({ label, value }) {
   return (
     <div className="space-y-1">
-      <p className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest">
+      <p className="text-xs font-label font-bold text-on-surface-variant uppercase">
         {label}
       </p>
       <p className="text-on-surface font-medium break-words">{value || '—'}</p>
@@ -23,7 +23,7 @@ export function ProductDetail({ item, canDelete, onEdit, onDelete, onCancel }) {
           className="w-20 h-20 rounded-2xl object-cover shrink-0 bg-surface"
         />
         <div className="min-w-0 space-y-2">
-          <p className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest">
+          <p className="text-xs font-label font-bold text-on-surface-variant uppercase">
             Código {item.codigo || '—'}
           </p>
           <h4 className="font-headline text-2xl font-bold text-on-surface break-words">{item.nome}</h4>

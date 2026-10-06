@@ -115,7 +115,7 @@ export function ShiftDetailForm({ shift, people = [], roles = [], onSuccess, onC
       <div className="space-y-2">
         <label
           htmlFor="shift-freelancer"
-          className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+          className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
         >
           Selecionar Freelancer
         </label>
@@ -157,7 +157,7 @@ export function ShiftDetailForm({ shift, people = [], roles = [], onSuccess, onC
       <div className="space-y-2">
         <label
           htmlFor="shift-status"
-          className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+          className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
         >
           Status
         </label>

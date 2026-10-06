@@ -106,7 +106,7 @@ export function NewFreelancerForm({ person, roles, onSuccess, onCancel }) {
       <div className="space-y-2">
         <label
           htmlFor="freelancer-photo"
-          className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+          className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
         >
           Foto (opcional)
         </label>

@@ -219,7 +219,7 @@ export function PdvSummary({ customers = [] }) {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="text-on-surface-variant text-xs font-bold uppercase tracking-widest">
+              <tr className="text-on-surface-variant text-xs font-bold uppercase">
                 <th className="px-2 py-3">Produto</th>
                 <th className="px-2 py-3">Qtd</th>
                 <th className="px-2 py-3">Unitário</th>
@@ -296,7 +296,7 @@ export function PdvSummary({ customers = [] }) {
             onChange={(event) => dispatch({ type: 'set-received', valorRecebido: event.target.value })}
           />
           <div className="space-y-2">
-            <p className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+            <p className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
               Troco
             </p>
             <p className={`min-h-11 flex items-center font-headline text-xl font-extrabold ${troco != null && troco < 0 ? 'text-error' : 'text-on-surface'}`}>

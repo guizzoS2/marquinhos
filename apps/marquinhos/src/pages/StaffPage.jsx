@@ -4,6 +4,9 @@ import { addStaffMember, fetchStaff } from '../services/dashboardService';
 import { roleLabel } from '../services/roles';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Pagination } from '../components/ui/Pagination';
+import { usePagedList } from '../components/ui/usePagedList';
 import { useToast } from '../contexts/ToastContext';
 
 export function StaffPage() {
@@ -21,6 +24,7 @@ export function StaffPage() {
     role: 'stock',
   });
   const [error, setError] = useState('');
+  const memberPage = usePagedList(members, String(members.length));
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -42,13 +46,11 @@ export function StaffPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 md:space-y-8">
-      <section className="space-y-2">
-        <h1 className="font-headline text-3xl font-extrabold tracking-tight">Equipe da casa</h1>
-        <p className="text-on-surface-variant text-sm">
-          Logins internos do bar. Funcionário de estoque não vê caixa nem freelas da plataforma.
-        </p>
-      </section>
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+      <PageHeader
+        title="Equipe da casa"
+        description="Logins internos do bar. Funcionário de estoque não vê caixa nem freelas da plataforma."
+      />
 
       <form
         className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-surface-container-lowest rounded-2xl p-4 md:p-6"
@@ -80,7 +82,7 @@ export function StaffPage() {
           onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
         />
         <div className="space-y-2">
-          <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+          <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
             Papel
           </label>
           <select
@@ -101,7 +103,7 @@ export function StaffPage() {
       </form>
 
       <ul className="space-y-3">
-        {members.map((member) => (
+        {memberPage.rows.map((member) => (
           <li
             key={member.uid}
             className="bg-surface-container-lowest rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
@@ -114,6 +116,7 @@ export function StaffPage() {
           </li>
         ))}
       </ul>
+      <Pagination page={memberPage.current} pageCount={memberPage.pageCount} onPage={memberPage.setPage} />
     </div>
   );
 }

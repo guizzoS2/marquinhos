@@ -10,6 +10,7 @@ import {
 } from '../services/freelancerSchedule';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
 import { FreelancerCalendar } from '../components/freelancers/FreelancerCalendar';
 import { FreelancerProfile } from '../components/freelancers/FreelancerProfile';
 import { FreelancerRoster } from '../components/freelancers/FreelancerRoster';
@@ -176,20 +177,11 @@ export function FreelancersPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 lg:p-12 relative">
-      <div className="fixed top-0 right-0 w-1/3 h-1/2 bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10" />
-      <div className="fixed bottom-0 left-0 w-1/4 h-1/3 bg-secondary/5 blur-[100px] rounded-full pointer-events-none -z-10" />
-
-      <header className="flex flex-col gap-4 mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-          <div>
-            <h2 className="font-headline text-3xl font-extrabold text-on-surface tracking-tight">
-              Gestão de Freelancers
-            </h2>
-            <p className="text-on-surface-variant mt-1 font-body">
-              Coordene turnos, pagamentos e disponibilidade em tempo real.
-            </p>
-          </div>
+    <div className="p-4 md:p-8 relative space-y-6 md:space-y-8">
+      <PageHeader
+        title="Gestão de Freelancers"
+        description="Coordene turnos, pagamentos e disponibilidade em tempo real."
+      >
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="grid grid-cols-2 sm:flex gap-3">
               <Button onClick={openCreate} className="px-3 sm:px-5">
@@ -202,8 +194,7 @@ export function FreelancersPage() {
               </Button>
             </div>
           </div>
-        </div>
-      </header>
+      </PageHeader>
 
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">

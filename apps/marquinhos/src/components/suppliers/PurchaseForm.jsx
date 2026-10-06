@@ -93,7 +93,7 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
     <form className="space-y-5" onSubmit={handleSubmit}>
       <Input label="Data" type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
       <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Fornecedor
         </label>
         <select
@@ -111,7 +111,7 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
         </select>
       </div>
       <div className="space-y-3">
-        <p className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <p className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Produtos
         </p>
         {lines.map((line, index) => (
@@ -166,7 +166,7 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
         </Button>
       </div>
       <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Categoria financeira
         </label>
         <select

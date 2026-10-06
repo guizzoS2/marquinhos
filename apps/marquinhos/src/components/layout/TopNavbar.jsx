@@ -6,7 +6,7 @@ export function TopNavbar({ onMenuClick }) {
   const { user } = useAuth();
 
   return (
-    <header className="w-full sticky top-0 z-40 bg-white border-b border-outline-variant font-headline antialiased tracking-tight flex justify-between items-center gap-3 px-4 md:px-8 h-16">
+    <header className="w-full sticky top-0 z-40 bg-white border-b border-outline-variant font-headline antialiased flex justify-between items-center gap-3 px-4 md:px-8 h-16">
       <button
         type="button"
         onClick={onMenuClick}

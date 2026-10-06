@@ -3,8 +3,12 @@ import { formatCents, parseMoneyToCents } from '../../services/cashFlowUtils';
 import { formatShiftDate, shiftStatusLabel } from '../../services/freelancerSchedule';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
+import { Pagination } from '../ui/Pagination';
+import { usePagedList } from '../ui/usePagedList';
 
 function ShiftTableComponent({ shifts, people, onEdit, onDelete }) {
+  const page = usePagedList(shifts, shifts.map((shift) => shift.id || shift.date).join('|'));
+
   if (!shifts.length) {
     return (
       <section className="bg-surface-container-lowest rounded-2xl p-6 md:p-8">
@@ -18,7 +22,7 @@ function ShiftTableComponent({ shifts, people, onEdit, onDelete }) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[40rem] text-left">
           <thead>
-            <tr className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
+            <tr className="text-xs font-label uppercase text-on-surface-variant">
               <th className="p-4 font-bold">Data</th>
               <th className="p-4 font-bold">Freelancer</th>
               <th className="p-4 font-bold">Função</th>
@@ -28,7 +32,7 @@ function ShiftTableComponent({ shifts, people, onEdit, onDelete }) {
             </tr>
           </thead>
           <tbody>
-            {shifts.map((shift) => {
+            {page.rows.map((shift) => {
               const person = people.find((item) => String(item.id) === String(shift.freelancerId));
               return (
                 <tr
@@ -59,6 +63,9 @@ function ShiftTableComponent({ shifts, people, onEdit, onDelete }) {
             })}
           </tbody>
         </table>
+      </div>
+      <div className="p-4">
+        <Pagination page={page.current} pageCount={page.pageCount} onPage={page.setPage} />
       </div>
     </section>
   );

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { Card } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/PageHeader';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Icon } from '../components/ui/Icon';
@@ -69,15 +70,8 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 md:space-y-8">
-      <section className="space-y-2">
-        <h1 className="font-headline text-3xl font-extrabold text-on-surface tracking-tight">
-          Perfil do Usuário
-        </h1>
-        <p className="text-on-surface-variant font-body">
-          Dados da sua conta neste bar.
-        </p>
-      </section>
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+      <PageHeader title="Perfil do Usuário" description="Dados da sua conta neste bar." />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
         <Card className="p-5 md:p-8 space-y-6">
@@ -93,7 +87,7 @@ export function ProfilePage() {
               </h2>
               <p className="text-sm text-on-surface-variant">{form.title}</p>
             </div>
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-xs font-bold uppercase tracking-wider">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-xs font-bold uppercase">
               <Icon name="verified" className="text-sm" />
               {roleLabel(user?.role)}
             </span>

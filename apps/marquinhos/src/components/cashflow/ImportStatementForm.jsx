@@ -64,7 +64,7 @@ export function ImportStatementForm({ onSuccess, onCancel }) {
         freela não passa por aqui.
       </p>
       <label className="block space-y-2">
-        <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant pl-1">
+        <span className="text-xs font-bold uppercase text-on-surface-variant pl-1">
           Arquivo
         </span>
         <input

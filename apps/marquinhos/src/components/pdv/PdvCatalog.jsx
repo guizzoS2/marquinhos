@@ -1,6 +1,8 @@
 import { memo, useMemo, useState } from 'react';
 import { isValid, parseISO } from 'date-fns';
 import { Input } from '../ui/Input';
+import { Pagination } from '../ui/Pagination';
+import { usePagedList } from '../ui/usePagedList';
 import { saleUnitPrice } from '../../services/catalogRules';
 import { useCartDispatch } from '../../contexts/CartContext';
 
@@ -47,6 +49,7 @@ export const PdvCatalog = memo(function PdvCatalog({
       return nome.includes(term) || codigo.includes(term);
     });
   }, [catalog, category, query]);
+  const catalogPage = usePagedList(visible, `${category}|${query}`);
 
   return (
     <section className="min-w-0 space-y-4">
@@ -73,12 +76,13 @@ export const PdvCatalog = memo(function PdvCatalog({
           </button>
         ))}
       </div>
-      <div className="overflow-y-auto max-h-[70vh]">
+      <div>
         {visible.length === 0 ? (
           <p className="text-on-surface-variant">Nenhum produto encontrado.</p>
         ) : (
+          <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {visible.map((item) => (
+            {catalogPage.rows.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -100,6 +104,12 @@ export const PdvCatalog = memo(function PdvCatalog({
                 <p className="font-headline font-extrabold text-on-surface">{money(item.preco)}</p>
               </button>
             ))}
+          </div>
+          <Pagination
+            page={catalogPage.current}
+            pageCount={catalogPage.pageCount}
+            onPage={catalogPage.setPage}
+          />
           </div>
         )}
       </div>

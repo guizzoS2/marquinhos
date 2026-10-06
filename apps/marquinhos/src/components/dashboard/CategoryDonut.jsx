@@ -27,7 +27,7 @@ function DonutTooltip({ active, payload }) {
 export function CategoryDonut({ slices = [], total = 'R$ 0,00' }) {
   return (
     <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm min-w-0">
-      <h2 className="text-xl font-extrabold tracking-tight mb-6">Vendas por Categoria</h2>
+      <h2 className="text-xl font-extrabold mb-6">Vendas por Categoria</h2>
       {!slices.length ? (
         <p className="text-sm text-on-surface-variant">Sem vendas no período.</p>
       ) : (
@@ -56,7 +56,7 @@ export function CategoryDonut({ slices = [], total = 'R$ 0,00' }) {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <p className="text-[10px] uppercase tracking-wider text-on-surface-variant">Total</p>
+              <p className="text-[10px] uppercase text-on-surface-variant">Total</p>
               <p className="text-sm font-black text-on-surface text-center px-10">{total}</p>
             </div>
           </div>

@@ -3,6 +3,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchCashFlow, removeCashExpense } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
+import { MetricCard } from '../components/ui/MetricCard';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Pagination } from '../components/ui/Pagination';
+import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
 import { useToast } from '../contexts/ToastContext';
 import {
@@ -69,6 +73,20 @@ export function CashFlowPage() {
   }, [data, fromDate, toDate, movementFilter, natureFilter]);
 
   const periodLabel = formatIsoRange(fromDate, toDate);
+  const movementPage = usePagedList(
+    movements,
+    `${fromDate}|${toDate}|${movementFilter}|${natureFilter}`
+  );
+  const summaryCards = [
+    { label: 'Receita total', value: summary.totalRevenue, icon: 'payments', badge: summary.revenueDelta },
+    { label: 'Despesas totais', value: summary.totalExpenses, icon: 'money_off' },
+    { label: 'Despesas fixas', value: summary.fixedExpenses, icon: 'lock' },
+    { label: 'Despesas variáveis', value: summary.variableExpenses, icon: 'tune' },
+    { label: '% variável / receita', value: summary.variableShare, icon: 'percent' },
+    { label: 'Margem contribuição', value: summary.contributionMargin, icon: 'pie_chart' },
+    { label: 'Lucro estimado', value: summary.estimatedProfit, icon: 'trending_up' },
+    { label: 'Lucro líquido', value: summary.netProfit, icon: 'account_balance' },
+  ];
 
   function refreshCashFlow() {
     queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
@@ -106,93 +124,22 @@ export function CashFlowPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 font-body">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-on-surface font-headline">
-          Fluxo de Caixa
-        </h1>
-        <p className="text-on-surface-variant text-sm">
-          Visão consolidada da saúde financeira do Artisan Lounge
-        </p>
-      </div>
+    <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 font-body">
+      <PageHeader
+        title="Fluxo de Caixa"
+        description="Visão consolidada da saúde financeira do Artisan Lounge"
+      />
 
-      <div className="bg-surface/90 border border-outline-variant/20 p-4 md:p-6 rounded-xl">
-        <div className="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 md:gap-4">
-          <div className="space-y-1 border-b sm:border-b-0 sm:border-r border-outline-variant/20 pb-3 sm:pb-0 pr-0 sm:pr-4">
-            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
-              Receita total
-            </p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-lg font-extrabold text-on-surface">
-                {summary.totalRevenue}
-              </span>
-              <span className="text-xs font-semibold text-secondary flex items-center gap-0.5">
-                <Icon name="arrow_drop_up" className="text-sm" />
-                {summary.revenueDelta}
-              </span>
-            </div>
-          </div>
-          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
-            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
-              Despesas totais
-            </p>
-            <span className="text-lg font-extrabold text-on-surface">
-              {summary.totalExpenses}
-            </span>
-          </div>
-          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
-            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
-              Despesas fixas
-            </p>
-            <span className="text-lg font-extrabold text-on-surface">
-              {summary.fixedExpenses}
-            </span>
-          </div>
-          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
-            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
-              Despesas variáveis
-            </p>
-            <span className="text-lg font-extrabold text-tertiary">
-              {summary.variableExpenses}
-            </span>
-          </div>
-          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
-            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
-              % variável / receita
-            </p>
-            <span className="text-lg font-extrabold text-on-surface">
-              {summary.variableShare}
-            </span>
-          </div>
-          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
-            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
-              Margem contribuição
-            </p>
-            <span className="text-lg font-extrabold text-secondary">
-              {summary.contributionMargin}
-            </span>
-          </div>
-          <div className="space-y-1 md:border-r border-outline-variant/20 pr-2 md:pr-4">
-            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
-              Lucro estimado
-            </p>
-            <span className="text-lg font-extrabold text-secondary">
-              {summary.estimatedProfit}
-            </span>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
-              Lucro líquido
-            </p>
-            <span className="text-lg font-extrabold text-on-surface">{summary.netProfit}</span>
-          </div>
-        </div>
-      </div>
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+        {summaryCards.map((card, index) => (
+          <MetricCard key={card.label} {...card} accent={index} />
+        ))}
+      </section>
 
       <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-end gap-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full sm:w-auto">
           <label className="block space-y-2 min-w-0">
-            <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+            <span className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
               De
             </span>
             <input
@@ -204,7 +151,7 @@ export function CashFlowPage() {
             />
           </label>
           <label className="block space-y-2 min-w-0">
-            <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+            <span className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
               Até
             </span>
             <input
@@ -230,7 +177,7 @@ export function CashFlowPage() {
           <Icon name="file_upload" className="text-lg" />
           Importar extrato/PDF
         </Button>
-        <span className="text-[10px] font-bold text-error bg-error/10 px-2 py-0.5 rounded uppercase tracking-wider self-center">
+        <span className="text-[10px] font-bold text-error bg-error/10 px-2 py-0.5 rounded uppercase self-center">
           {periodLabel}
         </span>
       </div>
@@ -284,7 +231,7 @@ export function CashFlowPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/20">
-              {movements.map((row) => (
+              {movementPage.rows.map((row) => (
                 <tr
                   key={`${row.tipo}-${row.id}`}
                   className="hover:bg-surface-container-low transition-colors"
@@ -308,7 +255,7 @@ export function CashFlowPage() {
                       </span>
                       {row.tipo === 'saida' ? (
                         <span
-                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
                             row.nature === 'fixed'
                               ? 'bg-primary text-on-primary'
                               : 'bg-surface-container text-on-surface'
@@ -342,7 +289,7 @@ export function CashFlowPage() {
                   </td>
                 </tr>
               ))}
-              {!movements.length ? (
+              {!movementPage.rows.length ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-8 text-center text-on-surface-variant text-sm">
                     Nenhuma movimentação neste filtro.
@@ -353,6 +300,11 @@ export function CashFlowPage() {
           </table>
         </div>
       </div>
+      <Pagination
+        page={movementPage.current}
+        pageCount={movementPage.pageCount}
+        onPage={movementPage.setPage}
+      />
     </div>
   );
 }

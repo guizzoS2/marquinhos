@@ -1,4 +1,6 @@
 import { useCartDispatch } from '../../contexts/CartContext';
+import { Pagination } from '../ui/Pagination';
+import { usePagedList } from '../ui/usePagedList';
 
 function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -7,6 +9,7 @@ function money(value) {
 export function OpenComandas({ sales = [] }) {
   const dispatch = useCartDispatch();
   const open = sales.filter((sale) => sale.status === 'aberta');
+  const page = usePagedList(open, open.map((sale) => sale.id).join('|'));
 
   function load(sale) {
     dispatch({
@@ -31,8 +34,9 @@ export function OpenComandas({ sales = [] }) {
       {open.length === 0 ? (
         <p className="text-on-surface-variant">Nenhuma comanda aberta.</p>
       ) : (
+        <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {open.map((sale) => (
+          {page.rows.map((sale) => (
             <button
               key={sale.id}
               type="button"
@@ -46,6 +50,8 @@ export function OpenComandas({ sales = [] }) {
               <p className="font-headline text-xl font-bold text-on-surface mt-3">{money(sale.total)}</p>
             </button>
           ))}
+        </div>
+        <Pagination page={page.current} pageCount={page.pageCount} onPage={page.setPage} />
         </div>
       )}
     </section>

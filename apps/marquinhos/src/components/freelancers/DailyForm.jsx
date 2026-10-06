@@ -106,7 +106,7 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
       <div className="space-y-2">
         <label
           htmlFor="daily-freelancer"
-          className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+          className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
         >
           Selecionar Freelancer
         </label>
@@ -149,7 +149,7 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
       <div className="space-y-2">
         <label
           htmlFor="daily-status"
-          className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+          className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
         >
           Status
         </label>
@@ -174,7 +174,7 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
       </div>
 
       <div className="space-y-2">
-        <p className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <p className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Data do Turno
         </p>
         <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl">

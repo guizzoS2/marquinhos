@@ -4,6 +4,9 @@ import { ptBR } from 'date-fns/locale';
 import { fetchInventory, fetchSuppliers, removeSupplier, reversePurchase } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Pagination } from '../components/ui/Pagination';
+import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
 
 function formatPurchaseDate(value) {
@@ -64,6 +67,9 @@ export function SuppliersPage() {
     });
   }
 
+  const purchases = inventory.data?.purchases || [];
+  const purchasePage = usePagedList(purchases, String(purchases.length));
+
   if (inventory.isLoading || !inventory.data) {
     return (
       <div className="p-4 md:p-8 text-on-surface-variant font-body">Carregando compras...</div>
@@ -71,19 +77,13 @@ export function SuppliersPage() {
   }
 
   const suppliers = suppliersQuery.data?.suppliers || [];
-  const purchases = inventory.data.purchases || [];
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8">
-      <section className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-extrabold text-on-background tracking-tight font-headline">
-            Compras
-          </h1>
-          <p className="text-on-surface-variant max-w-xl font-body">
-            Histórico das compras. Uma compra finalizada só pode ser estornada.
-          </p>
-        </div>
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+      <PageHeader
+        title="Compras"
+        description="Histórico das compras. Uma compra finalizada só pode ser estornada."
+      >
         <div className="flex flex-col sm:flex-row flex-wrap gap-3">
           <Button
             variant="secondary"
@@ -120,13 +120,13 @@ export function SuppliersPage() {
             Novo fornecedor
           </Button>
         </div>
-      </section>
+      </PageHeader>
 
       <section className="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
+              <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase">
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Fornecedor</th>
                 <th className="px-6 py-4">Categoria</th>
@@ -144,7 +144,7 @@ export function SuppliersPage() {
                   </td>
                 </tr>
               ) : (
-                purchases.map((row) => {
+                purchasePage.rows.map((row) => {
                   const cancelled = row.status === 'cancelada';
                   return (
                     <tr key={row.id} className="bg-surface-container-lowest">
@@ -181,6 +181,13 @@ export function SuppliersPage() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="p-4">
+          <Pagination
+            page={purchasePage.current}
+            pageCount={purchasePage.pageCount}
+            onPage={purchasePage.setPage}
+          />
         </div>
       </section>
     </div>

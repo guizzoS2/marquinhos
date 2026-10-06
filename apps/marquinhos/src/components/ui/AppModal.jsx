@@ -147,19 +147,19 @@ function SupplierDetailView({ supplierId, fallbackSupplier, onCancel }) {
     <div className="space-y-6">
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1 sm:col-span-2">
-          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest">
+          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase">
             Nome
           </dt>
           <dd className="font-headline font-bold text-on-surface">{supplier.name}</dd>
         </div>
         <div className="space-y-1">
-          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest">
+          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase">
             Contato
           </dt>
           <dd className="text-on-surface">{supplier.contact || '—'}</dd>
         </div>
         <div className="space-y-1">
-          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest">
+          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase">
             CNPJ
           </dt>
           <dd className="text-on-surface">{supplier.cnpj || '—'}</dd>
@@ -284,7 +284,7 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
         required
       />
       <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Fornecedor cadastrado
         </label>
         <select
@@ -313,7 +313,7 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
         required
       />
       <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Categoria
         </label>
         <select
@@ -329,7 +329,7 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
         </select>
       </div>
       <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Natureza
         </label>
         <div className="flex gap-2 p-1 bg-surface-container-low rounded-2xl">
@@ -370,7 +370,7 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
         required
       />
       <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Recorrência
         </label>
         <select
@@ -447,7 +447,7 @@ function NewOrderForm({ onSuccess, onCancel }) {
         required
       />
       <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Categoria
         </label>
         <select
@@ -579,7 +579,7 @@ function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
         required
       />
       <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Produto
         </label>
         <select
@@ -615,7 +615,7 @@ function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
       {stockOnly ? null : (
         <>
           <div className="space-y-2">
-            <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+            <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
               Fornecedor
             </label>
             <select

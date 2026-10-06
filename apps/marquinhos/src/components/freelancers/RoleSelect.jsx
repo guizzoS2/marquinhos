@@ -15,7 +15,7 @@ export function RoleSelect({
     <div className="space-y-2">
       <label
         htmlFor={id}
-        className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+        className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
       >
         {label}
       </label>

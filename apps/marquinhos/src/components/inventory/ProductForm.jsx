@@ -116,7 +116,7 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
       <div className="space-y-2">
         <label
           htmlFor="produto-descricao"
-          className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+          className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
         >
           Descrição
         </label>
@@ -132,7 +132,7 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
         <div className="space-y-2 md:col-span-2">
           <label
             htmlFor="produto-categoria"
-            className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1"
+            className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
           >
             Categoria
           </label>
@@ -195,7 +195,7 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
         required
       />
       <label className="block space-y-2">
-        <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
+        <span className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Foto
         </span>
         <input
