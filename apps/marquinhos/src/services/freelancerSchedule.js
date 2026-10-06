@@ -1,6 +1,7 @@
 export const SHIFT_STATUSES = [
   { id: 'on_shift', label: 'Em turno' },
   { id: 'pending_payment', label: 'Pendente pagamento' },
+  { id: 'paid', label: 'Pago' },
   { id: 'available', label: 'Disponível' },
 ];
 
