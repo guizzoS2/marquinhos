@@ -195,6 +195,66 @@ export function buildCashFlowCsv(data, { natureFilter = 'all' } = {}) {
   return `\uFEFF${lines.join('\n')}`;
 }
 
+function movementTime(row) {
+  if (row?.createdAt) {
+    const time = new Date(row.createdAt).getTime();
+    if (!Number.isNaN(time)) return time;
+  }
+  const iso = parseCashFlowDate(row?.date);
+  if (!iso) return 0;
+  return new Date(`${iso}T00:00:00`).getTime();
+}
+
+function formatMovementStamp(row) {
+  if (row?.createdAt) {
+    const date = new Date(row.createdAt);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+  }
+  return row?.date || '—';
+}
+
+export function unifyCashMovements(incomes = [], expenses = []) {
+  const rows = [
+    ...incomes.map((row) => ({
+      id: row.id,
+      data_hora: formatMovementStamp(row),
+      date: row.date,
+      createdAt: row.createdAt || null,
+      descricao: row.description || '—',
+      entidade: row.cliente || row.customer || null,
+      categoria: row.category || '',
+      categoryIcon: row.categoryIcon || 'payments',
+      categoryTone: row.categoryTone || 'secondary',
+      valor: row.value || formatCents(row.amount),
+      tipo: 'entrada',
+      nature: null,
+    })),
+    ...expenses.map((row) => ({
+      id: row.id,
+      data_hora: formatMovementStamp(row),
+      date: row.date,
+      createdAt: row.createdAt || null,
+      descricao: row.description || '—',
+      entidade: row.supplier || null,
+      categoria: row.category || '',
+      categoryIcon: row.categoryIcon || 'payments',
+      categoryTone: null,
+      valor: row.value || formatCents(row.amount),
+      tipo: 'saida',
+      nature: row.nature || 'variable',
+    })),
+  ];
+  return rows.sort((left, right) => movementTime(right) - movementTime(left) || String(right.id).localeCompare(String(left.id)));
+}
+
 export function downloadCsv(filename, content) {
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);

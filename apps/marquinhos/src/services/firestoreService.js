@@ -13,6 +13,7 @@ import {
   buildCashFlowSummary,
   formatCents,
   parseMoneyToCents,
+  unifyCashMovements,
 } from './cashFlowUtils';
 import {
   assertInstallments,
@@ -289,15 +290,16 @@ async function patchDocument(path, data) {
 
 function migrateCashFlow(raw) {
   if (!raw) return cashFlowFallback;
+  const { movements: _movements, ...source } = raw;
 
-  const categories = raw.categories?.length ? raw.categories : expenseCategories;
-  const incomes = (raw.incomes || []).map((row, index) => ({
+  const categories = source.categories?.length ? source.categories : expenseCategories;
+  const incomes = (source.incomes || []).map((row, index) => ({
     ...row,
     id: row.id || `inc-${index + 1}`,
     amount: row.amount ?? parseMoneyToCents(row.value),
   }));
 
-  const expenses = (raw.expenses || []).map((row, index) => {
+  const expenses = (source.expenses || []).map((row, index) => {
     const categoryMeta = categories.find(
       (item) => item.id === row.categoryId || item.name === row.category
     );
@@ -320,21 +322,27 @@ function migrateCashFlow(raw) {
   });
 
   const summary = buildCashFlowSummary(incomes, expenses, {
-    revenueDelta: raw.summary?.revenueDelta,
-    expensesDelta: raw.summary?.expensesDelta,
+    revenueDelta: source.summary?.revenueDelta,
+    expensesDelta: source.summary?.expensesDelta,
   });
 
   return {
-    ...raw,
-    period: raw.period || cashFlowFallback.period,
+    ...source,
+    period: source.period || cashFlowFallback.period,
     categories,
     incomes,
     expenses,
     summary: {
-      ...raw.summary,
+      ...source.summary,
       ...summary,
     },
   };
+}
+
+function cashFlowDocument(cash) {
+  if (!cash || typeof cash !== 'object') return cash;
+  const { movements: _movements, ...rest } = cash;
+  return rest;
 }
 
 export async function ensureDashboardSeed() {
@@ -452,7 +460,11 @@ export async function getOverview() {
 export async function getCashFlow() {
   await ensureDashboardSeed();
   const raw = (await readDocument(DOCS.cashFlow)) || cashFlowFallback;
-  return migrateCashFlow(raw);
+  const cash = migrateCashFlow(raw);
+  return {
+    ...cash,
+    movements: unifyCashMovements(cash.incomes, cash.expenses),
+  };
 }
 
 export async function getInventory() {
@@ -543,14 +555,14 @@ export async function createExpense(payload) {
     expensesDelta: current.summary?.expensesDelta,
   });
 
-  const next = {
+  const next = cashFlowDocument({
     ...current,
     expenses,
     summary: {
       ...current.summary,
       ...summary,
     },
-  };
+  });
 
   await writeDocument(DOCS.cashFlow, next);
 
@@ -569,7 +581,7 @@ export async function createExpense(payload) {
 }
 
 async function saveCashFlow(current, patch) {
-  const nextBase = { ...current, ...patch };
+  const nextBase = { ...cashFlowDocument(current), ...cashFlowDocument(patch) };
   const summary = buildCashFlowSummary(nextBase.incomes || [], nextBase.expenses || [], {
     revenueDelta: current.summary?.revenueDelta,
     expensesDelta: current.summary?.expensesDelta,
