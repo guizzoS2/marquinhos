@@ -14,6 +14,7 @@ import {
   registerPurchase,
   cancelPurchase,
   createExpense,
+  addExpenseCategory,
   updateExpense,
   deleteExpense,
   createIncome,
@@ -131,6 +132,11 @@ export function editFreelancer(freelancerId, payload) {
 export function createCashExpense(payload) {
   requireAdmin();
   return createExpense(payload);
+}
+
+export function createExpenseCategory(name) {
+  requireAdmin();
+  return addExpenseCategory(name);
 }
 
 export function editCashExpense(expenseId, payload) {

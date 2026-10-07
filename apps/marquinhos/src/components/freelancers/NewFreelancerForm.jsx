@@ -59,14 +59,12 @@ export function NewFreelancerForm({ person, roles, onSuccess, onCancel }) {
       status: person?.status || 'available',
     };
     try {
-      if (person?.id != null) {
-        await editFreelancer(person.id, payload);
-        toast.success('Freelancer atualizado.');
-      } else {
-        await createFreelancer(payload);
-        toast.success('Freelancer cadastrado com sucesso.');
-      }
-      onSuccess?.();
+      const saved =
+        person?.id != null
+          ? await editFreelancer(person.id, payload)
+          : await createFreelancer(payload);
+      toast.success(person?.id != null ? 'Freelancer atualizado.' : 'Freelancer cadastrado com sucesso.');
+      onSuccess?.(saved);
       onCancel();
     } catch {
       setError(person ? 'Não foi possível atualizar o freelancer.' : 'Não foi possível cadastrar o freelancer.');

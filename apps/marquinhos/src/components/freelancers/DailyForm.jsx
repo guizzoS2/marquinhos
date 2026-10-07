@@ -1,8 +1,10 @@
-import { useMemo, useReducer } from 'react';
+import { useMemo, useReducer, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { Input } from '../ui/Input';
+import { FieldModal } from '../ui/FieldModal';
 import { useToast } from '../../contexts/ToastContext';
 import { createDaily } from '../../services/dashboardService';
 import {
@@ -12,6 +14,7 @@ import {
   toIsoDate,
 } from '../../services/freelancerSchedule';
 import { Dropdown } from '../ui/Dropdown';
+import { NewFreelancerForm } from './NewFreelancerForm';
 import { RoleSelect } from './RoleSelect';
 
 function dailyReducer(state, action) {
@@ -23,15 +26,27 @@ function dailyReducer(state, action) {
       freelancerId: allowed.has(String(state.freelancerId)) ? state.freelancerId : '',
     };
   }
+  if (action.type === 'select-person') {
+    return { ...state, role: action.role, freelancerId: action.freelancerId };
+  }
   if (action.type === 'patch') {
     return { ...state, ...action.patch };
   }
   return state;
 }
 
+function mergeById(base, extra) {
+  const seen = new Set(base.map((item) => String(item.id)));
+  return [...base, ...extra.filter((item) => item?.id != null && !seen.has(String(item.id)))];
+}
+
 export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const today = toIsoDate(new Date());
+  const [extraPeople, setExtraPeople] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const roster = useMemo(() => mergeById(people, extraPeople), [people, extraPeople]);
   const [state, dispatch] = useReducer(dailyReducer, {
     role: roles[0] || 'Barman',
     freelancerId: '',
@@ -44,7 +59,7 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
   const [saving, setSaving] = useReducer((_, next) => next, false);
   const [error, setError] = useReducer((_, next) => next, '');
 
-  const options = useMemo(() => peopleByRole(people, state.role), [people, state.role]);
+  const options = useMemo(() => peopleByRole(roster, state.role), [roster, state.role]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -95,13 +110,14 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
   }
 
   return (
+    <>
     <form className="space-y-5" onSubmit={handleSubmit}>
       <RoleSelect
         id="daily-role"
         label="Função"
         roles={roles}
         value={state.role}
-        onChange={(role) => dispatch({ type: 'role', role, people })}
+        onChange={(role) => dispatch({ type: 'role', role, people: roster })}
         required
       />
 
@@ -112,17 +128,29 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
         >
           Selecionar Freelancer
         </label>
-        <Dropdown
-          id="daily-freelancer"
-          label="Selecionar Freelancer"
-          muted
-          leading="person_search"
-          disabled={!options.length}
-          value={state.freelancerId}
-          placeholder={options.length ? 'Selecione um profissional' : 'Nenhum freelancer nesta função'}
-          onChange={(freelancerId) => dispatch({ type: 'patch', patch: { freelancerId } })}
-          options={options.map((person) => ({ value: person.id, label: person.name }))}
-        />
+        <div className="flex items-center gap-2">
+          <Dropdown
+            id="daily-freelancer"
+            className="min-w-0 flex-1"
+            label="Selecionar Freelancer"
+            muted
+            leading="person_search"
+            disabled={!options.length}
+            value={state.freelancerId}
+            placeholder={options.length ? 'Selecione um profissional' : 'Nenhum freelancer nesta função'}
+            onChange={(freelancerId) => dispatch({ type: 'patch', patch: { freelancerId } })}
+            options={options.map((person) => ({ value: person.id, label: person.name }))}
+          />
+          <Button
+            type="button"
+            size="icon"
+            className="shrink-0"
+            aria-label="Novo freelancer"
+            onClick={() => setAdding(true)}
+          >
+            <Icon name="add" />
+          </Button>
+        </div>
       </div>
 
       <Input
@@ -203,5 +231,25 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
         </p>
       </div>
     </form>
+      {adding ? (
+        <FieldModal title="Novo Freelancer" icon="person_add" onClose={() => setAdding(false)}>
+          <NewFreelancerForm
+            person={{ role: state.role }}
+            roles={roles}
+            onCancel={() => setAdding(false)}
+            onSuccess={(person) => {
+              if (person?.id == null) return;
+              setExtraPeople((prev) => mergeById(prev, [person]));
+              dispatch({
+                type: 'select-person',
+                role: person.role || state.role,
+                freelancerId: person.id,
+              });
+              queryClient.invalidateQueries({ queryKey: ['freelancers'] });
+            }}
+          />
+        </FieldModal>
+      ) : null}
+    </>
   );
 }

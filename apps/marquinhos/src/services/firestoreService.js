@@ -519,6 +519,40 @@ export async function createExpense(payload) {
   return expense;
 }
 
+function expenseCategoryId(name, taken) {
+  const base =
+    name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'categoria';
+  if (!taken.has(base)) return base;
+  let suffix = 2;
+  while (taken.has(`${base}-${suffix}`)) suffix += 1;
+  return `${base}-${suffix}`;
+}
+
+export async function addExpenseCategory(name) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o nome da categoria.');
+  const categories = current.categories?.length ? [...current.categories] : [...expenseCategories];
+  if (categories.some((item) => item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Essa categoria já existe.');
+  }
+  const category = {
+    id: expenseCategoryId(label, new Set(categories.map((item) => item.id))),
+    name: label,
+    type: 'expense',
+    defaultNature: 'variable',
+    icon: 'category',
+  };
+  await saveCashFlow(current, { categories: [...categories, category] });
+  return category;
+}
+
 async function saveCashFlow(current, patch) {
   const nextBase = { ...cashFlowDocument(current), ...cashFlowDocument(patch) };
   const summary = buildCashFlowSummary(nextBase.incomes || [], nextBase.expenses || [], {

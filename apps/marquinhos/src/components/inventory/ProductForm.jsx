@@ -83,11 +83,12 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
       if (isEdit) {
         await editInventoryProduct(item.id, payload);
         toast.success('Produto atualizado.');
+        onSuccess?.();
       } else {
-        await addInventoryProduct(payload);
+        const created = await addInventoryProduct(payload);
         toast.success('Produto cadastrado.');
+        onSuccess?.(created?.item);
       }
-      onSuccess?.();
       onCancel();
     } catch (err) {
       const message = err?.message || 'Não foi possível salvar o produto.';
