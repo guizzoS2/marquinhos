@@ -2286,6 +2286,64 @@ async function storeStaffPeople(people) {
   return next;
 }
 
+function memberFromPerson(person) {
+  const permissions = person.permissions || [];
+  return {
+    uid: person.uid,
+    email: person.email,
+    name: person.name,
+    title: person.title || '—',
+    role: permissions.includes('caixa') ? 'admin' : 'stock',
+    createdAt: person.createdAt,
+  };
+}
+
+export async function listStaff() {
+  const staff = await getStaff();
+  return (staff.people || []).map(memberFromPerson);
+}
+
+export async function createStaffMember(payload) {
+  const name = String(payload.name || '').trim();
+  const email = String(payload.email || '').trim().toLowerCase();
+  const password = String(payload.password || '');
+  const role = payload.role === 'admin' ? 'admin' : 'stock';
+  if (!name || !email || !password) {
+    throw new Error('Informe nome, e-mail e senha.');
+  }
+  if (password.length < 6) {
+    throw new Error('Senha mínima de 6 caracteres.');
+  }
+  if (await emailTaken(email)) {
+    throw new Error('Já existe um usuário com este e-mail.');
+  }
+
+  const staff = await getStaff();
+  if ((staff.people || []).some((item) => item.email === email)) {
+    throw new Error('Já existe um usuário com este e-mail.');
+  }
+
+  const created = await createAuthUserRest({ email, password });
+  const member = {
+    email,
+    name,
+    title: String(payload.title || (role === 'stock' ? 'Estoquista' : 'Administrador')).trim(),
+    role,
+    uid: created.uid,
+    createdAt: new Date().toISOString(),
+  };
+  const nextId =
+    (staff.people || []).reduce((max, person) => Math.max(max, Number(person.id) || 0), 0) + 1;
+  await storeStaffPeople([...(staff.people || []), { id: nextId, ...member }]);
+  await upsertUserProfile(created.uid, {
+    ...member,
+    roles: ['staff'],
+    tenantId: TENANT_ID,
+    barRole: role,
+  });
+  return { member: memberFromPerson({ ...member, permissions: role === 'admin' ? ['caixa'] : [] }), staff };
+}
+
 export async function listStaffPeople() {
   const staff = await getStaff();
   return staff.people || [];

@@ -45,6 +45,8 @@ import {
   updateFreelancer,
   deleteFreelancer,
   importStatementRows,
+  listStaff,
+  createStaffMember,
   listStaffPeople,
   createHouseStaff,
   updateHouseStaff,
@@ -279,7 +281,13 @@ export function importCashStatement(rows) {
 }
 
 export function fetchStaff() {
-  return listStaffPeople();
+  requireAdmin();
+  return listStaff();
+}
+
+export function addStaffMember(payload) {
+  requireAdmin();
+  return createStaffMember(payload);
 }
 
 export function createStaff(payload) {

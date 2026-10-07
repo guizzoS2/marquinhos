@@ -3,28 +3,24 @@ import { Icon } from '../ui/Icon';
 import { Button } from '../ui/Button';
 import { BrandLogo } from './BrandLogo';
 import { useAuth } from '../../contexts/AuthContext';
-import { effectivePermissions, homeForUser, isBarOwner } from '../../services/roles';
+import { isStockRole } from '../../services/roles';
 
 const allNavItems = [
-  { to: '/', label: 'Visão Geral', icon: 'dashboard', end: true, permission: 'overview' },
-  { to: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: 'payments', permission: 'caixa' },
-  { to: '/estoque', label: 'Estoque', icon: 'inventory_2', permission: 'estoque' },
-  { to: '/catalogo', label: 'Catálogo', icon: 'storefront', permission: 'catalogo' },
-  { to: '/pdv', label: 'PDV', icon: 'point_of_sale', permission: 'pdv' },
-  { to: '/fornecedores', label: 'Fornecedores', icon: 'local_shipping', permission: 'fornecedores' },
-  { to: '/freelancers', label: 'Freelancers', icon: 'group', owner: true },
-  { to: '/equipe', label: 'Equipe da casa', icon: 'badge', permission: 'equipe' },
-  { to: '/perfil', label: 'Perfil', icon: 'person', permission: 'perfil' },
+  { to: '/', label: 'Visão Geral', icon: 'dashboard', end: true, admin: true },
+  { to: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: 'payments', admin: true },
+  { to: '/estoque', label: 'Estoque', icon: 'inventory_2' },
+  { to: '/catalogo', label: 'Catálogo', icon: 'storefront' },
+  { to: '/pdv', label: 'PDV', icon: 'point_of_sale' },
+  { to: '/fornecedores', label: 'Fornecedores', icon: 'local_shipping', admin: true },
+  { to: '/freelancers', label: 'Freelancers', icon: 'group', admin: true },
+  { to: '/equipe', label: 'Equipe da casa', icon: 'badge', admin: true },
+  { to: '/perfil', label: 'Perfil', icon: 'person' },
 ];
 
 export function Sidebar({ open = false, onNavigate }) {
   const { logout, user } = useAuth();
-  const owner = isBarOwner(user);
-  const permissions = effectivePermissions(user);
-  const navItems = allNavItems.filter((item) => {
-    if (item.owner) return owner;
-    return permissions.includes(item.permission);
-  });
+  const stockOnly = isStockRole(user?.role);
+  const navItems = allNavItems.filter((item) => !item.admin || !stockOnly);
 
   return (
     <aside
@@ -33,7 +29,7 @@ export function Sidebar({ open = false, onNavigate }) {
       } md:translate-x-0`}
     >
       <NavLink
-        to={homeForUser(user)}
+        to={stockOnly ? '/estoque' : '/'}
         className="mb-8 block"
         aria-label="Marquinho's"
         onClick={onNavigate}
