@@ -206,7 +206,13 @@ async function writeEmailLock(email, uid) {
   requireDb();
   const id = String(email || '').trim().toLowerCase();
   if (!id) return;
-  await setDoc(doc(db, 'emails', id), { uid, email: id });
+  const ref = doc(db, 'emails', id);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    if (snap.data()?.uid === uid) return;
+    throw new Error('E-mail já cadastrado.');
+  }
+  await setDoc(ref, { uid, email: id });
 }
 
 async function emailTaken(email) {
@@ -2286,14 +2292,28 @@ async function storeStaffPeople(people) {
   return next;
 }
 
+const STOCK_ACCESS = ['estoque', 'catalogo', 'pdv', 'perfil'];
+const ADMIN_ACCESS = ['overview', 'caixa', 'estoque', 'catalogo', 'pdv', 'fornecedores', 'equipe', 'perfil'];
+
+function accessForRole(role) {
+  const admin = role === 'admin';
+  return {
+    role: admin ? 'admin' : 'stock',
+    permissions: admin ? ADMIN_ACCESS : STOCK_ACCESS,
+  };
+}
+
 function memberFromPerson(person) {
   const permissions = person.permissions || [];
   return {
-    uid: person.uid,
-    email: person.email,
+    id: person.id,
+    uid: person.uid || null,
+    email: person.email || '',
     name: person.name,
-    title: person.title || '—',
+    title: person.title || '',
     role: permissions.includes('caixa') ? 'admin' : 'stock',
+    disabled: Boolean(person.disabled),
+    accountStatus: person.accountStatus || (person.uid ? 'active' : ''),
     createdAt: person.createdAt,
   };
 }
@@ -2342,6 +2362,138 @@ export async function createStaffMember(payload) {
     barRole: role,
   });
   return { member: memberFromPerson({ ...member, permissions: role === 'admin' ? ['caixa'] : [] }), staff };
+}
+
+export async function saveStaffPerson(payload) {
+  const name = String(payload.name || '').trim();
+  const title = String(payload.title || '').trim();
+  const access = accessForRole(payload.role);
+  if (!name) throw new Error('Informe o nome.');
+  if (!title) throw new Error('Informe o cargo.');
+  const current = await getStaff();
+  const nextId =
+    (current.people || []).reduce((max, person) => Math.max(max, Number(person.id) || 0), 0) + 1;
+  const person = normalizeStaffPerson({
+    id: nextId,
+    name,
+    title,
+    role: access.role,
+    permissions: access.permissions,
+    createdAt: new Date().toISOString(),
+  });
+  await storeStaffPeople([...(current.people || []), person]);
+  return memberFromPerson(person);
+}
+
+export async function updateStaffPerson(staffId, payload) {
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing) throw new Error('Funcionário não encontrado.');
+  const name = String(payload.name ?? existing.name).trim();
+  const title = String(payload.title ?? existing.title).trim();
+  const access = accessForRole(payload.role);
+  if (!name) throw new Error('Informe o nome.');
+  if (!title) throw new Error('Informe o cargo.');
+  const people = (current.people || []).map((person) => {
+    if (String(person.id) !== String(staffId)) return person;
+    return normalizeStaffPerson({ ...person, name, title, role: access.role, permissions: access.permissions });
+  });
+  const next = await storeStaffPeople(people);
+  const saved = next.people.find((person) => String(person.id) === String(staffId));
+  if (saved?.uid) {
+    await patchStaffUser(saved.uid, {
+      name: saved.name,
+      title: saved.title || 'Equipe',
+      barRole: access.role,
+      permissions: access.permissions,
+    });
+  }
+  return memberFromPerson(saved);
+}
+
+export async function setStaffActive(staffId, active) {
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing) throw new Error('Funcionário não encontrado.');
+  if (existing.uid) await patchStaffUser(existing.uid, { disabled: !active });
+  const people = (current.people || []).map((person) => {
+    if (String(person.id) !== String(staffId)) return person;
+    return normalizeStaffPerson({ ...person, disabled: !active });
+  });
+  const next = await storeStaffPeople(people);
+  return memberFromPerson(next.people.find((person) => String(person.id) === String(staffId)));
+}
+
+export async function openStaffAccount(staffId, payload) {
+  const email = String(payload.email || '').trim().toLowerCase();
+  if (!email) throw new Error('Informe o e-mail.');
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing) throw new Error('Funcionário não encontrado.');
+  if (existing.disabled) throw new Error('Funcionário desativado.');
+  if ((current.people || []).some((person) => person.email === email && String(person.id) !== String(staffId))) {
+    throw new Error('E-mail já cadastrado.');
+  }
+  if (!existing.uid && (await emailTaken(email))) {
+    throw new Error('E-mail já cadastrado.');
+  }
+
+  const access = accessForRole(existing.permissions?.includes('caixa') ? 'admin' : 'stock');
+  let uid = existing.uid || null;
+  if (!uid) {
+    const created = await createAuthUserRest({ email, password: randomStaffPassword() });
+    uid = created.uid;
+  }
+  await writeStaffUser(uid, {
+    email,
+    name: existing.name || 'Funcionário',
+    title: existing.title || 'Equipe',
+    permissions: access.permissions,
+    barRole: access.role,
+    disabled: false,
+    createdAt: existing.createdAt || new Date().toISOString(),
+  });
+
+  const staged = await storeStaffPeople(
+    (await getStaff()).people.map((person) =>
+      String(person.id) === String(staffId)
+        ? normalizeStaffPerson({
+            ...person,
+            email,
+            uid,
+            permissions: access.permissions,
+            accountStatus: 'pending',
+            disabled: false,
+          })
+        : person
+    )
+  );
+  const stagedPerson = staged.people.find((person) => String(person.id) === String(staffId));
+
+  try {
+    await sendStaffPasswordReset(email);
+  } catch (error) {
+    const err = new Error(error?.message || 'Não foi possível enviar o e-mail.');
+    err.staff = memberFromPerson(stagedPerson);
+    throw err;
+  }
+
+  const latest = await getStaff();
+  const next = await storeStaffPeople(
+    (latest.people || []).map((person) =>
+      String(person.id) === String(staffId)
+        ? normalizeStaffPerson({
+            ...person,
+            email,
+            uid,
+            permissions: access.permissions,
+            accountStatus: 'invited',
+            disabled: false,
+          })
+        : person
+    )
+  );
+  return memberFromPerson(next.people.find((person) => String(person.id) === String(staffId)));
 }
 
 export async function listStaffPeople() {

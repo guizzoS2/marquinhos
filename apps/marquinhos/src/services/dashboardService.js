@@ -46,6 +46,10 @@ import {
   deleteFreelancer,
   importStatementRows,
   listStaff,
+  saveStaffPerson,
+  updateStaffPerson,
+  setStaffActive,
+  openStaffAccount,
   createStaffMember,
   listStaffPeople,
   createHouseStaff,
@@ -287,7 +291,27 @@ export function fetchStaff() {
 
 export function addStaffMember(payload) {
   requireAdmin();
-  return createStaffMember(payload);
+  return saveStaffPerson(payload);
+}
+
+export function editStaffMember(staffId, payload) {
+  requireAdmin();
+  return updateStaffPerson(staffId, payload);
+}
+
+export function deactivateStaffMember(staffId) {
+  requireAdmin();
+  return setStaffActive(staffId, false);
+}
+
+export function reactivateStaffMember(staffId) {
+  requireAdmin();
+  return setStaffActive(staffId, true);
+}
+
+export function inviteStaffAccount(staffId, payload) {
+  requireAdmin();
+  return openStaffAccount(staffId, payload);
 }
 
 export function createStaff(payload) {
