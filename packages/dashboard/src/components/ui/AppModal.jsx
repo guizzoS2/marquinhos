@@ -7,7 +7,6 @@ import { useModal } from '../../contexts/ModalContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDashboardApi } from '../../contexts/DashboardApiContext';
 import { expenseCategories } from '../../services/fallbacks';
-import { BAR_PERMISSIONS, DEFAULT_STAFF_PERMISSIONS } from '../../services/staffPermissions';
 import { parseMoneyToCents } from '../../services/cashFlowUtils';
 
 const titles = {
@@ -17,125 +16,12 @@ const titles = {
   'new-product': 'Novo produto',
   'new-daily': 'Nova Diária',
   'new-freelancer': 'Novo Freelancer',
-  'new-staff': 'Novo funcionário',
-  'edit-staff': 'Editar funcionário',
   'new-supplier': 'Novo Fornecedor',
   'supplier-detail': 'Histórico do fornecedor',
   'new-expense': 'Nova Despesa',
   'import-statement': 'Importar Extrato',
   confirm: 'Confirmar ação',
 };
-
-function StaffForm({ person, onSuccess, onCancel }) {
-  const { api } = useDashboardApi();
-  const toast = useToast();
-  const editing = Boolean(person);
-  const [form, setForm] = useState({
-    name: person?.name || '',
-    email: person?.email || '',
-    password: '',
-    title: person?.title || 'Equipe',
-    permissions: person?.permissions || DEFAULT_STAFF_PERMISSIONS,
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  function togglePermission(id) {
-    setForm((prev) => ({
-      ...prev,
-      permissions: prev.permissions.includes(id)
-        ? prev.permissions.filter((item) => item !== id)
-        : [...prev.permissions, id],
-    }));
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      if (editing) {
-        await api.updateStaff(person.id, {
-          ...form,
-          password: form.password || undefined,
-        });
-        toast.success('Funcionário atualizado.');
-      } else {
-        await api.createStaff(form);
-        toast.success('Funcionário pode entrar em /login/bar.');
-      }
-      onSuccess?.();
-      onCancel();
-    } catch (err) {
-      const message = err?.message || 'Não foi possível salvar o funcionário.';
-      setError(message);
-      toast.error(message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
-      <Input
-        label="Nome"
-        name="name"
-        value={form.name}
-        onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-        required
-      />
-      <Input
-        label="E-mail de login"
-        name="email"
-        type="email"
-        value={form.email}
-        onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-        required
-      />
-      <Input
-        label={editing ? 'Nova senha (opcional)' : 'Senha'}
-        name="password"
-        type="password"
-        value={form.password}
-        onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-        required={!editing}
-      />
-      <Input
-        label="Cargo"
-        name="title"
-        value={form.title}
-        onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-        required
-      />
-      <fieldset className="space-y-2">
-        <legend className="font-display text-sm tracking-widest uppercase text-[var(--muted,#5c5c5c)]">
-          Permissões
-        </legend>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {BAR_PERMISSIONS.map((item) => (
-            <label key={item.id} className="flex items-center gap-2 min-h-11">
-              <input
-                type="checkbox"
-                checked={form.permissions.includes(item.id)}
-                onChange={() => togglePermission(item.id)}
-              />
-              <span className="text-sm">{item.label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
-      <div className="flex flex-wrap gap-3 justify-end">
-        <Button variant="secondary" type="button" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? 'Salvando...' : editing ? 'Salvar' : 'Cadastrar'}
-        </Button>
-      </div>
-    </form>
-  );
-}
 
 function NewProductForm({ onSuccess, onCancel }) {
   const { api } = useDashboardApi();
@@ -1026,9 +912,7 @@ export function AppModal() {
       ? titles['edit-income']
       : titles[modal.type] || 'Confirmação';
   const iconName =
-    modal.type === 'new-staff' || modal.type === 'edit-staff'
-      ? 'group'
-      : modal.type === 'new-product'
+    modal.type === 'new-product'
         ? 'inventory_2'
         : modal.type === 'new-freelancer'
       ? 'person_add'
@@ -1071,13 +955,7 @@ export function AppModal() {
           </button>
         </div>
 
-        {modal.type === 'new-staff' || modal.type === 'edit-staff' ? (
-          <StaffForm
-            person={modal.payload?.person}
-            onCancel={closeModal}
-            onSuccess={modal.payload?.onSuccess}
-          />
-        ) : modal.type === 'new-product' ? (
+        {modal.type === 'new-product' ? (
           <NewProductForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
         ) : modal.type === 'new-freelancer' ? (
           <NewFreelancerForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />

@@ -1,6 +1,11 @@
 import { doc, getDoc, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase';
-import { createAuthUserRest } from './identity';
+import { createAuthUserRest, randomStaffPassword, sendStaffPasswordReset } from './identity';
+import {
+  assertStaffInfo,
+  normalizeStaffPerson,
+  syncStaffPayrollExpenses,
+} from '@fnl/dashboard/staffPayroll';
 import {
   overviewFallback,
   cashFlowFallback,
@@ -55,6 +60,7 @@ const USER_FIELDS = [
   'company',
   'photoURL',
   'permissions',
+  'disabled',
   'createdAt',
   'updatedAt',
   'uid',
@@ -114,34 +120,8 @@ function staffAsPeople(staff) {
   return {
     people: source.map((item, index) => {
       const { password: _ignored, ...safe } = item;
-      return {
-        id: safe.id || index + 1,
-        uid: safe.uid || null,
-        name: safe.name,
-        email: safe.email,
-        title: safe.title || 'Equipe',
-        permissions: Array.isArray(safe.permissions)
-          ? safe.permissions
-          : safe.role === 'admin' || safe.barRole === 'admin'
-            ? ['overview', 'caixa', 'estoque', 'fornecedores', 'equipe']
-            : ['estoque'],
-        barRole: safe.barRole || safe.role || 'stock',
-        createdAt: safe.createdAt || new Date().toISOString(),
-      };
+      return normalizeStaffPerson(safe, index);
     }),
-  };
-}
-
-function staffAsMembers(staff) {
-  return {
-    members: staffAsPeople(staff).people.map((item) => ({
-      uid: item.uid,
-      email: item.email,
-      name: item.name,
-      title: item.title,
-      role: item.barRole === 'admin' ? 'admin' : 'stock',
-      createdAt: item.createdAt,
-    })),
   };
 }
 
@@ -243,9 +223,9 @@ async function readDocument(path) {
     return snap.exists() ? snap.data() : null;
   }
   const key = sectionKey(path);
-  if (key) {
+    if (key) {
     const ops = await readOps();
-    if (key === 'staff') return staffAsMembers(ops.staff);
+    if (key === 'staff') return staffAsPeople(ops.staff);
     return ops[key] || null;
   }
   const snap = await getDoc(toDocRef(path));
@@ -270,7 +250,7 @@ async function writeDocument(path, data, merge = false) {
           ? { ...current, ...data }
           : data;
     await writeOps({ ...ops, [key]: nextSection });
-    return key === 'staff' ? staffAsMembers(nextSection) : nextSection;
+    return key === 'staff' ? staffAsPeople(nextSection) : nextSection;
   }
   await setDoc(toDocRef(path), data, { merge });
   return data;
@@ -2263,57 +2243,235 @@ export async function deleteSupplier(supplierId) {
 
 export async function getStaff() {
   await ensureDashboardSeed();
-  return (await readDocument(DOCS.staff)) || staffFallback;
+  const ops = await readOps();
+  return staffAsPeople(ops.staff);
 }
 
-export async function createStaffMember(payload) {
-  const name = String(payload.name || '').trim();
-  const email = String(payload.email || '').trim().toLowerCase();
-  const password = String(payload.password || '');
-  const role = payload.role === 'admin' ? 'admin' : 'stock';
-  if (!name || !email || !password) {
-    throw new Error('Informe nome, e-mail e senha.');
-  }
-  if (password.length < 6) {
-    throw new Error('Senha mínima de 6 caracteres.');
-  }
-  if (await emailTaken(email)) {
-    throw new Error('Já existe um usuário com este e-mail.');
-  }
+async function syncPeoplePayroll(people) {
+  const current = await getCashFlow();
+  const category =
+    (current.categories || expenseCategories).find((item) => item.id === 'salarios') ||
+    expenseCategories.find((item) => item.id === 'salarios');
+  const expenses = syncStaffPayrollExpenses(
+    people,
+    current.expenses || [],
+    ({ person, iso, amount, key, prev }) => ({
+      ...prev,
+      id: prev?.id || key,
+      payrollKey: key,
+      staffId: String(person.id),
+      date: formatExpenseDate(iso),
+      isoDate: iso,
+      supplier: person.name || 'Funcionário',
+      supplierId: null,
+      category: category?.name || 'Salários',
+      categoryId: category?.id || 'salarios',
+      categoryIcon: category?.icon || 'badge',
+      nature: 'fixed',
+      value: formatCents(amount),
+      amount,
+      recurrence: 'monthly',
+      source: 'staff_payroll',
+      createdAt: prev?.createdAt || new Date().toISOString(),
+    })
+  );
+  await saveCashFlow(current, { expenses });
+}
 
+async function storeStaffPeople(people) {
+  const ops = await readOps();
+  const next = staffAsPeople({ people });
+  await writeOps({ ...ops, staff: next });
+  await syncPeoplePayroll(next.people);
+  return next;
+}
+
+export async function listStaffPeople() {
   const staff = await getStaff();
-  if ((staff.members || []).some((item) => item.email === email)) {
-    throw new Error('Já existe um usuário com este e-mail.');
-  }
+  return staff.people || [];
+}
 
-  const created = await createAuthUserRest({ email, password });
-  const member = {
-    uid: created.uid,
-    email,
-    name,
-    title: String(payload.title || (role === 'stock' ? 'Estoquista' : 'Administrador')).trim(),
-    role,
+export async function createHouseStaff(payload) {
+  const info = assertStaffInfo(payload);
+  if (String(payload.monthlyCost ?? '').trim() === '') {
+    throw new Error('Informe o custo mensal.');
+  }
+  const monthlyCostCents = parseMoneyToCents(payload.monthlyCost);
+  const current = await getStaff();
+  const nextId =
+    (current.people || []).reduce((max, person) => Math.max(max, Number(person.id) || 0), 0) + 1;
+  const person = normalizeStaffPerson({
+    id: nextId,
+    ...info,
+    monthlyCostCents,
+    permissions: [],
     createdAt: new Date().toISOString(),
-  };
-  const next = { members: [...(staff.members || []), member] };
-  await writeDocument(DOCS.staff, next);
-  await upsertUserProfile(member.uid, {
-    ...member,
-    roles: ['staff'],
-    tenantId: TENANT_ID,
-    barRole: role,
   });
-  return { member, staff: { members: next.members } };
+  await storeStaffPeople([...(current.people || []), person]);
+  return person;
 }
 
-function stripStaffPassword(member) {
-  const { password: _ignored, ...safe } = member;
-  return safe;
+export async function updateHouseStaff(staffId, payload) {
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing) throw new Error('Funcionário não encontrado.');
+  const info = assertStaffInfo({
+    name: payload.name ?? existing.name,
+    title: payload.title ?? existing.title,
+    contractType: payload.contractType ?? existing.contractType,
+    contractStart: payload.contractStart ?? existing.contractStart,
+    contractEnd: payload.contractEnd ?? existing.contractEnd,
+  });
+  if (payload.monthlyCost != null && String(payload.monthlyCost).trim() === '') {
+    throw new Error('Informe o custo mensal.');
+  }
+  const monthlyCostCents =
+    payload.monthlyCost != null ? parseMoneyToCents(payload.monthlyCost) : existing.monthlyCostCents;
+  const people = (current.people || []).map((person) => {
+    if (String(person.id) !== String(staffId)) return person;
+    return normalizeStaffPerson({ ...person, ...info, monthlyCostCents });
+  });
+  const next = await storeStaffPeople(people);
+  return next.people.find((person) => String(person.id) === String(staffId));
 }
 
-export async function listStaff() {
-  const staff = await getStaff();
-  return (staff.members || []).map(stripStaffPassword);
+async function writeStaffUser(uid, data) {
+  const payload = pickUserFields({
+    ...data,
+    uid,
+    tenantId: TENANT_ID,
+    roles: ['staff'],
+    updatedAt: new Date().toISOString(),
+  });
+  await setDoc(doc(db, 'users', uid), payload);
+  if (payload.email) await writeEmailLock(payload.email, uid);
+  return payload;
+}
+
+async function patchStaffUser(uid, data) {
+  const payload = pickUserFields({
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
+  delete payload.uid;
+  delete payload.roles;
+  delete payload.email;
+  delete payload.tenantId;
+  await setDoc(doc(db, 'users', uid), payload, { merge: true });
+  return payload;
+}
+
+export async function inviteHouseStaff(staffId, payload) {
+  const email = String(payload.email || '').trim().toLowerCase();
+  const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+  if (!email) throw new Error('Informe o e-mail.');
+  if (!permissions.length) throw new Error('Marque ao menos uma permissão.');
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing) throw new Error('Funcionário não encontrado.');
+  if ((current.people || []).some((person) => person.email === email && String(person.id) !== String(staffId))) {
+    throw new Error('E-mail já cadastrado.');
+  }
+  if (!existing.uid && (await emailTaken(email))) {
+    throw new Error('E-mail já cadastrado.');
+  }
+
+  let uid = existing.uid || null;
+  const stagedStatus = uid ? existing.accountStatus || 'active' : 'pending';
+  if (!uid) {
+    const created = await createAuthUserRest({ email, password: randomStaffPassword() });
+    uid = created.uid;
+    await writeStaffUser(uid, {
+      email,
+      name: existing.name || 'Funcionário',
+      title: existing.title || 'Equipe',
+      permissions,
+      barRole: 'staff',
+      disabled: false,
+      createdAt: new Date().toISOString(),
+    });
+  } else {
+    await patchStaffUser(uid, {
+      name: existing.name,
+      title: existing.title || 'Equipe',
+      permissions,
+      disabled: false,
+    });
+  }
+
+  const staged = await storeStaffPeople(
+    (await getStaff()).people.map((person) =>
+      String(person.id) === String(staffId)
+        ? normalizeStaffPerson({
+            ...person,
+            email,
+            uid,
+            permissions,
+            accountStatus: stagedStatus,
+            disabled: false,
+          })
+        : person
+    )
+  );
+  const stagedPerson = staged.people.find((person) => String(person.id) === String(staffId));
+
+  try {
+    await sendStaffPasswordReset(email);
+  } catch (error) {
+    const err = new Error(error?.message || 'Não foi possível enviar o e-mail.');
+    err.staff = stagedPerson;
+    throw err;
+  }
+
+  const latest = await getStaff();
+  const next = await storeStaffPeople(
+    (latest.people || []).map((person) =>
+      String(person.id) === String(staffId)
+        ? normalizeStaffPerson({
+            ...person,
+            email,
+            uid,
+            permissions,
+            accountStatus: 'invited',
+            disabled: false,
+          })
+        : person
+    )
+  );
+  return next.people.find((person) => String(person.id) === String(staffId));
+}
+
+export async function saveHouseStaffAccess(staffId, payload) {
+  const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+  if (!permissions.length) throw new Error('Marque ao menos uma permissão.');
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing?.uid) throw new Error('Esta pessoa ainda não tem conta.');
+  await patchStaffUser(existing.uid, {
+    name: existing.name,
+    title: existing.title || 'Equipe',
+    permissions,
+    disabled: false,
+  });
+  const next = await storeStaffPeople(
+    (current.people || []).map((person) =>
+      String(person.id) === String(staffId)
+        ? normalizeStaffPerson({ ...person, permissions, disabled: false })
+        : person
+    )
+  );
+  return next.people.find((person) => String(person.id) === String(staffId));
+}
+
+export async function removeHouseStaff(staffId) {
+  const current = await getStaff();
+  const removed = (current.people || []).find((person) => String(person.id) === String(staffId)) || null;
+  if (removed?.uid) {
+    await patchStaffUser(removed.uid, { disabled: true });
+  }
+  const kept = (current.people || []).filter((person) => String(person.id) !== String(staffId));
+  await storeStaffPeople(kept);
+  return removed;
 }
 
 export async function getUserProfile(uid) {

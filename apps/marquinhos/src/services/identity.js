@@ -1,4 +1,5 @@
-import { firebaseConfig, isFirebaseConfigured } from './firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth, firebaseConfig, isFirebaseConfigured } from './firebase';
 
 export async function createAuthUserRest({ email, password }) {
   if (!isFirebaseConfigured()) {
@@ -20,4 +21,29 @@ export async function createAuthUserRest({ email, password }) {
     throw new Error(data.error.message || 'Falha no cadastro.');
   }
   return { uid: data.localId };
+}
+
+export function randomStaffPassword() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  let out = 'Aa1';
+  bytes.forEach((value) => {
+    out += alphabet[value % alphabet.length];
+  });
+  return out;
+}
+
+export async function sendStaffPasswordReset(email) {
+  if (!isFirebaseConfigured() || !auth) {
+    throw new Error('Firebase não configurado.');
+  }
+  try {
+    await sendPasswordResetEmail(auth, email);
+  } catch (error) {
+    if (error?.code === 'auth/too-many-requests') {
+      throw new Error('Muitas tentativas. Espere e reenvie.');
+    }
+    throw new Error('Não foi possível enviar o e-mail.');
+  }
 }

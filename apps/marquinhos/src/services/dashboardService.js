@@ -45,15 +45,25 @@ import {
   updateFreelancer,
   deleteFreelancer,
   importStatementRows,
-  listStaff,
-  createStaffMember,
+  listStaffPeople,
+  createHouseStaff,
+  updateHouseStaff,
+  inviteHouseStaff,
+  saveHouseStaffAccess,
+  removeHouseStaff,
 } from './firestoreService';
-import { getCurrentRole } from './authService';
-import { isAdminRole } from './roles';
+import { getCurrentRole, getCurrentUser } from './authService';
+import { isAdminRole, isBarOwner } from './roles';
 
 function requireAdmin() {
   if (!isAdminRole(getCurrentRole())) {
     throw new Error('Acesso restrito ao administrador.');
+  }
+}
+
+function requireOwner() {
+  if (!isBarOwner(getCurrentUser())) {
+    throw new Error('Acesso restrito ao dono.');
   }
 }
 
@@ -269,11 +279,30 @@ export function importCashStatement(rows) {
 }
 
 export function fetchStaff() {
-  requireAdmin();
-  return listStaff();
+  return listStaffPeople();
 }
 
-export function addStaffMember(payload) {
-  requireAdmin();
-  return createStaffMember(payload);
+export function createStaff(payload) {
+  requireOwner();
+  return createHouseStaff(payload);
+}
+
+export function updateStaff(staffId, payload) {
+  requireOwner();
+  return updateHouseStaff(staffId, payload);
+}
+
+export function inviteStaff(staffId, payload) {
+  requireOwner();
+  return inviteHouseStaff(staffId, payload);
+}
+
+export function saveStaffAccess(staffId, payload) {
+  requireOwner();
+  return saveHouseStaffAccess(staffId, payload);
+}
+
+export function removeStaff(staffId) {
+  requireOwner();
+  return removeHouseStaff(staffId);
 }

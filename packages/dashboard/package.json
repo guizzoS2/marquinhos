@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./staffPayroll": "./src/services/staffPayroll.js"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.0.0",
