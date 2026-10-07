@@ -27,14 +27,9 @@ export function FreelancerProfile({ person, dailies, onClose, onEdit, onDelete, 
       <aside className="fixed right-0 top-0 z-[60] h-dvh w-full max-w-md bg-surface-container-lowest border-l border-outline-variant p-4 md:p-8 overflow-y-auto">
         <div className="flex items-start justify-between gap-3 mb-6">
           <h3 className="font-headline text-xl font-bold text-on-surface">Perfil</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-surface-container-low"
-          >
+          <Button type="button" size="icon" variant="ghost" onClick={onClose} aria-label="Fechar">
             <Icon name="close" />
-          </button>
+          </Button>
         </div>
 
         <div className="flex items-center gap-4 mb-6">
@@ -53,7 +48,7 @@ export function FreelancerProfile({ person, dailies, onClose, onEdit, onDelete, 
           </Button>
           {person.status === 'pending_payment' ? (
             <Button variant="secondary" className="w-full sm:w-auto" onClick={onSettle}>
-              <Icon name="payments" />
+              <Icon name="check" />
               Dar baixa
             </Button>
           ) : null}

@@ -147,11 +147,8 @@ export function buildCashFlowSummary(incomes = [], expenses = [], deltas = {}) {
   };
 }
 
-export function buildCashFlowCsv(data, { natureFilter = 'all' } = {}) {
-  const expenses = (data.expenses || []).filter((row) => {
-    if (natureFilter === 'all') return true;
-    return row.nature === natureFilter;
-  });
+export function buildCashFlowCsv(data) {
+  const expenses = data.expenses || [];
 
   const lines = [
     ['Data', 'Tipo', 'Descrição', 'Categoria', 'Natureza', 'Valor'].join(';'),
@@ -229,11 +226,13 @@ export function unifyCashMovements(incomes = [], expenses = []) {
       date: row.date,
       createdAt: row.createdAt || null,
       descricao: row.description || '—',
+      description: row.description || '',
       entidade: row.cliente || row.customer || null,
       categoria: row.category || '',
       categoryIcon: row.categoryIcon || 'payments',
       categoryTone: row.categoryTone || 'secondary',
       valor: row.value || formatCents(row.amount),
+      amount: row.amount ?? parseMoneyToCents(row.value),
       tipo: 'entrada',
       nature: null,
     })),
@@ -243,13 +242,19 @@ export function unifyCashMovements(incomes = [], expenses = []) {
       date: row.date,
       createdAt: row.createdAt || null,
       descricao: row.description || '—',
+      description: row.description || '',
       entidade: row.supplier || null,
+      supplier: row.supplier || '',
+      supplierId: row.supplierId || '',
       categoria: row.category || '',
+      categoryId: row.categoryId || '',
       categoryIcon: row.categoryIcon || 'payments',
       categoryTone: null,
       valor: row.value || formatCents(row.amount),
+      amount: row.amount ?? parseMoneyToCents(row.value),
       tipo: 'saida',
       nature: row.nature || 'variable',
+      recurrence: row.recurrence || '',
     })),
   ];
   return rows.sort((left, right) => movementTime(right) - movementTime(left) || String(right.id).localeCompare(String(left.id)));

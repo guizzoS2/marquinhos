@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { AppFooter } from './AppFooter';
 import { Sidebar } from './Sidebar';
 import { TopNavbar } from './TopNavbar';
 import { AppModal } from '../ui/AppModal';
@@ -26,6 +27,7 @@ export function DashboardLayout() {
       <main className="md:ml-64 min-h-screen flex flex-col min-w-0">
         <TopNavbar onMenuClick={() => setNavOpen(true)} />
         <Outlet />
+        <AppFooter />
       </main>
       <AppModal />
     </div>

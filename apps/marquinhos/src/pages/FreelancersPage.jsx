@@ -11,6 +11,10 @@ import {
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
+import { FilterBar } from '../components/ui/FilterBar';
+import { FilterSelect } from '../components/ui/FilterSelect';
+import { SearchField } from '../components/ui/SearchField';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { Tabs } from '../components/ui/Tabs';
 import { FreelancerCalendar } from '../components/freelancers/FreelancerCalendar';
 import { FreelancerProfile } from '../components/freelancers/FreelancerProfile';
@@ -26,9 +30,11 @@ export function FreelancersPage() {
   const [anchor, setAnchor] = useState(() => new Date());
   const [roleFilter, setRoleFilter] = useState(null);
   const [query, setQuery] = useState('');
+  const [section, setSection] = useState('agenda');
   const [panel, setPanel] = useState('calendar');
   const [calendarView, setCalendarView] = useState('month');
   const [profileId, setProfileId] = useState(null);
+  const [rosterView, setRosterView] = useState('cards');
 
   const { data, isLoading } = useQuery({
     queryKey: ['freelancers'],
@@ -46,6 +52,10 @@ export function FreelancersPage() {
   const roles = useMemo(
     () => (data?.roles?.length ? data.roles : ['Barman', 'Garçom', 'Cozinha']),
     [data]
+  );
+  const roleOptions = useMemo(
+    () => [{ value: '', label: 'Todas' }, ...roles.map((role) => ({ value: role, label: role }))],
+    [roles]
   );
 
   const period = calendarView === 'week' ? 'Semana' : 'Mês';
@@ -178,66 +188,64 @@ export function FreelancersPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 relative space-y-6 md:space-y-8">
+    <div className="p-4 md:p-8 relative space-y-6">
       <PageHeader
         title="Gestão de Freelancers"
         description="Coordene turnos, pagamentos e disponibilidade em tempo real."
-      >
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="grid grid-cols-2 sm:flex gap-3">
-              <Button onClick={openCreate} className="px-3 sm:px-5">
-                <Icon name="person_add" />
-                Novo Freelancer
-              </Button>
-              <Button variant="secondary" onClick={openDaily} className="px-3 sm:px-5">
-                <Icon name="assignment_add" />
-                Registrar Diária
-              </Button>
-            </div>
-          </div>
-      </PageHeader>
+      />
 
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <Tabs
-            items={[
-              { id: 'calendar', label: 'Calendário' },
-              { id: 'list', label: 'Lista' },
-            ]}
-            value={panel}
-            onChange={setPanel}
-          />
-          <Tabs
-            items={[
-              { id: 'month', label: 'Mensal' },
-              { id: 'week', label: 'Semanal' },
-            ]}
-            value={calendarView}
-            onChange={setCalendarView}
-          />
-        </div>
+      <Tabs
+        label="Freelancers"
+        items={[
+          { id: 'agenda', label: 'Agendamentos' },
+          { id: 'freelancers', label: 'Freelancers' },
+        ]}
+        value={section}
+        onChange={setSection}
+      />
+
+      {section === 'agenda' ? (
+      <>
+      <FilterBar
+        actions={
+          <Button onClick={openDaily}>
+            <Icon name="add" />
+            Registrar diária
+          </Button>
+        }
+      >
+        <SegmentedControl
+          variant="primary"
+          label="Visualização da agenda"
+          items={[
+            { id: 'calendar', label: 'Calendário' },
+            { id: 'list', label: 'Lista' },
+          ]}
+          value={panel}
+          onChange={setPanel}
+        />
+        <SegmentedControl
+          variant="primary"
+          label="Período do calendário"
+          items={[
+            { id: 'month', label: 'Mensal' },
+            { id: 'week', label: 'Semanal' },
+          ]}
+          value={calendarView}
+          onChange={setCalendarView}
+        />
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            aria-label="Período anterior"
-            onClick={() => movePeriod('prev')}
-            className="min-h-11 min-w-11 rounded-xl text-on-surface-variant hover:bg-surface-container-low"
-          >
+          <Button type="button" size="icon" variant="secondary" aria-label="Período anterior" onClick={() => movePeriod('prev')}>
             <Icon name="chevron_left" />
-          </button>
-          <p className="text-sm font-semibold text-on-surface capitalize">
+          </Button>
+          <p className="text-sm font-semibold leading-5 text-on-surface capitalize">
             {formatPeriodLabel(period, anchor)}
           </p>
-          <button
-            type="button"
-            aria-label="Próximo período"
-            onClick={() => movePeriod('next')}
-            className="min-h-11 min-w-11 rounded-xl text-on-surface-variant hover:bg-surface-container-low"
-          >
+          <Button type="button" size="icon" variant="secondary" aria-label="Próximo período" onClick={() => movePeriod('next')}>
             <Icon name="chevron_right" />
-          </button>
+          </Button>
         </div>
-      </div>
+      </FilterBar>
 
       {panel === 'calendar' ? (
         <FreelancerCalendar
@@ -249,43 +257,44 @@ export function FreelancersPage() {
       ) : (
         <ShiftTable shifts={shifts} people={people} onEdit={openShift} onDelete={deleteShift} />
       )}
-
-      <section className="mt-8 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <h3 className="font-headline text-xl font-bold text-on-surface">Freelancers</h3>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="relative w-full sm:w-64">
-              <Icon
-                name="search"
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant"
-              />
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Buscar freelancer"
-                aria-label="Buscar freelancer pelo nome"
-                className="w-full pl-11 pr-4 min-h-11 bg-surface-container-low border-none rounded-full text-sm text-on-surface focus:ring-2 focus:ring-primary-container"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {roles.map((role) => (
-                <button
-                  key={role}
-                  type="button"
-                  onClick={() => setRoleFilter(roleFilter === role ? null : role)}
-                  className={`px-4 py-1.5 min-h-11 rounded-full border border-outline-variant/20 text-sm font-medium hover:bg-surface-container-lowest transition-colors ${
-                    roleFilter === role ? 'bg-primary text-on-primary' : ''
-                  }`}
-                >
-                  {role}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <FreelancerRoster people={roster} onOpen={openProfile} />
+      </>
+      ) : (
+      <section className="space-y-6">
+        <FilterBar
+          actions={
+            <Button onClick={openCreate}>
+              <Icon name="add" />
+              Novo freelancer
+            </Button>
+          }
+        >
+          <SegmentedControl
+            variant="primary"
+            label="Visualização dos freelancers"
+            items={[
+              { id: 'list', label: 'Lista' },
+              { id: 'cards', label: 'Cards' },
+            ]}
+            value={rosterView}
+            onChange={setRosterView}
+          />
+          <FilterSelect
+            id="freelancer-role-filter"
+            label="Função"
+            value={roleFilter || ''}
+            onChange={(role) => setRoleFilter(role || null)}
+            options={roleOptions}
+          />
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            placeholder="Buscar freelancer"
+            label="Buscar freelancer pelo nome"
+          />
+        </FilterBar>
+        <FreelancerRoster people={roster} onOpen={openProfile} view={rosterView} />
       </section>
+      )}
 
       {profile ? (
         <FreelancerProfile

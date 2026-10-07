@@ -42,3 +42,123 @@ h3,
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);
 }
+
+.fnl-calendar .rbc-calendar {
+  font-family: Inter, sans-serif;
+  color: #111111;
+}
+
+.fnl-calendar .rbc-month-view,
+.fnl-calendar .rbc-time-view {
+  border: 0;
+  border-radius: 1.25rem;
+}
+
+.fnl-calendar .rbc-month-row + .rbc-month-row,
+.fnl-calendar .rbc-header,
+.fnl-calendar .rbc-time-header > .rbc-row:first-child,
+.fnl-calendar .rbc-timeslot-group,
+.fnl-calendar .rbc-time-header.rbc-overflowing,
+.fnl-calendar .rbc-time-content > * + * > *,
+.fnl-calendar .rbc-day-bg + .rbc-day-bg {
+  border-color: #e5e5e5;
+}
+
+.fnl-calendar .rbc-header {
+  padding: 0.5rem 0;
+  border-left: 0;
+  border-bottom: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #5c5c5c;
+}
+
+.fnl-calendar .rbc-header + .rbc-header {
+  border-left: 0;
+}
+
+.fnl-calendar .rbc-off-range-bg {
+  background: #f7f7f7;
+}
+
+.fnl-calendar .rbc-off-range {
+  color: #5c5c5c;
+}
+
+.fnl-calendar .rbc-today {
+  background: transparent;
+}
+
+.fnl-calendar .rbc-date-cell {
+  padding: 0.35rem 0 0;
+  text-align: center;
+}
+
+.fnl-calendar .rbc-date-cell > .rbc-button-link {
+  display: inline-flex;
+  height: 1.75rem;
+  width: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.fnl-calendar .rbc-date-cell.rbc-now > .rbc-button-link {
+  background: var(--color-primary, #ffdb15);
+  color: #111111;
+}
+
+.fnl-calendar .rbc-event,
+.fnl-calendar .rbc-event.rbc-selected {
+  border: 0;
+  border-radius: 9999px;
+  background: var(--color-primary, #ffdb15);
+  color: #111111;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.fnl-calendar .rbc-event:focus {
+  outline: none;
+}
+
+.fnl-calendar .rbc-event-content {
+  font-weight: 600;
+}
+
+.fnl-calendar .rbc-show-more {
+  border-radius: 9999px;
+  background: #f7f7f7;
+  color: #111111;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0 0.5rem;
+}
+
+.fnl-calendar .rbc-overlay {
+  overflow: hidden;
+  border: 1px solid #d4d4d4;
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgba(17, 17, 17, 0.06);
+  padding: 0.75rem;
+}
+
+.fnl-calendar .rbc-overlay-header {
+  border-bottom: 1px solid #e5e5e5;
+  margin: -0.75rem -0.75rem 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-weight: 700;
+}
+
+.fnl-calendar .rbc-current-time-indicator {
+  height: 2px;
+  background: var(--color-primary, #ffdb15);
+}
+
+.fnl-calendar .rbc-time-slot.rbc-now {
+  background: transparent;
+}

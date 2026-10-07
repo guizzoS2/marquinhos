@@ -1,3 +1,4 @@
+import { Children } from 'react';
 import { Icon } from '../ui/Icon';
 
 const badgeClasses = {
@@ -8,7 +9,7 @@ const badgeClasses = {
 
 export function MetricCard({ label, value, badge, badgeTone = 'neutral', icon, valueTone }) {
   return (
-    <div className="bg-surface border border-outline rounded-xl p-4 md:p-5">
+    <div className="h-full min-w-0 bg-surface border border-outline rounded-xl p-4 md:p-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-11 h-11 rounded-lg bg-primary text-on-primary flex items-center justify-center shrink-0">
@@ -25,6 +26,46 @@ export function MetricCard({ label, value, badge, badgeTone = 'neutral', icon, v
       >
         {value}
       </h3>
+    </div>
+  );
+}
+
+const rowCols = {
+  1: 'md:grid-cols-1',
+  2: 'md:grid-cols-2',
+  3: 'md:grid-cols-3',
+  4: 'md:grid-cols-4',
+  5: 'md:grid-cols-5',
+};
+
+function rowSizes(count, max = 5) {
+  if (count <= 0) return [];
+  const rowCount = Math.ceil(count / max);
+  const base = Math.floor(count / rowCount);
+  let extra = count % rowCount;
+  return Array.from({ length: rowCount }, () => {
+    const size = base + (extra > 0 ? 1 : 0);
+    if (extra > 0) extra -= 1;
+    return size;
+  });
+}
+
+export function MetricGrid({ children }) {
+  const items = Children.toArray(children);
+  const sizes = rowSizes(items.length);
+  let offset = 0;
+
+  return (
+    <div className="space-y-4 md:space-y-6">
+      {sizes.map((size) => {
+        const slice = items.slice(offset, offset + size);
+        offset += size;
+        return (
+          <div key={slice.map((item) => item.key).join('|')} className={`grid grid-cols-1 gap-4 md:gap-6 ${rowCols[size]}`}>
+            {slice}
+          </div>
+        );
+      })}
     </div>
   );
 }

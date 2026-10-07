@@ -1,6 +1,4 @@
 import { Icon } from '../ui/Icon';
-import { Pagination } from '../ui/Pagination';
-import { usePagedList } from '../ui/usePagedList';
 
 const rankToneClass = {
   secondary: 'bg-primary text-on-primary',
@@ -9,23 +7,21 @@ const rankToneClass = {
 };
 
 export function TopSoldList({ items = [] }) {
-  const page = usePagedList(items, items.map((item) => item.id).join('|'));
-
   return (
-    <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm">
-      <div className="flex items-center justify-between mb-6 md:mb-8">
+    <section className="h-full bg-surface border border-outline rounded-xl p-4 md:p-5">
+      <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-extrabold">Top 5 Vendidos</h2>
       </div>
       {!items.length ? (
         <p className="text-sm text-on-surface-variant">Nenhuma venda no período.</p>
       ) : null}
-      <div className="space-y-6">
-        {page.rows.map((item, index) => {
-          const rank = page.current * page.pageSize + index;
+      <div className="divide-y divide-outline-variant">
+        {items.map((item, index) => {
+          const rank = index;
           return (
           <div
             key={item.id}
-            className={`flex items-center gap-4 ${rank > 2 ? 'opacity-80' : ''}`}
+            className={`flex items-center gap-4 py-3 first:pt-0 last:pb-0 ${rank > 2 ? 'opacity-80' : ''}`}
           >
             {item.image ? (
               <div className="relative">
@@ -58,9 +54,6 @@ export function TopSoldList({ items = [] }) {
           </div>
           );
         })}
-      </div>
-      <div className="mt-6">
-        <Pagination state={page} />
       </div>
     </section>
   );

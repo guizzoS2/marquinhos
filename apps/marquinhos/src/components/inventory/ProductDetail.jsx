@@ -1,4 +1,5 @@
 import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
 
 function Field({ label, value }) {
   return (
@@ -56,14 +57,17 @@ export function ProductDetail({ item, canDelete, onEdit, onDelete, onCancel }) {
 
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="close" />
           Fechar
         </Button>
         {canDelete ? (
           <Button variant="danger" type="button" onClick={onDelete}>
-            Apagar
+            <Icon name="delete" />
+            Excluir
           </Button>
         ) : null}
         <Button type="button" onClick={onEdit}>
+          <Icon name="edit" />
           Editar
         </Button>
       </div>

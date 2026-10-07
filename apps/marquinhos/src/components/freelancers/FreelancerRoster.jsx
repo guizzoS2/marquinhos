@@ -1,3 +1,5 @@
+import { DataTable, StatusPill, TBody, Td, Th, THead, Tr } from '../ui/DataTable';
+import { EntityCard, EntityCardGrid } from '../ui/EntityCard';
 import { Icon } from '../ui/Icon';
 import { Pagination } from '../ui/Pagination';
 import { usePagedList } from '../ui/usePagedList';
@@ -5,74 +7,98 @@ import { usePagedList } from '../ui/usePagedList';
 function StatusBadge({ status, label }) {
   if (status === 'on_shift') {
     return (
-      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase shrink-0">
-        <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+      <StatusPill tone="accent" dot>
         {label}
-      </span>
+      </StatusPill>
     );
   }
 
   if (status === 'pending_payment') {
-    return (
-      <span className="px-3 py-1 rounded-full bg-error-container/20 text-on-error-container text-[11px] font-bold uppercase shrink-0">
-        {label}
-      </span>
-    );
+    return <StatusPill tone="danger">{label}</StatusPill>;
   }
 
-  return (
-    <span className="px-3 py-1 rounded-full bg-tertiary-container/20 text-on-tertiary-container text-[11px] font-bold uppercase shrink-0">
-      {label}
-    </span>
-  );
+  return <StatusPill tone="neutral">{label}</StatusPill>;
 }
 
-export function FreelancerRoster({ people, onOpen }) {
+export function FreelancerRoster({ people, onOpen, view = 'cards' }) {
   const page = usePagedList(people, people.map((person) => person.id).join('|'));
 
   if (!people.length) {
     return <p className="text-on-surface-variant">Nenhum freelancer encontrado.</p>;
   }
 
+  if (view === 'list') {
+    return (
+      <div className="space-y-4">
+        <DataTable>
+          <THead>
+            <Th>Nome</Th>
+            <Th>Função</Th>
+            <Th>Contato</Th>
+            <Th>Status</Th>
+            <Th align="right">Diária</Th>
+          </THead>
+          <TBody>
+            {page.rows.map((person) => (
+              <Tr
+                key={person.id}
+                tabIndex={0}
+                onClick={() => onOpen(person.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onOpen(person.id);
+                  }
+                }}
+              >
+                <Td>
+                  <div className="flex items-center gap-3">
+                    <img alt="" src={person.image} className="h-11 w-11 rounded-lg object-cover" />
+                    <span className="font-semibold text-on-surface">{person.name}</span>
+                  </div>
+                </Td>
+                <Td>{person.role}</Td>
+                <Td tone="muted">{person.contact || '—'}</Td>
+                <Td>
+                  <StatusBadge status={person.status} label={person.statusLabel} />
+                </Td>
+                <Td align="right" tone="strong">
+                  {person.dailyRate}
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </DataTable>
+        <Pagination state={page} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <EntityCardGrid>
       {page.rows.map((person) => (
-        <button
+        <EntityCard
           key={person.id}
-          type="button"
+          image={person.image}
+          icon="person"
+          title={person.name}
+          accent={person.status === 'pending_payment'}
           onClick={() => onOpen(person.id)}
-          className={`w-full text-left bg-surface-container-lowest rounded-2xl p-6 min-h-11 transition-all hover:shadow-xl hover:shadow-on-surface/5 ${
-            person.status === 'pending_payment' ? 'border-l-4 border-error-container/40' : ''
-          }`}
+          badge={<StatusBadge status={person.status} label={person.statusLabel} />}
         >
-          <div className="flex justify-between items-start mb-6 gap-3">
-            <div className="flex items-center gap-4 min-w-0">
-              <img
-                alt=""
-                className="w-14 h-14 rounded-2xl object-cover shrink-0"
-                src={person.image}
-              />
-              <div className="min-w-0">
-                <h4 className="font-headline font-bold text-lg text-on-surface truncate">{person.name}</h4>
-                <p className="text-sm text-on-surface-variant font-label">{person.role}</p>
-                {person.contact ? (
-                  <p className="text-sm text-on-surface-variant">{person.contact}</p>
-                ) : null}
-              </div>
-            </div>
-            <StatusBadge status={person.status} label={person.statusLabel} />
-          </div>
-          <div className="flex items-end justify-between gap-3">
+          <p className="text-sm text-on-surface-variant">{person.role}</p>
+          {person.contact ? <p className="text-sm text-on-surface-variant">{person.contact}</p> : null}
+          <div className="mt-auto flex items-end justify-between gap-3">
             <div>
-              <p className="text-xs text-on-surface-variant font-label mb-1">Valor diária</p>
-              <p className="text-xl font-headline font-extrabold text-on-surface">{person.dailyRate}</p>
+              <p className="text-xs text-on-surface-variant">Valor diária</p>
+              <p className="font-headline text-xl font-extrabold text-on-surface">{person.dailyRate}</p>
             </div>
             <Icon name="chevron_right" className="text-on-surface-variant" />
           </div>
-        </button>
+        </EntityCard>
       ))}
-    </div>
+    </EntityCardGrid>
     <Pagination state={page} />
     </div>
   );

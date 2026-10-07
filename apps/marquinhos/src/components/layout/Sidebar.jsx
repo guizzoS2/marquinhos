@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { Icon } from '../ui/Icon';
+import { Button } from '../ui/Button';
 import { BrandLogo } from './BrandLogo';
 import { useAuth } from '../../contexts/AuthContext';
 import { isStockRole } from '../../services/roles';
@@ -60,14 +61,10 @@ export function Sidebar({ open = false, onNavigate }) {
       </nav>
 
       <div className="pt-4 border-t border-outline-variant/20 space-y-1">
-        <button
-          type="button"
-          onClick={logout}
-          className="w-full flex items-center gap-3 px-3 py-2 min-h-11 text-on-surface-variant hover:text-error transition-colors"
-        >
+        <Button type="button" variant="ghost" className="w-full justify-start" onClick={logout}>
           <Icon name="logout" />
-          <span>Sair</span>
-        </button>
+          Sair
+        </Button>
       </div>
     </aside>
   );

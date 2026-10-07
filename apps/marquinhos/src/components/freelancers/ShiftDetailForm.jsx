@@ -5,6 +5,7 @@ import { Icon } from '../ui/Icon';
 import { useToast } from '../../contexts/ToastContext';
 import { editDaily, removeDaily } from '../../services/dashboardService';
 import { SHIFT_STATUSES, peopleByRole } from '../../services/freelancerSchedule';
+import { Dropdown } from '../ui/Dropdown';
 import { RoleSelect } from './RoleSelect';
 
 function shiftReducer(state, action) {
@@ -119,28 +120,17 @@ export function ShiftDetailForm({ shift, people = [], roles = [], onSuccess, onC
         >
           Selecionar Freelancer
         </label>
-        <div className="relative">
-          <select
-            id="shift-freelancer"
-            className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-            value={state.freelancerId}
-            onChange={(event) => dispatch({ type: 'patch', patch: { freelancerId: event.target.value } })}
-            required
-          >
-            <option value="">
-              {options.length ? 'Selecione um profissional' : 'Nenhum freelancer nesta função'}
-            </option>
-            {options.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <Icon
-            name="person_search"
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
-          />
-        </div>
+        <Dropdown
+          id="shift-freelancer"
+          label="Selecionar Freelancer"
+          muted
+          leading="person_search"
+          disabled={!options.length}
+          value={state.freelancerId}
+          placeholder={options.length ? 'Selecione um profissional' : 'Nenhum freelancer nesta função'}
+          onChange={(freelancerId) => dispatch({ type: 'patch', patch: { freelancerId } })}
+          options={options.map((item) => ({ value: item.id, label: item.name }))}
+        />
       </div>
 
       <Input
@@ -161,24 +151,14 @@ export function ShiftDetailForm({ shift, people = [], roles = [], onSuccess, onC
         >
           Status
         </label>
-        <div className="relative">
-          <select
-            id="shift-status"
-            className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-4 pr-10 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-            value={state.status}
-            onChange={(event) => dispatch({ type: 'patch', patch: { status: event.target.value } })}
-          >
-            {SHIFT_STATUSES.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <Icon
-            name="expand_more"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm pointer-events-none"
-          />
-        </div>
+        <Dropdown
+          id="shift-status"
+          label="Status"
+          muted
+          value={state.status}
+          onChange={(status) => dispatch({ type: 'patch', patch: { status } })}
+          options={SHIFT_STATUSES.map((item) => ({ value: item.id, label: item.label }))}
+        />
       </div>
 
       <Input
@@ -194,6 +174,7 @@ export function ShiftDetailForm({ shift, people = [], roles = [], onSuccess, onC
 
       <div className="pt-2 flex flex-col sm:flex-row gap-3">
         <Button type="submit" className="w-full sm:flex-1" disabled={saving}>
+          <Icon name="save" />
           {saving ? 'Salvando...' : 'Salvar diária'}
         </Button>
         <Button type="button" variant="danger" className="w-full sm:w-auto" onClick={handleDelete} disabled={saving}>

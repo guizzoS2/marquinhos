@@ -14,8 +14,11 @@ import {
   registerPurchase,
   cancelPurchase,
   createExpense,
+  updateExpense,
   deleteExpense,
   createIncome,
+  updateIncome,
+  deleteIncome,
   registerStockEntry,
   createProduction,
   updateProduction,
@@ -30,6 +33,7 @@ import {
   createCustomer,
   registerSale,
   saveOpenSale,
+  createOpenComanda,
   closeShift,
   deleteInventoryItem,
   createInventoryItem,
@@ -129,6 +133,11 @@ export function createCashExpense(payload) {
   return createExpense(payload);
 }
 
+export function editCashExpense(expenseId, payload) {
+  requireAdmin();
+  return updateExpense(expenseId, payload);
+}
+
 export function removeCashExpense(expenseId) {
   requireAdmin();
   return deleteExpense(expenseId);
@@ -137,6 +146,16 @@ export function removeCashExpense(expenseId) {
 export function createCashIncome(payload) {
   requireAdmin();
   return createIncome(payload);
+}
+
+export function editCashIncome(incomeId, payload) {
+  requireAdmin();
+  return updateIncome(incomeId, payload);
+}
+
+export function removeCashIncome(incomeId) {
+  requireAdmin();
+  return deleteIncome(incomeId);
 }
 
 export function addStockEntry(payload) {
@@ -196,6 +215,10 @@ export function checkoutSale(payload) {
 
 export function saveOpenTab(payload) {
   return saveOpenSale(payload);
+}
+
+export function openComanda(payload) {
+  return createOpenComanda(payload);
 }
 
 export function closeCashShift() {

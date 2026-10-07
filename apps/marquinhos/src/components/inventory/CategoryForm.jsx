@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
 import { addInventoryFilter } from '../../services/dashboardService';
@@ -39,9 +40,11 @@ export function CategoryForm({ onSuccess, onCancel }) {
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="submit" disabled={saving}>
+          <Icon name="add" />
           {saving ? 'Salvando...' : 'Criar categoria'}
         </Button>
       </div>

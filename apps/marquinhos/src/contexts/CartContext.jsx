@@ -72,6 +72,17 @@ function cartReducer(state, action) {
         numeroComanda: action.numeroComanda ?? '',
         clienteId: action.clienteId || '',
       };
+    case 'attach':
+      return {
+        ...state,
+        saleId: action.saleId || '',
+        numeroComanda: action.numeroComanda != null && action.numeroComanda !== '' ? String(action.numeroComanda) : '',
+        clienteId: action.clienteId || '',
+        identificacao: action.identificacao ?? '',
+        lines: Array.isArray(action.lines)
+          ? action.lines.map((line) => withQty(line, line.quantidade))
+          : state.lines,
+      };
     case 'load': {
       const numero =
         action.numeroComanda != null && action.numeroComanda !== '' ? String(action.numeroComanda) : '';

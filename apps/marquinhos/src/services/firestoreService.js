@@ -542,6 +542,45 @@ export async function deleteExpense(expenseId) {
   return saveCashFlow(current, { expenses });
 }
 
+function shiftCreatedAt(createdAt, isoDate) {
+  if (!isoDate) return createdAt || new Date().toISOString();
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const base = createdAt ? new Date(createdAt) : new Date();
+  if (Number.isNaN(base.getTime())) return new Date(year, month - 1, day, 12, 0, 0).toISOString();
+  base.setFullYear(year, month - 1, day);
+  return base.toISOString();
+}
+
+export async function updateExpense(expenseId, payload) {
+  const current = await getCashFlow();
+  const existing = (current.expenses || []).find((row) => String(row.id) === String(expenseId));
+  if (!existing) throw new Error('Despesa não encontrada.');
+  const category =
+    (current.categories || expenseCategories).find((item) => item.id === payload.categoryId) ||
+    expenseCategories[0];
+  const amountCents = payload.amount ?? parseMoneyToCents(payload.value);
+  const nature = payload.nature || category.defaultNature || existing.nature || 'variable';
+  const expense = {
+    ...existing,
+    date: formatExpenseDate(payload.date),
+    createdAt: shiftCreatedAt(existing.createdAt, payload.date),
+    supplier: String(payload.supplier || '').trim(),
+    supplierId: payload.supplierId || null,
+    category: category.name,
+    categoryId: category.id,
+    categoryIcon: category.icon,
+    nature,
+    value: formatCents(amountCents),
+    amount: amountCents,
+    recurrence: payload.recurrence || null,
+  };
+  const expenses = (current.expenses || []).map((row) =>
+    String(row.id) === String(expenseId) ? expense : row
+  );
+  await saveCashFlow(current, { expenses });
+  return expense;
+}
+
 export async function createIncome(payload) {
   const current = await getCashFlow();
   const amountCents =
@@ -562,6 +601,35 @@ export async function createIncome(payload) {
   return saveCashFlow(current, {
     incomes: [income, ...(current.incomes || [])],
   }).then(() => income);
+}
+
+export async function updateIncome(incomeId, payload) {
+  const current = await getCashFlow();
+  const existing = (current.incomes || []).find((row) => String(row.id) === String(incomeId));
+  if (!existing) throw new Error('Entrada não encontrada.');
+  const amountCents = payload.amount ?? parseMoneyToCents(payload.value);
+  const income = {
+    ...existing,
+    date: formatExpenseDate(payload.date),
+    createdAt: shiftCreatedAt(existing.createdAt, payload.date),
+    description: String(payload.description || '').trim(),
+    category: payload.category || existing.category || 'Varejo',
+    categoryIcon: payload.categoryIcon || existing.categoryIcon || 'payments',
+    categoryTone: payload.categoryTone || existing.categoryTone || 'secondary',
+    value: formatCents(amountCents),
+    amount: amountCents,
+  };
+  const incomes = (current.incomes || []).map((row) =>
+    String(row.id) === String(incomeId) ? income : row
+  );
+  await saveCashFlow(current, { incomes });
+  return income;
+}
+
+export async function deleteIncome(incomeId) {
+  const current = await getCashFlow();
+  const incomes = (current.incomes || []).filter((row) => String(row.id) !== String(incomeId));
+  return saveCashFlow(current, { incomes });
 }
 
 function parseStockLabel(label) {
@@ -638,7 +706,8 @@ function presentProduct(item, codigo) {
   const nome = String(item.nome || item.name || '').trim();
   const categoria = String(item.categoria || item.category || 'Insumos').trim() || 'Insumos';
   const descricao = String(item.descricao || item.subtitle || '').trim();
-  const foto = item.foto || item.image || DEFAULT_PRODUCT_IMAGE;
+  const rawFoto = item.foto || item.image || '';
+  const foto = item.tipo === 'combo' ? rawFoto : rawFoto || DEFAULT_PRODUCT_IMAGE;
   const valor =
     item.valor_unitario != null && item.valor_unitario !== ''
       ? item.valor_unitario
@@ -1360,7 +1429,7 @@ export async function createCombo(payload) {
       estoque_atual: 0,
       estoque_sugerido: 0,
       valor_unitario: preco,
-      foto: primeiro?.foto || primeiro?.image || '',
+      foto: String(payload.foto || '').trim() || primeiro?.foto || primeiro?.image || '',
       stock: formatStockLabel(0, 'un'),
       minStock: formatStockLabel(0, 'un'),
       created_at: now,
@@ -1430,6 +1499,8 @@ export async function updateCombo(comboId, payload) {
       name: nome,
       valor_unitario: preco,
       cost: preco,
+      foto: payload.foto != null ? String(payload.foto) : existing.foto || existing.image || '',
+      image: payload.foto != null ? String(payload.foto) : existing.foto || existing.image || '',
       updated_at: new Date().toISOString(),
       updated_by: actor,
     },
@@ -1556,6 +1627,35 @@ function assertOpenComandaFree(sales, numero, saleId) {
       String(sale.id) !== String(saleId || '')
   );
   if (clash) throw new Error('Essa comanda já está aberta.');
+}
+
+export async function createOpenComanda(payload) {
+  const numero = assertComanda(payload.numero_comanda);
+  const usuarioId = await actorId();
+  await ensureDashboardSeed();
+  const now = await readServerNow();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    assertOpenComandaFree(inventory.sales, numero);
+    const cliente = customerFromOps(ops, payload.cliente_id);
+    const sale = normalizeSale({
+      id: `sale-${Date.now()}`,
+      numero_comanda: numero,
+      status: 'aberta',
+      cliente_id: cliente.id,
+      cliente_nome: cliente.nome,
+      forma_pagamento: null,
+      total: 0,
+      itens: [],
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      usuario_id: usuarioId,
+    });
+    return {
+      ops: { ...ops, inventory: { ...inventory, sales: [sale, ...(inventory.sales || [])] } },
+      value: sale,
+    };
+  });
 }
 
 export async function saveOpenSale(payload) {

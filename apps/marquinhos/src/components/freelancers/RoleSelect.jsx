@@ -1,4 +1,4 @@
-import { Icon } from '../ui/Icon';
+import { Dropdown } from '../ui/Dropdown';
 
 export function RoleSelect({
   id,
@@ -7,37 +7,15 @@ export function RoleSelect({
   options,
   value,
   onChange,
-  required = false,
 }) {
   const choices = options || (roles || []).map((role) => ({ value: role, label: role }));
 
   return (
     <div className="space-y-2">
-      <label
-        htmlFor={id}
-        className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
-      >
+      <label htmlFor={id} className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
         {label}
       </label>
-      <div className="relative">
-        <select
-          id={id}
-          className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-4 pr-10 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          required={required}
-        >
-          {choices.map((choice) => (
-            <option key={choice.value} value={choice.value}>
-              {choice.label}
-            </option>
-          ))}
-        </select>
-        <Icon
-          name="expand_more"
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm pointer-events-none"
-        />
-      </div>
+      <Dropdown id={id} label={label} muted value={value} onChange={onChange} options={choices} />
     </div>
   );
 }

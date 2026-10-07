@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
+import { Dropdown } from '../ui/Dropdown';
 import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
 import { addPurchase, fetchCashFlow } from '../../services/dashboardService';
@@ -96,19 +98,17 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
         <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Fornecedor
         </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+        <Dropdown
+          label="Fornecedor"
+          muted
           value={supplierId}
-          onChange={(event) => setSupplierId(event.target.value)}
-          required
-        >
-          <option value="">Selecione</option>
-          {suppliers.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+          placeholder="Selecione"
+          onChange={setSupplierId}
+          options={[
+            { value: '', label: 'Selecione' },
+            ...suppliers.map((item) => ({ value: item.id, label: item.name })),
+          ]}
+        />
       </div>
       <div className="space-y-3">
         <p className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
@@ -116,25 +116,23 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
         </p>
         {lines.map((line, index) => (
           <div key={`${index}-${line.produto_id}`} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <select
-              className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+            <Dropdown
+              label="Produto"
+              muted
               value={line.produto_id}
-              onChange={(event) =>
+              placeholder="Selecione"
+              onChange={(produtoId) =>
                 setLines((prev) =>
                   prev.map((row, rowIndex) =>
-                    rowIndex === index ? { ...row, produto_id: event.target.value } : row
+                    rowIndex === index ? { ...row, produto_id: produtoId } : row
                   )
                 )
               }
-              required
-            >
-              <option value="">Selecione</option>
-              {products.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.nome || item.name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'Selecione' },
+                ...products.map((item) => ({ value: item.id, label: item.nome || item.name })),
+              ]}
+            />
             <Input
               label="Quantidade"
               type="number"
@@ -156,12 +154,14 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
                 variant="secondary"
                 onClick={() => setLines((prev) => prev.filter((_, rowIndex) => rowIndex !== index))}
               >
+                <Icon name="delete" />
                 Remover
               </Button>
             ) : null}
           </div>
         ))}
         <Button type="button" variant="secondary" onClick={addLine}>
+          <Icon name="add" />
           Adicionar produto
         </Button>
       </div>
@@ -169,18 +169,13 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
         <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Categoria financeira
         </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+        <Dropdown
+          label="Categoria financeira"
+          muted
           value={categoryId}
-          onChange={(event) => setCategoryId(event.target.value)}
-          required
-        >
-          {categories.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+          onChange={setCategoryId}
+          options={categories.map((item) => ({ value: item.id, label: item.name }))}
+        />
       </div>
       <p className="text-sm text-on-surface-variant">Total dos itens {money(calculated)}</p>
       <Input
@@ -196,9 +191,11 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="submit" disabled={saving || !products.length || !suppliers.length}>
+          <Icon name="add" />
           {saving ? 'Salvando...' : 'Registrar compra'}
         </Button>
       </div>

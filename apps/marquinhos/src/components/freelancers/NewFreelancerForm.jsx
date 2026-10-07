@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
+import { FileField } from '../ui/FileField';
 import { Input } from '../ui/Input';
 import { Icon } from '../ui/Icon';
 import { useToast } from '../../contexts/ToastContext';
@@ -104,29 +105,20 @@ export function NewFreelancerForm({ person, roles, onSuccess, onCancel }) {
         required
       />
       <div className="space-y-2">
-        <label
-          htmlFor="freelancer-photo"
-          className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
-        >
-          Foto (opcional)
-        </label>
-        <input
+        <FileField
           id="freelancer-photo"
-          type="file"
+          label="Foto (opcional)"
           accept="image/*"
           onChange={handlePhoto}
-          className="w-full min-h-11 text-sm text-on-surface file:mr-3 file:min-h-11 file:px-4 file:rounded-xl file:border-0 file:bg-primary file:text-on-primary file:font-semibold"
+          cleared={!form.image}
         />
         {form.image ? (
           <div className="flex items-center gap-3">
             <img src={form.image} alt="" className="w-14 h-14 rounded-2xl object-cover" />
-            <button
-              type="button"
-              onClick={() => setForm((prev) => ({ ...prev, image: '' }))}
-              className="min-h-11 px-3 text-sm font-semibold text-on-surface-variant hover:text-error"
-            >
+            <Button type="button" variant="secondary" onClick={() => setForm((prev) => ({ ...prev, image: '' }))}>
+              <Icon name="delete" />
               Remover foto
-            </button>
+            </Button>
           </div>
         ) : (
           <p className="text-xs text-on-surface-variant pl-1">Arquivo local. Sem link.</p>
@@ -135,10 +127,11 @@ export function NewFreelancerForm({ person, roles, onSuccess, onCancel }) {
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="submit" disabled={saving}>
-          <Icon name={person ? 'edit' : 'person_add'} />
+          <Icon name={person ? 'save' : 'add'} />
           {saving ? 'Salvando...' : person ? 'Salvar' : 'Adicionar freelancer'}
         </Button>
       </div>

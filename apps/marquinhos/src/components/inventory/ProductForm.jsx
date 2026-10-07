@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
+import { FileField } from '../ui/FileField';
+import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
 import {
@@ -12,6 +14,7 @@ import { inventoryFallback } from '../../services/fallbacks';
 import { moneyInputValue, parseReaisInput, PRODUCT_MEASURES } from '../../services/inventoryProduct';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { readLocalImage } from '../../services/readLocalImage';
+import { Dropdown } from '../ui/Dropdown';
 
 export function ProductForm({ item, categories, onSuccess, onCancel }) {
   const toast = useToast();
@@ -124,7 +127,7 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
           id="produto-descricao"
           value={form.descricao}
           onChange={(event) => setForm((prev) => ({ ...prev, descricao: event.target.value }))}
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all"
+          className="w-full bg-surface-container-low border border-outline rounded-2xl py-3 px-4 min-h-11 text-on-surface outline-none focus:border-primary focus:outline-none focus:ring-0 transition-all"
           rows={3}
         />
       </div>
@@ -136,18 +139,14 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
           >
             Categoria
           </label>
-          <select
+          <Dropdown
             id="produto-categoria"
-            className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11"
+            label="Categoria"
+            muted
             value={form.categoria}
-            onChange={(event) => setForm((prev) => ({ ...prev, categoria: event.target.value }))}
-          >
-            {categoryOptions.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
+            onChange={(categoria) => setForm((prev) => ({ ...prev, categoria }))}
+            options={categoryOptions.map((category) => ({ value: category, label: category }))}
+          />
         </div>
         <Input
           label="Volume / Peso"
@@ -194,26 +193,20 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
         onChange={(event) => setForm((prev) => ({ ...prev, valor_unitario: event.target.value }))}
         required
       />
-      <label className="block space-y-2">
-        <span className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-          Foto
-        </span>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handlePhoto}
-          className="block w-full text-sm min-h-11"
-        />
+      <div className="space-y-2">
+        <FileField label="Foto" accept="image/*" onChange={handlePhoto} />
         {form.foto ? (
-          <img alt="" src={form.foto} className="w-16 h-16 rounded-xl object-cover" />
+          <img alt="" src={form.foto} className="h-16 w-16 rounded-xl object-cover" />
         ) : null}
-      </label>
+      </div>
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="submit" disabled={saving}>
+          <Icon name={isEdit ? 'save' : 'add'} />
           {saving ? 'Salvando...' : isEdit ? 'Salvar produto' : 'Cadastrar produto'}
         </Button>
       </div>

@@ -1,7 +1,8 @@
 import { useMemo, useReducer } from 'react';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
 import { Icon } from '../ui/Icon';
+import { SegmentedControl } from '../ui/SegmentedControl';
+import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
 import { createDaily } from '../../services/dashboardService';
 import {
@@ -10,6 +11,7 @@ import {
   peopleByRole,
   toIsoDate,
 } from '../../services/freelancerSchedule';
+import { Dropdown } from '../ui/Dropdown';
 import { RoleSelect } from './RoleSelect';
 
 function dailyReducer(state, action) {
@@ -110,29 +112,17 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
         >
           Selecionar Freelancer
         </label>
-        <div className="relative">
-          <select
-            id="daily-freelancer"
-            className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-            value={state.freelancerId}
-            onChange={(event) => dispatch({ type: 'patch', patch: { freelancerId: event.target.value } })}
-            required
-            disabled={!options.length}
-          >
-            <option value="">
-              {options.length ? 'Selecione um profissional' : 'Nenhum freelancer nesta função'}
-            </option>
-            {options.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name}
-              </option>
-            ))}
-          </select>
-          <Icon
-            name="person_search"
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
-          />
-        </div>
+        <Dropdown
+          id="daily-freelancer"
+          label="Selecionar Freelancer"
+          muted
+          leading="person_search"
+          disabled={!options.length}
+          value={state.freelancerId}
+          placeholder={options.length ? 'Selecione um profissional' : 'Nenhum freelancer nesta função'}
+          onChange={(freelancerId) => dispatch({ type: 'patch', patch: { freelancerId } })}
+          options={options.map((person) => ({ value: person.id, label: person.name }))}
+        />
       </div>
 
       <Input
@@ -153,54 +143,30 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
         >
           Status
         </label>
-        <div className="relative">
-          <select
-            id="daily-status"
-            className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-4 pr-10 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-            value={state.status}
-            onChange={(event) => dispatch({ type: 'patch', patch: { status: event.target.value } })}
-          >
-            {SHIFT_STATUSES.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <Icon
-            name="expand_more"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm pointer-events-none"
-          />
-        </div>
+        <Dropdown
+          id="daily-status"
+          label="Status"
+          muted
+          value={state.status}
+          onChange={(status) => dispatch({ type: 'patch', patch: { status } })}
+          options={SHIFT_STATUSES.map((item) => ({ value: item.id, label: item.label }))}
+        />
       </div>
 
       <div className="space-y-2">
         <p className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Data do Turno
         </p>
-        <div className="flex p-1 gap-1 bg-surface-container-low rounded-2xl">
-          <button
-            type="button"
-            onClick={() => dispatch({ type: 'patch', patch: { dateMode: 'single' } })}
-            className={
-              state.dateMode === 'single'
-                ? 'flex-1 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                : 'flex-1 min-h-11 rounded-xl text-on-surface-variant'
-            }
-          >
-            Um dia
-          </button>
-          <button
-            type="button"
-            onClick={() => dispatch({ type: 'patch', patch: { dateMode: 'range' } })}
-            className={
-              state.dateMode === 'range'
-                ? 'flex-1 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                : 'flex-1 min-h-11 rounded-xl text-on-surface-variant'
-            }
-          >
-            Período
-          </button>
-        </div>
+        <SegmentedControl
+          className="w-full"
+          label="Data do turno"
+          items={[
+            { id: 'single', label: 'Um dia' },
+            { id: 'range', label: 'Período' },
+          ]}
+          value={state.dateMode}
+          onChange={(dateMode) => dispatch({ type: 'patch', patch: { dateMode } })}
+        />
       </div>
 
       <div className={state.dateMode === 'range' ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : ''}>
@@ -229,7 +195,8 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
 
       <div className="pt-2">
         <Button type="submit" className="w-full" disabled={saving || !options.length}>
-          {saving ? 'Confirmando...' : 'Confirmar Agendamento'}
+          <Icon name="check" />
+          {saving ? 'Confirmando...' : 'Confirmar agendamento'}
         </Button>
         <p className="text-center text-[11px] text-on-surface-variant mt-4 leading-relaxed">
           Ao confirmar, cada dia entra como despesa variável nas saídas do fluxo de caixa.

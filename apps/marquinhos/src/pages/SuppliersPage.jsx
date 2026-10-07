@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, isValid, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -5,6 +6,11 @@ import { fetchInventory, fetchSuppliers, removeSupplier, reversePurchase } from 
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
+import { FilterBar } from '../components/ui/FilterBar';
+import { SearchField } from '../components/ui/SearchField';
+import { Tabs } from '../components/ui/Tabs';
+import { SuppliersList } from '../components/suppliers/SuppliersList';
+import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
@@ -20,6 +26,8 @@ function money(value) {
 }
 
 export function SuppliersPage() {
+  const [tab, setTab] = useState('compras');
+  const [purchaseQuery, setPurchaseQuery] = useState('');
   const { openModal } = useModal();
   const queryClient = useQueryClient();
   const suppliersQuery = useQuery({
@@ -57,7 +65,7 @@ export function SuppliersPage() {
   function confirmCancel(row) {
     openModal('confirm', {
       message: `Estornar a compra de ${row.supplierName || 'fornecedor'}? O estoque será reduzido e a despesa cancelada.`,
-      confirmLabel: 'Estornar/Cancelar Compra',
+      confirmLabel: 'Cancelar compra',
       successMessage: 'Compra cancelada.',
       errorMessage: 'Não foi possível cancelar a compra.',
       onConfirm: async () => {
@@ -67,8 +75,20 @@ export function SuppliersPage() {
     });
   }
 
-  const purchases = inventory.data?.purchases || [];
-  const purchasePage = usePagedList(purchases, String(purchases.length));
+  const filteredPurchases = useMemo(() => {
+    const purchases = inventory.data?.purchases || [];
+    const term = purchaseQuery.trim().toLowerCase();
+    if (!term) return purchases;
+    return purchases.filter((row) => {
+      const products = (row.itens || []).map((item) => `${item.nome} ${item.quantidade}`).join(' ');
+      const status = row.status === 'cancelada' ? 'cancelada' : 'ativa';
+      return [row.supplierName, row.categoryName, products, formatPurchaseDate(row.date), status, money(row.total)]
+        .join(' ')
+        .toLowerCase()
+        .includes(term);
+    });
+  }, [inventory.data, purchaseQuery]);
+  const purchasePage = usePagedList(filteredPurchases, purchaseQuery);
 
   if (inventory.isLoading || !inventory.data) {
     return (
@@ -79,113 +99,131 @@ export function SuppliersPage() {
   const suppliers = suppliersQuery.data?.suppliers || [];
 
   return (
-    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+    <div className="p-4 md:p-8 space-y-6">
       <PageHeader
         title="Compras"
         description="Histórico das compras. Uma compra finalizada só pode ser estornada."
-      >
-        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-          <Button
-            variant="secondary"
-            onClick={() =>
-              openModal('suppliers-list', {
-                onChanged: refreshSuppliers,
-                onDelete: confirmDelete,
-              })
-            }
-          >
-            Ver fornecedores
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() =>
-              openModal('new-purchase', {
-                items: inventory.data?.items || [],
-                suppliers,
-                onSuccess: refreshPurchase,
-              })
-            }
-          >
-            <Icon name="add" />
-            Nova compra
-          </Button>
-          <Button
-            onClick={() =>
-              openModal('new-supplier', {
-                onSuccess: refreshSuppliers,
-              })
-            }
-          >
-            <Icon name="add" />
-            Novo fornecedor
-          </Button>
-        </div>
-      </PageHeader>
+      />
 
-      <section className="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase">
-                <th className="px-6 py-4">Data</th>
-                <th className="px-6 py-4">Fornecedor</th>
-                <th className="px-6 py-4">Categoria</th>
-                <th className="px-6 py-4">Produtos</th>
-                <th className="px-6 py-4 text-right">Valor total</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-variant/30">
-              {purchases.length === 0 ? (
-                <tr className="bg-surface-container-lowest">
-                  <td className="px-6 py-5 text-on-surface-variant" colSpan={7}>
-                    Nenhuma compra registrada.
-                  </td>
-                </tr>
-              ) : (
-                purchasePage.rows.map((row) => {
-                  const cancelled = row.status === 'cancelada';
-                  return (
-                    <tr key={row.id} className="bg-surface-container-lowest">
-                      <td className="px-6 py-5 text-on-surface">{formatPurchaseDate(row.date)}</td>
-                      <td className="px-6 py-5 font-bold text-on-surface">{row.supplierName}</td>
-                      <td className="px-6 py-5 text-on-surface">{row.categoryName}</td>
-                      <td className="px-6 py-5 text-on-surface-variant">
-                        {(row.itens || []).map((item) => `${item.nome} × ${item.quantidade}`).join(', ') || '—'}
-                      </td>
-                      <td className="px-6 py-5 text-right font-bold text-on-surface">{money(row.total)}</td>
-                      <td className="px-6 py-5">
-                        <span
-                          className={
-                            cancelled
-                              ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-surface-variant/40 text-on-surface-variant'
-                              : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-secondary-container/20 text-on-secondary-fixed-variant'
-                          }
-                        >
-                          {cancelled ? 'Cancelada' : 'Ativa'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5">
-                        {cancelled ? (
-                          <span className="text-on-surface-variant">—</span>
-                        ) : (
-                          <Button type="button" variant="danger" onClick={() => confirmCancel(row)}>
-                            Estornar/Cancelar Compra
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
+      <Tabs
+        label="Compras"
+        items={[
+          { id: 'compras', label: 'Compras' },
+          { id: 'fornecedores', label: 'Fornecedores' },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+
+      {tab === 'compras' ? (
+      <section className="space-y-6">
+        <FilterBar
+          actions={
+            <Button
+              onClick={() =>
+                openModal('new-purchase', {
+                  items: inventory.data?.items || [],
+                  suppliers,
+                  onSuccess: refreshPurchase,
                 })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="p-4">
-          <Pagination state={purchasePage} />
+              }
+            >
+              <Icon name="add" />
+              Nova compra
+            </Button>
+          }
+        >
+          <SearchField
+            value={purchaseQuery}
+            onChange={setPurchaseQuery}
+            placeholder="Buscar compra"
+            label="Buscar compra"
+          />
+        </FilterBar>
+        <div className="space-y-4">
+        <DataTable>
+          <THead>
+            <Th>Data</Th>
+            <Th>Fornecedor</Th>
+            <Th>Categoria</Th>
+            <Th>Produtos</Th>
+            <Th align="right">Valor total</Th>
+            <Th>Status</Th>
+            <Th align="right">Ações</Th>
+          </THead>
+          <TBody>
+            {(inventory.data?.purchases || []).length === 0 ? (
+              <EmptyRow colSpan={7}>Nenhuma compra registrada.</EmptyRow>
+            ) : purchasePage.rows.length === 0 ? (
+              <EmptyRow colSpan={7}>Nenhuma compra encontrada.</EmptyRow>
+            ) : (
+              purchasePage.rows.map((row) => {
+                const cancelled = row.status === 'cancelada';
+                return (
+                  <Tr key={row.id}>
+                    <Td tone="muted">{formatPurchaseDate(row.date)}</Td>
+                    <Td tone="strong">{row.supplierName}</Td>
+                    <Td>{row.categoryName}</Td>
+                    <Td tone="muted">
+                      {(row.itens || []).map((item) => `${item.nome} × ${item.quantidade}`).join(', ') || '—'}
+                    </Td>
+                    <Td align="right" tone="strong">
+                      {money(row.total)}
+                    </Td>
+                    <Td>
+                      <StatusPill tone={cancelled ? 'neutral' : 'accent'}>
+                        {cancelled ? 'Cancelada' : 'Ativa'}
+                      </StatusPill>
+                    </Td>
+                    <Td align="right" tone="muted">
+                      {cancelled ? (
+                        '—'
+                      ) : (
+                        <TableActions>
+                          <Button type="button" size="icon" variant="danger" onClick={() => confirmCancel(row)} aria-label="Cancelar compra">
+                            <Icon name="cancel" />
+                          </Button>
+                        </TableActions>
+                      )}
+                    </Td>
+                  </Tr>
+                );
+              })
+            )}
+          </TBody>
+        </DataTable>
+        <Pagination state={purchasePage} />
         </div>
       </section>
+      ) : (
+        <SuppliersList
+          action={
+            <Button
+              onClick={() =>
+                openModal('new-supplier', {
+                  onSuccess: refreshSuppliers,
+                })
+              }
+            >
+              <Icon name="add" />
+              Novo fornecedor
+            </Button>
+          }
+          onOpen={(supplier) =>
+            openModal('supplier-detail', {
+              supplierId: supplier.id,
+              supplier,
+            })
+          }
+          onEdit={(supplier) =>
+            openModal('edit-supplier', {
+              supplier,
+              onSuccess: refreshSuppliers,
+            })
+          }
+          onDelete={confirmDelete}
+        />
+      )}
     </div>
   );
 }

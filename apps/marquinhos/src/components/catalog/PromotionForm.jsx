@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { useToast } from '../../contexts/ToastContext';
@@ -91,9 +92,11 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="submit" disabled={saving || !items.length}>
+          <Icon name={editing ? 'save' : reactivate ? 'restart_alt' : 'add'} />
           {saving ? 'Salvando...' : editing ? 'Salvar promoção' : reactivate ? 'Reativar promoção' : 'Cadastrar promoção'}
         </Button>
       </div>

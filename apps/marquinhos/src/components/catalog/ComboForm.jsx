@@ -1,16 +1,20 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../ui/Button';
+import { FileField } from '../ui/FileField';
+import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
 import { addCombo, editCombo } from '../../services/dashboardService';
 import { moneyInputValue, parseReaisInput } from '../../services/inventoryProduct';
+import { readLocalImage } from '../../services/readLocalImage';
 
 export function ComboForm({ items = [], combo = null, parts = [], onSuccess, onCancel }) {
   const toast = useToast();
   const editing = Boolean(combo?.id);
   const [nome, setNome] = useState(editing ? combo.nome || combo.name || '' : 'Combo ');
   const [valor, setValor] = useState(editing ? moneyInputValue(combo.valor_unitario ?? combo.cost) : '');
+  const [foto, setFoto] = useState(editing ? combo.foto || combo.image || '' : '');
   const [query, setQuery] = useState('');
   const [lines, setLines] = useState(() =>
     parts.map((part) => ({
@@ -54,6 +58,20 @@ export function ComboForm({ items = [], combo = null, parts = [], onSuccess, onC
     setQuery('');
   }
 
+  async function handlePhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setError('');
+    try {
+      setFoto(await readLocalImage(file));
+    } catch (err) {
+      const message = err?.message || 'Não foi possível ler a foto.';
+      setError(message);
+      toast.error(message);
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setSaving(true);
@@ -68,6 +86,7 @@ export function ComboForm({ items = [], combo = null, parts = [], onSuccess, onC
       const payload = {
         nome,
         valor: preco,
+        foto,
         itens: lines.map((line) => ({
           produto_associado_id: line.produto_associado_id,
           quantidade: Number(line.quantidade),
@@ -99,6 +118,26 @@ export function ComboForm({ items = [], combo = null, parts = [], onSuccess, onC
           onChange={(event) => setValor(event.target.value)}
           required
         />
+      </div>
+      <div className="space-y-2">
+        <FileField
+          id="combo-photo"
+          label="Foto"
+          accept="image/*"
+          onChange={handlePhoto}
+          cleared={!foto}
+        />
+        {foto ? (
+          <div className="flex items-center gap-3">
+            <img src={foto} alt="" className="h-16 w-16 rounded-xl object-cover" />
+            <Button type="button" variant="secondary" onClick={() => setFoto('')}>
+              <Icon name="delete" />
+              Remover foto
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs text-on-surface-variant pl-1">Arquivo local. Sem link.</p>
+        )}
       </div>
       <Input
         label="Buscar produto"
@@ -170,6 +209,7 @@ export function ComboForm({ items = [], combo = null, parts = [], onSuccess, onC
               )
             }
           >
+            <Icon name="inventory_2" />
             {line.deduz_estoque_integral ? 'Deduz estoque integral' : 'Não deduz estoque integral'}
           </Button>
           <Button
@@ -179,6 +219,7 @@ export function ComboForm({ items = [], combo = null, parts = [], onSuccess, onC
               setLines((prev) => prev.filter((row) => row.produto_associado_id !== line.produto_associado_id))
             }
           >
+            <Icon name="delete" />
             Remover
           </Button>
         </div>
@@ -186,9 +227,11 @@ export function ComboForm({ items = [], combo = null, parts = [], onSuccess, onC
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="submit" disabled={saving || !lines.length}>
+          <Icon name={editing ? 'save' : 'add'} />
           {saving ? 'Salvando...' : editing ? 'Salvar combo' : 'Cadastrar combo'}
         </Button>
       </div>

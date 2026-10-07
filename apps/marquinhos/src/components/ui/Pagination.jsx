@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Dropdown } from './Dropdown';
 import { Icon } from './Icon';
-import { PAGE_SIZES } from './usePagedList';
+import { PAGE_AFTER, PAGE_SIZES } from './usePagedList';
 
 function pageWindow(currentIndex, pageCount) {
   const current = currentIndex + 1;
@@ -43,7 +44,7 @@ function NavButton({ label, icon, disabled, onClick }) {
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex shrink-0 items-center justify-center min-h-11 min-w-11 rounded-lg border border-outline bg-surface text-on-surface disabled:opacity-40"
+      className="inline-flex shrink-0 items-center justify-center h-11 w-11 rounded-full border border-outline bg-surface text-on-surface disabled:opacity-40 [&_.material-symbols-outlined]:text-xl"
     >
       <Icon name={icon} />
     </button>
@@ -60,6 +61,7 @@ export function Pagination({ state }) {
   }, [page]);
 
   const items = pageWindow(page, pageCount);
+  if ((state.total ?? 0) <= PAGE_AFTER) return null;
 
   return (
     <nav
@@ -80,7 +82,7 @@ export function Pagination({ state }) {
             event.preventDefault();
             setDraft(String(commitPage(draft, page, pageCount, setPage) + 1));
           }}
-          className="w-12 min-h-11 rounded-lg border border-outline bg-surface text-center text-sm font-semibold text-on-surface"
+          className="h-11 w-12 rounded-lg border border-outline bg-surface text-center text-sm font-semibold text-on-surface outline-none focus:border-primary focus:outline-none focus:ring-0"
         />
         <span>de {pageCount}</span>
       </div>
@@ -110,7 +112,7 @@ export function Pagination({ state }) {
               aria-label={`Página ${item}`}
               aria-current={item === page + 1 ? 'page' : undefined}
               onClick={() => setPage(item - 1)}
-              className={`inline-flex shrink-0 items-center justify-center min-h-11 min-w-11 rounded-lg text-sm ${
+              className={`inline-flex shrink-0 items-center justify-center h-11 w-11 rounded-full text-sm font-semibold ${
                 item === page + 1
                   ? 'bg-primary font-semibold text-on-primary'
                   : 'text-on-surface'
@@ -136,24 +138,13 @@ export function Pagination({ state }) {
 
       <label className="flex flex-wrap items-center gap-2 text-sm text-on-surface">
         Linhas por página
-        <span className="relative">
-          <select
-            aria-label="Linhas por página"
-            value={pageSize}
-            onChange={(event) => setPageSize(event.target.value)}
-            className="min-h-11 appearance-none rounded-lg border border-outline bg-surface py-2 pl-3 pr-9 text-sm font-semibold text-on-surface"
-          >
-            {PAGE_SIZES.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-          <Icon
-            name="expand_more"
-            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm"
-          />
-        </span>
+        <Dropdown
+          label="Linhas por página"
+          className="w-24"
+          value={pageSize}
+          onChange={setPageSize}
+          options={PAGE_SIZES.map((size) => ({ value: size, label: String(size) }))}
+        />
       </label>
     </nav>
   );

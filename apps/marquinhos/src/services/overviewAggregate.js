@@ -103,9 +103,9 @@ function bucketKey(date, unit) {
 }
 
 function bucketLabel(date, range) {
-  if (range.unit === 'hour') return format(date, 'HH');
+  if (range.unit === 'hour') return `hora ${format(date, 'H')}`;
   if (range.unit === 'month') return format(date, 'MMM', { locale: ptBR }).replace('.', '');
-  if (range.id === 'mes') return format(date, 'dd');
+  if (range.id === 'mes') return `dia ${format(date, 'd')}`;
   return format(date, 'EEE', { locale: ptBR }).replace('.', '');
 }
 

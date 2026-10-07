@@ -2,25 +2,27 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Icon } from './Icon';
 import { Button } from './Button';
+import { DataTable, EmptyRow, TBody, Td, Th, THead, Tr } from './DataTable';
+import { SegmentedControl } from './SegmentedControl';
+import { Dropdown } from './Dropdown';
 import { Input } from './Input';
 import { useModal } from '../../contexts/ModalContext';
 import { useToast } from '../../contexts/ToastContext';
-import { useAuth } from '../../contexts/AuthContext';
 import {
   createCashExpense,
   createCashIncome,
+  editCashExpense,
+  editCashIncome,
   createSupplier,
   editSupplier,
   fetchCashFlow,
-  fetchInventory,
   fetchSuppliers,
-  addStockEntry,
 } from '../../services/dashboardService';
 import { NewFreelancerForm } from '../freelancers/NewFreelancerForm';
 import { DailyForm } from '../freelancers/DailyForm';
 import { ShiftDetailForm } from '../freelancers/ShiftDetailForm';
 import { expenseCategories } from '../../services/fallbacks';
-import { isStockRole } from '../../services/roles';
+import { parseCashFlowDate, toIsoDate } from '../../services/cashFlowUtils';
 import { ProductForm } from '../inventory/ProductForm';
 import { ProductDetail } from '../inventory/ProductDetail';
 import { CategoryForm } from '../inventory/CategoryForm';
@@ -31,12 +33,9 @@ import { PromotionForm } from '../catalog/PromotionForm';
 import { CustomerForm } from '../pdv/CustomerForm';
 import { PurchaseForm } from '../suppliers/PurchaseForm';
 import { SuppliersList } from '../suppliers/SuppliersList';
-import { RoleSelect } from '../freelancers/RoleSelect';
-import { PAYMENT_OPTIONS } from '../../services/inventoryProduct';
 
 const titles = {
   'new-order': 'Nova Venda',
-  'stock-entry': 'Entrada de Mercadoria',
   'new-product': 'Novo produto',
   'edit-product': 'Editar produto',
   'product-detail': 'Detalhes do Produto',
@@ -118,9 +117,11 @@ function NewSupplierForm({ supplier = null, onSuccess, onCancel }) {
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="submit" disabled={saving}>
+          <Icon name={editing ? 'save' : 'add'} />
           {saving ? 'Salvando...' : editing ? 'Salvar fornecedor' : 'Adicionar fornecedor'}
         </Button>
       </div>
@@ -168,61 +169,65 @@ function SupplierDetailView({ supplierId, fallbackSupplier, onCancel }) {
 
       <div className="space-y-3">
         <h4 className="font-headline font-bold text-on-surface">Histórico de compras</h4>
-        <div className="overflow-x-auto rounded-xl border border-outline-variant/20">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-surface-container-low text-on-surface-variant font-medium">
-              <tr>
-                <th className="px-4 py-3">Data</th>
-                <th className="px-4 py-3">Categoria</th>
-                <th className="px-4 py-3 text-right">Valor</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/20">
-              {history.map((row) => (
-                <tr key={row.id || `${row.date}-${row.value}`}>
-                  <td className="px-4 py-3 text-on-surface-variant">{row.date}</td>
-                  <td className="px-4 py-3 text-on-surface">{row.category}</td>
-                  <td className="px-4 py-3 text-right font-bold text-error">{row.value}</td>
-                </tr>
-              ))}
-              {!history.length ? (
-                <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-on-surface-variant">
-                    Nenhuma compra vinculada.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+        <DataTable>
+          <THead>
+            <Th>Data</Th>
+            <Th>Categoria</Th>
+            <Th align="right">Valor</Th>
+          </THead>
+          <TBody>
+            {history.map((row) => (
+              <Tr key={row.id || `${row.date}-${row.value}`}>
+                <Td tone="muted">{row.date}</Td>
+                <Td>{row.category}</Td>
+                <Td align="right" tone="danger">
+                  {row.value}
+                </Td>
+              </Tr>
+            ))}
+            {!history.length ? <EmptyRow colSpan={3}>Nenhuma compra vinculada.</EmptyRow> : null}
+          </TBody>
+        </DataTable>
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={onCancel}>Fechar</Button>
+        <Button onClick={onCancel}>
+          <Icon name="close" />
+          Fechar
+        </Button>
       </div>
     </div>
   );
 }
 
-function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
+function cashFormDate(row) {
+  return parseCashFlowDate(row?.date) || toIsoDate(row?.createdAt) || new Date().toISOString().slice(0, 10);
+}
+
+function reaisInput(cents) {
+  return (Number(cents || 0) / 100).toFixed(2);
+}
+
+function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp, expense = null }) {
   const toast = useToast();
+  const editing = Boolean(expense?.id);
   const categories = categoriesProp?.length ? categoriesProp : expenseCategories;
-  const initialCategory = categories[0];
+  const initialCategory = categories.find((item) => item.id === expense?.categoryId) || categories[0];
   const { data: suppliersData } = useQuery({
     queryKey: ['suppliers'],
     queryFn: fetchSuppliers,
   });
   const suppliers = suppliersData?.suppliers || [];
   const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    supplier: '',
-    supplierId: '',
+    date: editing ? cashFormDate(expense) : new Date().toISOString().slice(0, 10),
+    supplier: expense?.supplier || '',
+    supplierId: expense?.supplierId || '',
     categoryId: initialCategory?.id || 'bebidas',
-    nature: initialCategory?.defaultNature || 'variable',
-    value: '',
-    recurrence: '',
+    nature: expense?.nature || initialCategory?.defaultNature || 'variable',
+    value: editing ? reaisInput(expense.amount) : '',
+    recurrence: expense?.recurrence || '',
   });
-  const [natureTouched, setNatureTouched] = useState(false);
+  const [natureTouched, setNatureTouched] = useState(editing);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -252,7 +257,7 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
     setSaving(true);
     setError('');
     try {
-      await createCashExpense({
+      const payload = {
         date: form.date,
         supplier: form.supplier,
         supplierId: form.supplierId || null,
@@ -261,13 +266,15 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
         amount: Math.round(Number(form.value) * 100),
         recurrence: form.recurrence || null,
         source: 'manual',
-      });
-      toast.success('Despesa registrada.');
+      };
+      if (editing) await editCashExpense(expense.id, payload);
+      else await createCashExpense(payload);
+      toast.success(editing ? 'Despesa atualizada.' : 'Despesa registrada.');
       onSuccess?.();
       onCancel();
     } catch {
-      setError('Não foi possível registrar a despesa.');
-      toast.error('Falha ao registrar despesa.');
+      setError(editing ? 'Não foi possível atualizar a despesa.' : 'Não foi possível registrar a despesa.');
+      toast.error(editing ? 'Falha ao atualizar despesa.' : 'Falha ao registrar despesa.');
     } finally {
       setSaving(false);
     }
@@ -287,18 +294,16 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
         <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Fornecedor cadastrado
         </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+        <Dropdown
+          label="Fornecedor cadastrado"
+          muted
           value={form.supplierId}
-          onChange={(e) => handleSupplierSelect(e.target.value)}
-        >
-          <option value="">Nenhum / avulso</option>
-          {suppliers.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+          onChange={handleSupplierSelect}
+          options={[
+            { value: '', label: 'Nenhum / avulso' },
+            ...suppliers.map((item) => ({ value: item.id, label: item.name })),
+          ]}
+        />
         <p className="text-[11px] text-on-surface-variant pl-1">
           Marcar um fornecedor atualiza a última compra e o valor na lista.
         </p>
@@ -316,44 +321,31 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
         <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Categoria
         </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+        <Dropdown
+          label="Categoria"
+          muted
           value={form.categoryId}
-          onChange={(e) => handleCategoryChange(e.target.value)}
-        >
-          {categories.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+          onChange={handleCategoryChange}
+          options={categories.map((item) => ({ value: item.id, label: item.name }))}
+        />
       </div>
       <div className="space-y-2">
         <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Natureza
         </label>
-        <div className="flex gap-2 p-1 bg-surface-container-low rounded-2xl">
-          {[
+        <SegmentedControl
+          className="w-full"
+          label="Natureza"
+          items={[
             { id: 'fixed', label: 'Fixa' },
             { id: 'variable', label: 'Variável' },
-          ].map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                setNatureTouched(true);
-                setForm((prev) => ({ ...prev, nature: item.id }));
-              }}
-              className={
-                form.nature === item.id
-                  ? 'flex-1 px-4 py-2 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                  : 'flex-1 px-4 py-2 min-h-11 rounded-xl text-on-surface-variant'
-              }
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+          ]}
+          value={form.nature}
+          onChange={(nature) => {
+            setNatureTouched(true);
+            setForm((prev) => ({ ...prev, nature }));
+          }}
+        />
         <p className="text-[11px] text-on-surface-variant pl-1">
           Default da categoria {selectedCategory?.name}:{' '}
           {selectedCategory?.defaultNature === 'fixed' ? 'Fixa' : 'Variável'}
@@ -373,35 +365,40 @@ function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
         <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Recorrência
         </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+        <Dropdown
+          label="Recorrência"
+          muted
           value={form.recurrence}
-          onChange={(e) => setForm((prev) => ({ ...prev, recurrence: e.target.value }))}
-        >
-          <option value="">Única</option>
-          <option value="monthly">Mensal</option>
-        </select>
+          onChange={(recurrence) => setForm((prev) => ({ ...prev, recurrence }))}
+          options={[
+            { value: '', label: 'Única' },
+            { value: 'monthly', label: 'Mensal' },
+          ]}
+        />
       </div>
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="submit" disabled={saving}>
-          {saving ? 'Salvando...' : 'Registrar despesa'}
+          <Icon name={editing ? 'save' : 'add'} />
+          {saving ? 'Salvando...' : editing ? 'Salvar' : 'Registrar despesa'}
         </Button>
       </div>
     </form>
   );
 }
 
-function NewOrderForm({ onSuccess, onCancel }) {
+function NewOrderForm({ onSuccess, onCancel, income = null }) {
   const toast = useToast();
+  const editing = Boolean(income?.id);
   const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    description: '',
-    category: 'Varejo',
-    value: '',
+    date: editing ? cashFormDate(income) : new Date().toISOString().slice(0, 10),
+    description: income?.description || '',
+    category: income?.categoria || 'Varejo',
+    value: editing ? reaisInput(income.amount) : '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -411,20 +408,22 @@ function NewOrderForm({ onSuccess, onCancel }) {
     setSaving(true);
     setError('');
     try {
-      await createCashIncome({
+      const payload = {
         date: form.date,
         description: form.description,
         category: form.category,
         categoryIcon: form.category === 'Eventos' ? 'celebration' : 'payments',
         categoryTone: form.category === 'Eventos' ? 'tertiary' : 'secondary',
         amount: Math.round(Number(form.value) * 100),
-      });
-      toast.success('Venda registrada no fluxo de caixa.');
+      };
+      if (editing) await editCashIncome(income.id, payload);
+      else await createCashIncome(payload);
+      toast.success(editing ? 'Entrada atualizada.' : 'Venda registrada no fluxo de caixa.');
       onSuccess?.();
       onCancel();
     } catch {
-      setError('Não foi possível registrar a venda.');
-      toast.error('Falha ao registrar venda.');
+      setError(editing ? 'Não foi possível atualizar a entrada.' : 'Não foi possível registrar a venda.');
+      toast.error(editing ? 'Falha ao atualizar entrada.' : 'Falha ao registrar venda.');
     } finally {
       setSaving(false);
     }
@@ -450,15 +449,16 @@ function NewOrderForm({ onSuccess, onCancel }) {
         <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           Categoria
         </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+        <Dropdown
+          label="Categoria"
+          muted
           value={form.category}
-          onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
-        >
-          <option>Varejo</option>
-          <option>Eventos</option>
-          <option>Reservas</option>
-        </select>
+          onChange={(category) => setForm((prev) => ({ ...prev, category }))}
+          options={[...new Set([form.category, 'Varejo', 'Eventos', 'Reservas'].filter(Boolean))].map((item) => ({
+            value: item,
+            label: item,
+          }))}
+        />
       </div>
       <Input
         label="Valor (R$)"
@@ -472,192 +472,24 @@ function NewOrderForm({ onSuccess, onCancel }) {
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="submit" disabled={saving}>
-          {saving ? 'Salvando...' : 'Confirmar venda'}
+          <Icon name={editing ? 'save' : 'check'} />
+          {saving ? 'Salvando...' : editing ? 'Salvar' : 'Confirmar venda'}
         </Button>
       </div>
     </form>
   );
 }
 
-function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
-  const toast = useToast();
-  const { user } = useAuth();
-  const stockOnly = isStockRole(user?.role);
-  const [items, setItems] = useState(itemsProp || []);
-  const { data: suppliersData } = useQuery({
-    queryKey: ['suppliers'],
-    queryFn: fetchSuppliers,
-    enabled: !stockOnly,
-  });
-  const suppliers = suppliersData?.suppliers || [];
-  const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    itemId: '',
-    quantity: '',
-    supplierId: '',
-    value: '',
-    forma_pagamento: 'dinheiro',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (itemsProp?.length) {
-      setItems(itemsProp);
-      setForm((prev) => ({ ...prev, itemId: String(itemsProp[0].id) }));
-      return;
-    }
-    let active = true;
-    fetchInventory().then((data) => {
-      if (!active) return;
-      setItems(data.items || []);
-      if (data.items?.[0]) {
-        setForm((prev) => ({ ...prev, itemId: String(data.items[0].id) }));
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [itemsProp]);
-
-  function selectedSupplier() {
-    return suppliers.find((item) => String(item.id) === String(form.supplierId));
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      if (stockOnly) {
-        await addStockEntry({
-          date: form.date,
-          itemId: form.itemId,
-          quantity: Number(form.quantity),
-          forma_pagamento: form.forma_pagamento,
-          linkCash: false,
-        });
-        toast.success('Entrada lançada no estoque.');
-      } else {
-        const supplier = selectedSupplier();
-        if (!supplier) {
-          throw new Error('Selecione um fornecedor.');
-        }
-        await addStockEntry({
-          date: form.date,
-          itemId: form.itemId,
-          quantity: Number(form.quantity),
-          supplierId: form.supplierId,
-          supplier: supplier.name,
-          amount: Math.round(Number(form.value) * 100),
-          forma_pagamento: form.forma_pagamento,
-          linkCash: true,
-        });
-        toast.success('Entrada lançada no estoque e em Saídas.');
-      }
-      onSuccess?.();
-      onCancel();
-    } catch (err) {
-      const message = err?.message || 'Não foi possível registrar a entrada.';
-      setError(message);
-      toast.error(message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
-      <Input
-        label="Data da compra"
-        type="date"
-        value={form.date}
-        onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
-        required
-      />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-          Produto
-        </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-          value={form.itemId}
-          onChange={(e) => setForm((prev) => ({ ...prev, itemId: e.target.value }))}
-          required
-        >
-          {items.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name} — atual: {item.stock}
-            </option>
-          ))}
-        </select>
-      </div>
-      <Input
-        label="Quantidade de entrada"
-        type="number"
-        min="1"
-        step="1"
-        value={form.quantity}
-        onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
-        required
-      />
-      <RoleSelect
-        id="entrada-pagamento"
-        label="Forma de pagamento"
-        options={PAYMENT_OPTIONS}
-        value={form.forma_pagamento}
-        onChange={(forma_pagamento) => setForm((prev) => ({ ...prev, forma_pagamento }))}
-        required
-      />
-      {stockOnly ? null : (
-        <>
-          <div className="space-y-2">
-            <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-              Fornecedor
-            </label>
-            <select
-              className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-              value={form.supplierId}
-              onChange={(e) => setForm((prev) => ({ ...prev, supplierId: e.target.value }))}
-              required
-            >
-              <option value="">Selecione o fornecedor</option>
-              {suppliers.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Input
-            label="Valor da compra (R$)"
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.value}
-            onChange={(e) => setForm((prev) => ({ ...prev, value: e.target.value }))}
-            required
-          />
-          <p className="text-[11px] text-on-surface-variant pl-1">
-            A compra entra como saída variável no fluxo de caixa e atualiza a última compra do
-            fornecedor.
-          </p>
-        </>
-      )}
-      {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
-      <div className="flex flex-wrap gap-3 justify-end">
-        <Button variant="secondary" type="button" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={saving || !items.length}>
-          {saving ? 'Salvando...' : 'Confirmar entrada'}
-        </Button>
-      </div>
-    </form>
-  );
+function confirmActionIcon(label) {
+  const text = String(label || 'Confirmar');
+  if (text.startsWith('Excluir') || text.startsWith('Remover') || text.startsWith('Apagar')) return 'delete';
+  if (text.startsWith('Cancelar')) return 'cancel';
+  if (text.startsWith('Reativar')) return 'restart_alt';
+  return 'check';
 }
 
 function ConfirmForm({ payload, onCancel }) {
@@ -684,9 +516,11 @@ function ConfirmForm({ payload, onCancel }) {
       </p>
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button variant="danger" type="button" onClick={handleConfirm} disabled={saving}>
+          <Icon name={confirmActionIcon(payload?.confirmLabel)} />
           {saving ? 'Processando...' : payload?.confirmLabel || 'Confirmar'}
         </Button>
       </div>
@@ -720,7 +554,11 @@ export function AppModal() {
       ? 'Reativar promoção'
       : modal.type === 'new-freelancer' && modal.payload?.person
         ? 'Editar Freelancer'
-        : titles[modal.type] || 'Confirmação';
+        : modal.type === 'new-expense' && modal.payload?.expense
+          ? 'Editar despesa'
+          : modal.type === 'new-order' && modal.payload?.income
+            ? 'Editar entrada'
+            : titles[modal.type] || 'Confirmação';
   const iconName =
     modal.type === 'new-freelancer'
       ? 'person_add'
@@ -732,9 +570,7 @@ export function AppModal() {
           ? 'receipt_long'
           : modal.type === 'new-expense'
             ? 'payments'
-            : modal.type === 'stock-entry'
-              ? 'inventory_2'
-              : modal.type === 'new-order'
+            : modal.type === 'new-order'
                 ? 'point_of_sale'
                 : modal.type === 'confirm'
                   ? 'warning'
@@ -773,13 +609,9 @@ export function AppModal() {
             </div>
             <h3 className="font-headline text-xl font-bold text-on-surface">{title}</h3>
           </div>
-          <button
-            type="button"
-            onClick={closeModal}
-            className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors"
-          >
+          <Button type="button" size="icon" variant="ghost" onClick={closeModal} aria-label="Fechar">
             <Icon name="close" />
-          </button>
+          </Button>
         </div>
 
         {modal.type === 'new-freelancer' ? (
@@ -842,14 +674,13 @@ export function AppModal() {
         ) : modal.type === 'new-expense' ? (
           <NewExpenseForm
             categories={modal.payload?.categories || categories}
+            expense={modal.payload?.expense}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
         ) : modal.type === 'new-order' ? (
-          <NewOrderForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
-        ) : modal.type === 'stock-entry' ? (
-          <StockEntryForm
-            items={modal.payload?.items}
+          <NewOrderForm
+            income={modal.payload?.income}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
@@ -909,7 +740,10 @@ export function AppModal() {
               {modal.payload?.message || 'Ação disponível em breve.'}
             </p>
             <div className="flex justify-end">
-              <Button onClick={closeModal}>Fechar</Button>
+              <Button onClick={closeModal}>
+                <Icon name="close" />
+                Fechar
+              </Button>
             </div>
           </div>
         )}

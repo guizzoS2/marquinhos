@@ -3,6 +3,8 @@ import { compareDesc, parseISO } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { fetchInventory } from '../../services/dashboardService';
 import { Icon } from '../ui/Icon';
+import { Button } from '../ui/Button';
+import { DataTable, EmptyRow, TBody, Td, Th, THead, Tr } from '../ui/DataTable';
 import { Pagination } from '../ui/Pagination';
 import { usePagedList } from '../ui/usePagedList';
 import { useAuth } from '../../contexts/AuthContext';
@@ -62,13 +64,9 @@ export default function CaixaModal({ onClose }) {
             </div>
             <h3 className="font-headline text-xl font-bold text-on-surface">Fechamento de caixa</h3>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors"
-          >
+          <Button type="button" size="icon" variant="ghost" onClick={onClose} aria-label="Fechar">
             <Icon name="close" />
-          </button>
+          </Button>
         </div>
 
         {inventory.isLoading ? (
@@ -80,45 +78,37 @@ export default function CaixaModal({ onClose }) {
             <p className="text-on-surface-variant font-body">
               Vendas do dia. O fechamento soma só o que já foi pago.
             </p>
-            <section className="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase">
-                      <th className="px-6 py-4">Data</th>
-                      <th className="px-6 py-4">Hora</th>
-                      <th className="px-6 py-4">Nº Comanda</th>
-                      <th className="px-6 py-4">Cliente</th>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-variant/30">
-                    {rows.length === 0 ? (
-                      <tr className="bg-surface-container-lowest">
-                        <td className="px-6 py-5 text-on-surface-variant" colSpan={6}>
-                          Nenhuma venda hoje.
-                        </td>
-                      </tr>
-                    ) : (
-                      rows.map((sale) => {
-                        const stamp = formatSaleStamp(sale.created_at);
-                        return (
-                          <tr key={sale.id} className="bg-surface-container-lowest">
-                            <td className="px-6 py-5 text-on-surface">{stamp.data}</td>
-                            <td className="px-6 py-5 text-on-surface">{stamp.hora}</td>
-                            <td className="px-6 py-5 font-bold text-on-surface">{sale.numero_comanda ?? '—'}</td>
-                            <td className="px-6 py-5 text-on-surface">{sale.cliente_nome || 'Consumidor'}</td>
-                            <td className="px-6 py-5 text-on-surface">{STATUS_LABEL[sale.status] || sale.status}</td>
-                            <td className="px-6 py-5 text-right font-semibold text-on-surface">{money(sale.total)}</td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+            <DataTable>
+              <THead>
+                <Th>Data</Th>
+                <Th>Hora</Th>
+                <Th>Nº comanda</Th>
+                <Th>Cliente</Th>
+                <Th>Status</Th>
+                <Th align="right">Total</Th>
+              </THead>
+              <TBody>
+                {rows.length === 0 ? (
+                  <EmptyRow colSpan={6}>Nenhuma venda hoje.</EmptyRow>
+                ) : (
+                  rows.map((sale) => {
+                    const stamp = formatSaleStamp(sale.created_at);
+                    return (
+                      <Tr key={sale.id}>
+                        <Td tone="muted">{stamp.data}</Td>
+                        <Td tone="muted">{stamp.hora}</Td>
+                        <Td tone="strong">{sale.numero_comanda ?? '—'}</Td>
+                        <Td>{sale.cliente_nome || 'Consumidor'}</Td>
+                        <Td>{STATUS_LABEL[sale.status] || sale.status}</Td>
+                        <Td align="right" tone="strong">
+                          {money(sale.total)}
+                        </Td>
+                      </Tr>
+                    );
+                  })
+                )}
+              </TBody>
+            </DataTable>
 
             <Pagination state={page} />
 

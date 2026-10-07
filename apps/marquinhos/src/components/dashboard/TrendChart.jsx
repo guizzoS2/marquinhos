@@ -44,8 +44,8 @@ export function TrendChart({ points = [], unit = 'dia' }) {
   }));
 
   return (
-    <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm lg:col-span-2 min-w-0">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+    <section className="h-full bg-surface border border-outline rounded-xl p-4 md:p-5 lg:col-span-2 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
           <h2 className="text-xl font-extrabold">Entradas vs Saídas</h2>
           <p className="text-xs text-on-surface-variant">Agrupado por {unit}</p>

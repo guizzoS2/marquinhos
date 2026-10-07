@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchCashFlow, removeCashExpense } from '../services/dashboardService';
+import { fetchCashFlow, removeCashExpense, removeCashIncome } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
-import { MetricCard } from '../components/ui/MetricCard';
+import { DateRangeField } from '../components/ui/DateRangeField';
+import { FilterBar } from '../components/ui/FilterBar';
+import { MetricCard, MetricGrid } from '../components/ui/MetricCard';
 import { PageHeader } from '../components/ui/PageHeader';
+import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
 import { Tabs } from '../components/ui/Tabs';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
@@ -14,19 +17,12 @@ import {
   buildCashFlowCsv,
   buildCashFlowSummary,
   downloadCsv,
-  formatIsoRange,
   inDateRange,
   natureLabel,
   startOfMonthIso,
   toIsoDate,
   unifyCashMovements,
 } from '../services/cashFlowUtils';
-
-const natureFilters = [
-  { id: 'all', label: 'Todas' },
-  { id: 'fixed', label: 'Fixas' },
-  { id: 'variable', label: 'Variáveis' },
-];
 
 const movementFilters = [
   { id: 'todas', label: 'Todas as Movimentações' },
@@ -37,7 +33,6 @@ const movementFilters = [
 export function CashFlowPage() {
   const [fromDate, setFromDate] = useState(startOfMonthIso);
   const [toDate, setToDate] = useState(toIsoDate);
-  const [natureFilter, setNatureFilter] = useState('all');
   const [movementFilter, setMovementFilter] = useState('todas');
   const { openModal } = useModal();
   const toast = useToast();
@@ -68,22 +63,16 @@ export function CashFlowPage() {
     return source.filter((row) => {
       if (!inDateRange(row.date, fromDate, toDate)) return false;
       if (movementFilter !== 'todas' && row.tipo !== movementFilter) return false;
-      if (row.tipo === 'saida' && natureFilter !== 'all' && row.nature !== natureFilter) return false;
       return true;
     });
-  }, [data, fromDate, toDate, movementFilter, natureFilter]);
+  }, [data, fromDate, toDate, movementFilter]);
 
-  const periodLabel = formatIsoRange(fromDate, toDate);
-  const movementPage = usePagedList(
-    movements,
-    `${fromDate}|${toDate}|${movementFilter}|${natureFilter}`
-  );
+  const movementPage = usePagedList(movements, `${fromDate}|${toDate}|${movementFilter}`);
   const summaryCards = [
-    { label: 'Receita total', value: summary.totalRevenue, icon: 'payments', badge: summary.revenueDelta },
+    { label: 'Receita total', value: summary.totalRevenue, icon: 'payments' },
     { label: 'Despesas totais', value: summary.totalExpenses, icon: 'money_off' },
     { label: 'Despesas fixas', value: summary.fixedExpenses, icon: 'lock' },
     { label: 'Despesas variáveis', value: summary.variableExpenses, icon: 'tune' },
-    { label: '% variável / receita', value: summary.variableShare, icon: 'percent' },
     { label: 'Margem contribuição', value: summary.contributionMargin, icon: 'pie_chart' },
     { label: 'Lucro estimado', value: summary.estimatedProfit, icon: 'trending_up' },
     { label: 'Lucro líquido', value: summary.netProfit, icon: 'account_balance' },
@@ -96,23 +85,39 @@ export function CashFlowPage() {
 
   function handleExport() {
     if (!data) return;
-    const csv = buildCashFlowCsv(
-      { ...data, incomes: filteredIncomes, expenses: rangedExpenses, summary },
-      { natureFilter }
-    );
+    const csv = buildCashFlowCsv({
+      ...data,
+      incomes: filteredIncomes,
+      expenses: rangedExpenses,
+      summary,
+    });
     const stamp = new Date().toISOString().slice(0, 10);
     downloadCsv(`fluxo-caixa-${stamp}.csv`, csv);
     toast.success('Relatório CSV exportado.');
   }
 
-  function confirmDeleteExpense(row) {
+  function openEdit(row) {
+    if (row.tipo === 'entrada') {
+      openModal('new-order', { income: row, onSuccess: refreshCashFlow });
+      return;
+    }
+    openModal('new-expense', {
+      expense: row,
+      categories: data?.categories,
+      onSuccess: refreshCashFlow,
+    });
+  }
+
+  function confirmDelete(row) {
+    const entrada = row.tipo === 'entrada';
     openModal('confirm', {
-      message: `Excluir a despesa "${row.entidade || row.descricao}" (${row.valor})?`,
+      message: `Excluir a ${entrada ? 'entrada' : 'despesa'} "${row.entidade || row.descricao}" (${row.valor})?`,
       confirmLabel: 'Excluir',
-      successMessage: 'Despesa removida.',
-      errorMessage: 'Falha ao excluir despesa.',
+      successMessage: entrada ? 'Entrada removida.' : 'Despesa removida.',
+      errorMessage: entrada ? 'Falha ao excluir entrada.' : 'Falha ao excluir despesa.',
       onConfirm: async () => {
-        await removeCashExpense(row.id);
+        if (entrada) await removeCashIncome(row.id);
+        else await removeCashExpense(row.id);
         refreshCashFlow();
       },
     });
@@ -125,168 +130,118 @@ export function CashFlowPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 font-body">
+    <div className="p-4 md:p-8 space-y-6 font-body">
       <PageHeader
         title="Fluxo de Caixa"
         description="Visão consolidada da saúde financeira do Artisan Lounge"
       />
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-        {summaryCards.map((card, index) => (
-          <MetricCard key={card.label} {...card} accent={index} />
+      <MetricGrid>
+        {summaryCards.map((card) => (
+          <MetricCard key={card.label} {...card} />
         ))}
-      </section>
+      </MetricGrid>
 
-      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-end gap-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full sm:w-auto">
-          <label className="block space-y-2 min-w-0">
-            <span className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-              De
-            </span>
-            <input
-              type="date"
-              value={fromDate}
-              max={toDate || undefined}
-              onChange={(event) => setFromDate(event.target.value)}
-              className="w-full bg-surface-container-low rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container"
-            />
-          </label>
-          <label className="block space-y-2 min-w-0">
-            <span className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-              Até
-            </span>
-            <input
-              type="date"
-              value={toDate}
-              min={fromDate || undefined}
-              onChange={(event) => setToDate(event.target.value)}
-              className="w-full bg-surface-container-low rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container"
-            />
-          </label>
-        </div>
-        <Button variant="secondary" className="rounded-lg py-2" onClick={handleExport}>
-          <Icon name="download" className="text-lg" />
-          Exportar relatório
-        </Button>
-        <Button
-          variant="dark"
-          className="rounded-lg py-2 disabled:cursor-not-allowed"
-          disabled
-          aria-disabled="true"
-          title="Importação de extrato desativada"
-        >
-          <Icon name="file_upload" className="text-lg" />
-          Importar extrato/PDF
-        </Button>
-        <span className="text-[10px] font-bold text-error bg-error/10 px-2 py-0.5 rounded uppercase self-center">
-          {periodLabel}
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <Tabs items={movementFilters} value={movementFilter} onChange={setMovementFilter} />
-        <div className="flex flex-wrap gap-2">
-          {natureFilters.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setNatureFilter(item.id)}
-              className={
-                natureFilter === item.id
-                  ? 'px-3 py-2 min-h-11 rounded-full text-xs font-semibold bg-error text-on-error'
-                  : 'px-3 py-2 min-h-11 rounded-full text-xs font-medium bg-surface-container-lowest text-on-surface-variant'
-              }
+      <FilterBar
+        actions={
+          <>
+            <Button variant="secondary" onClick={handleExport}>
+              <Icon name="download" />
+              Exportar relatório
+            </Button>
+            <Button
+              variant="dark"
+              className="disabled:cursor-not-allowed"
+              disabled
+              aria-disabled="true"
+              title="Importação de extrato desativada"
             >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </div>
+              <Icon name="file_upload" />
+              Importar extrato/pdf
+            </Button>
+          </>
+        }
+      >
+        <DateRangeField
+          from={fromDate}
+          to={toDate}
+          onChange={({ from, to }) => {
+            setFromDate(from);
+            setToDate(to);
+          }}
+        />
+      </FilterBar>
 
-      <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm border border-outline-variant/20">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-surface-container-low text-on-surface-variant font-medium">
-              <tr>
-                <th className="px-5 py-3">Data/Hora</th>
-                <th className="px-5 py-3">Descrição</th>
-                <th className="px-5 py-3">Fornecedor/Origem</th>
-                <th className="px-5 py-3">Categoria</th>
-                <th className="px-5 py-3 text-right">Valor</th>
-                <th className="px-5 py-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/20">
-              {movementPage.rows.map((row) => (
-                <tr
-                  key={`${row.tipo}-${row.id}`}
-                  className="hover:bg-surface-container-low transition-colors"
-                >
-                  <td className="px-5 py-3 text-on-surface-variant whitespace-nowrap">{row.data_hora}</td>
-                  <td className="px-5 py-3 font-medium text-on-surface">{row.descricao}</td>
-                  <td className="px-5 py-3 text-on-surface">{row.entidade || '—'}</td>
-                  <td className="px-5 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full font-semibold ${
-                          row.tipo === 'entrada'
-                            ? row.categoryTone === 'tertiary'
-                              ? 'bg-tertiary-container/20 text-on-tertiary-container'
-                              : 'bg-secondary-container/20 text-on-secondary-container'
-                            : 'bg-surface-container text-on-surface-variant'
-                        }`}
-                      >
-                        <Icon name={row.categoryIcon} className="text-sm" />
-                        {row.categoria}
-                      </span>
-                      {row.tipo === 'saida' ? (
-                        <span
-                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                            row.nature === 'fixed'
-                              ? 'bg-primary text-on-primary'
-                              : 'bg-surface-container text-on-surface'
-                          }`}
-                        >
-                          {natureLabel(row.nature)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td
-                    className={`px-5 py-3 text-right font-bold ${
-                      row.tipo === 'entrada' ? 'text-secondary' : 'text-error'
-                    }`}
+      <Tabs items={movementFilters} value={movementFilter} onChange={setMovementFilter} />
+
+      <div className="space-y-4">
+      <DataTable>
+        <THead>
+          <Th>Data/Hora</Th>
+          <Th>Descrição</Th>
+          <Th>Fornecedor/Origem</Th>
+          <Th>Categoria</Th>
+          <Th align="right">Valor</Th>
+          <Th align="right">Ações</Th>
+        </THead>
+        <TBody>
+          {movementPage.rows.map((row) => (
+            <Tr
+              key={`${row.tipo}-${row.id}`}
+              tone={row.tipo === 'saida' && movementFilter !== 'saida' ? 'out' : undefined}
+            >
+              <Td tone="muted" className="whitespace-nowrap">
+                {row.data_hora}
+              </Td>
+              <Td tone="strong">{row.descricao}</Td>
+              <Td>{row.entidade || '—'}</Td>
+              <Td>
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusPill tone={row.tipo === 'entrada' ? 'accent' : 'neutral'}>
+                    <Icon name={row.categoryIcon} className="text-sm" />
+                    {row.categoria}
+                  </StatusPill>
+                  {row.tipo === 'saida' ? (
+                    <StatusPill tone={row.nature === 'fixed' ? 'accent' : 'neutral'}>
+                      {natureLabel(row.nature)}
+                    </StatusPill>
+                  ) : null}
+                </div>
+              </Td>
+              <Td align="right" tone={row.tipo === 'entrada' ? 'strong' : 'danger'}>
+                {row.valor}
+              </Td>
+              <Td align="right">
+                <TableActions>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="secondary"
+                    onClick={() => openEdit(row)}
+                    aria-label={row.tipo === 'entrada' ? 'Editar entrada' : 'Editar despesa'}
                   >
-                    {row.valor}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    {row.tipo === 'saida' ? (
-                      <button
-                        type="button"
-                        className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors"
-                        onClick={() => confirmDeleteExpense(row)}
-                        aria-label="Excluir despesa"
-                      >
-                        <Icon name="delete" />
-                      </button>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {!movementPage.rows.length ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-on-surface-variant text-sm">
-                    Nenhuma movimentação neste filtro.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                    <Icon name="edit" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="danger"
+                    onClick={() => confirmDelete(row)}
+                    aria-label={row.tipo === 'entrada' ? 'Excluir entrada' : 'Excluir despesa'}
+                  >
+                    <Icon name="delete" />
+                  </Button>
+                </TableActions>
+              </Td>
+            </Tr>
+          ))}
+          {!movementPage.rows.length ? (
+            <EmptyRow colSpan={6}>Nenhuma movimentação neste filtro.</EmptyRow>
+          ) : null}
+        </TBody>
+      </DataTable>
       <Pagination state={movementPage} />
+      </div>
     </div>
   );
 }

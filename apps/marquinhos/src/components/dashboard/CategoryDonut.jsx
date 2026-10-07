@@ -26,8 +26,8 @@ function DonutTooltip({ active, payload }) {
 
 export function CategoryDonut({ slices = [], total = 'R$ 0,00' }) {
   return (
-    <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm min-w-0">
-      <h2 className="text-xl font-extrabold mb-6">Vendas por Categoria</h2>
+    <section className="h-full bg-surface border border-outline rounded-xl p-4 md:p-5 min-w-0">
+      <h2 className="text-xl font-extrabold mb-4">Vendas por Categoria</h2>
       {!slices.length ? (
         <p className="text-sm text-on-surface-variant">Sem vendas no período.</p>
       ) : (

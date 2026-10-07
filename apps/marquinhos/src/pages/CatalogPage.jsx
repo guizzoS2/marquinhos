@@ -5,6 +5,11 @@ import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Tabs } from '../components/ui/Tabs';
+import { FilterBar } from '../components/ui/FilterBar';
+import { SearchField } from '../components/ui/SearchField';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
+import { EntityCard, EntityCardGrid, EntityThumb } from '../components/ui/EntityCard';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
@@ -12,6 +17,10 @@ import { formatCatalogDate } from '../services/catalogRules';
 
 export function CatalogPage() {
   const [tab, setTab] = useState('promocoes');
+  const [promotionView, setPromotionView] = useState('list');
+  const [comboView, setComboView] = useState('cards');
+  const [promotionQuery, setPromotionQuery] = useState('');
+  const [comboQuery, setComboQuery] = useState('');
   const { openModal } = useModal();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -23,8 +32,34 @@ export function CatalogPage() {
     () => (data?.items || []).filter((item) => item.tipo === 'combo'),
     [data]
   );
-  const promotionPage = usePagedList(data?.promotions || [], 'promocoes');
-  const comboPage = usePagedList(combos, 'combos');
+  const promotions = useMemo(() => {
+    const term = promotionQuery.trim().toLowerCase();
+    const rows = data?.promotions || [];
+    if (!term) return rows;
+    return rows.filter((row) => {
+      const product = (data?.items || []).find((item) => String(item.id) === String(row.produto_id));
+      const name = String(product?.nome || product?.name || '').toLowerCase();
+      const status = row.status === 'Ativa' ? 'ativa' : 'inativa';
+      return name.includes(term) || status.includes(term);
+    });
+  }, [data, promotionQuery]);
+  const filteredCombos = useMemo(() => {
+    const term = comboQuery.trim().toLowerCase();
+    if (!term) return combos;
+    return combos.filter((combo) => {
+      const names = (data?.comboItems || [])
+        .filter((row) => String(row.combo_id) === String(combo.id))
+        .map((row) => {
+          const product = (data?.items || []).find(
+            (item) => String(item.id) === String(row.produto_associado_id)
+          );
+          return product?.nome || product?.name || '';
+        });
+      return [combo.nome, combo.codigo, ...names].join(' ').toLowerCase().includes(term);
+    });
+  }, [combos, comboQuery, data]);
+  const promotionPage = usePagedList(promotions, `promocoes|${promotionQuery}`);
+  const comboPage = usePagedList(filteredCombos, `combos|${comboQuery}`);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -55,26 +90,8 @@ export function CatalogPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-      <PageHeader title="Catálogo" description="Promoções e combos vendidos como produto.">
-        {tab === 'promocoes' ? (
-          <Button
-            onClick={() =>
-              openModal('new-promotion', { items: data.items || [], onSuccess: refresh })
-            }
-          >
-            <Icon name="add" />
-            Nova promoção
-          </Button>
-        ) : (
-          <Button
-            onClick={() => openModal('new-combo', { items: data.items || [], onSuccess: refresh })}
-          >
-            <Icon name="add" />
-            Novo combo
-          </Button>
-        )}
-      </PageHeader>
+    <div className="p-4 md:p-8 space-y-6">
+      <PageHeader title="Catálogo" description="Promoções e combos vendidos como produto." />
 
       <Tabs
         items={[
@@ -85,59 +102,86 @@ export function CatalogPage() {
         onChange={setTab}
       />
 
+      <FilterBar
+        actions={
+          tab === 'promocoes' ? (
+            <Button
+              onClick={() =>
+                openModal('new-promotion', { items: data.items || [], onSuccess: refresh })
+              }
+            >
+              <Icon name="add" />
+              Nova promoção
+            </Button>
+          ) : (
+            <Button
+              onClick={() => openModal('new-combo', { items: data.items || [], onSuccess: refresh })}
+            >
+              <Icon name="add" />
+              Novo combo
+            </Button>
+          )
+        }
+      >
+        <SegmentedControl
+          variant="primary"
+          label={tab === 'promocoes' ? 'Visualização das promoções' : 'Visualização dos combos'}
+          items={[
+            { id: 'list', label: 'Lista' },
+            { id: 'cards', label: 'Cards' },
+          ]}
+          value={tab === 'promocoes' ? promotionView : comboView}
+          onChange={tab === 'promocoes' ? setPromotionView : setComboView}
+        />
+        <SearchField
+          value={tab === 'promocoes' ? promotionQuery : comboQuery}
+          onChange={tab === 'promocoes' ? setPromotionQuery : setComboQuery}
+          placeholder={tab === 'promocoes' ? 'Buscar promoção' : 'Buscar combo'}
+          label={tab === 'promocoes' ? 'Buscar promoção' : 'Buscar combo'}
+        />
+      </FilterBar>
+
       {tab === 'promocoes' ? (
-        <section className="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase">
-                  <th className="px-6 py-4">Produto</th>
-                  <th className="px-6 py-4">Preço promocional</th>
-                  <th className="px-6 py-4">Início</th>
-                  <th className="px-6 py-4">Término</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-variant/30">
-                {(data.promotions || []).length === 0 ? (
-                  <tr className="bg-surface-container-lowest">
-                    <td className="px-6 py-5 text-on-surface-variant" colSpan={6}>
-                      Nenhuma promoção cadastrada.
-                    </td>
-                  </tr>
-                ) : (
-                  promotionPage.rows.map((row) => (
-                    <tr key={row.id} className="bg-surface-container-lowest">
-                      <td className="px-6 py-5 font-bold text-on-surface">{productName(row.produto_id)}</td>
-                      <td className="px-6 py-5 text-on-surface">
-                        {Number(row.preco_promocional).toLocaleString('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        })}
-                      </td>
-                      <td className="px-6 py-5 text-on-surface-variant">
-                        {formatCatalogDate(row.data_inicio)}
-                      </td>
-                      <td className="px-6 py-5 text-on-surface-variant">
-                        {formatCatalogDate(row.data_termino)}
-                      </td>
-                      <td className="px-6 py-5">
-                        <span
-                          className={
-                            row.status === 'Ativa'
-                              ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-secondary-container/20 text-on-secondary-fixed-variant'
-                              : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-surface-variant/40 text-on-surface-variant'
-                          }
-                        >
-                          {row.status === 'Ativa' ? 'Ativa' : 'Inativa'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex flex-wrap gap-2">
+        promotionView === 'list' ? (
+        <section className="space-y-4">
+          <DataTable>
+            <THead>
+              <Th>Produto</Th>
+              <Th align="right">Preço promocional</Th>
+              <Th>Início</Th>
+              <Th>Término</Th>
+              <Th>Status</Th>
+              <Th align="right">Ações</Th>
+            </THead>
+            <TBody>
+              {(data.promotions || []).length === 0 ? (
+                <EmptyRow colSpan={6}>Nenhuma promoção cadastrada.</EmptyRow>
+              ) : promotionPage.rows.length === 0 ? (
+                <EmptyRow colSpan={6}>Nenhuma promoção encontrada.</EmptyRow>
+              ) : (
+                promotionPage.rows.map((row) => (
+                  <Tr key={row.id}>
+                    <Td tone="strong">{productName(row.produto_id)}</Td>
+                    <Td align="right" tone="strong">
+                      {Number(row.preco_promocional).toLocaleString('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      })}
+                    </Td>
+                    <Td tone="muted">{formatCatalogDate(row.data_inicio)}</Td>
+                    <Td tone="muted">{formatCatalogDate(row.data_termino)}</Td>
+                    <Td>
+                      <StatusPill tone={row.status === 'Ativa' ? 'accent' : 'neutral'}>
+                        {row.status === 'Ativa' ? 'Ativa' : 'Inativa'}
+                      </StatusPill>
+                    </Td>
+                    <Td align="right">
+                      <TableActions>
                           <Button
                             type="button"
+                            size="icon"
                             variant="secondary"
+                            aria-label="Editar promoção"
                             onClick={() =>
                               openModal('edit-promotion', {
                                 promotion: row,
@@ -147,12 +191,13 @@ export function CatalogPage() {
                             }
                           >
                             <Icon name="edit" />
-                            Editar
                           </Button>
                           {row.status !== 'Ativa' ? (
                             <Button
                               type="button"
+                              size="icon"
                               variant="secondary"
+                              aria-label="Reativar promoção"
                               onClick={() =>
                                 openModal('new-promotion', {
                                   reactivate: true,
@@ -162,12 +207,14 @@ export function CatalogPage() {
                                 })
                               }
                             >
-                              Reativar
+                              <Icon name="restart_alt" />
                             </Button>
                           ) : null}
                           <Button
                             type="button"
+                            size="icon"
                             variant="danger"
+                            aria-label="Excluir promoção"
                             onClick={() =>
                               openModal('confirm', {
                                 message: `Excluir a promoção de ${productName(row.produto_id)}?`,
@@ -182,96 +229,244 @@ export function CatalogPage() {
                             }
                           >
                             <Icon name="delete" />
-                            Excluir
                           </Button>
-                        </div>
-                      </td>
-                    </tr>
+                        </TableActions>
+                      </Td>
+                    </Tr>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
-          <div className="p-4">
+              </TBody>
+            </DataTable>
+          <Pagination state={promotionPage} />
+        </section>
+        ) : (data.promotions || []).length === 0 ? (
+          <p className="text-on-surface-variant">Nenhuma promoção cadastrada.</p>
+        ) : promotionPage.rows.length === 0 ? (
+          <p className="text-on-surface-variant">Nenhuma promoção encontrada.</p>
+        ) : (
+          <div className="space-y-4">
+            <EntityCardGrid>
+              {promotionPage.rows.map((row) => {
+                const product = (data.items || []).find((item) => String(item.id) === String(row.produto_id));
+                return (
+                  <EntityCard
+                    key={row.id}
+                    image={product?.foto || product?.image}
+                    icon="sell"
+                    title={productName(row.produto_id)}
+                    badge={
+                      <StatusPill tone={row.status === 'Ativa' ? 'accent' : 'neutral'}>
+                        {row.status === 'Ativa' ? 'Ativa' : 'Inativa'}
+                      </StatusPill>
+                    }
+                    actions={
+                      <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() =>
+                          openModal('edit-promotion', {
+                            promotion: row,
+                            items: data.items || [],
+                            onSuccess: refresh,
+                          })
+                        }
+                      >
+                        <Icon name="edit" />
+                        Editar
+                      </Button>
+                      {row.status !== 'Ativa' ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() =>
+                            openModal('new-promotion', {
+                              reactivate: true,
+                              promotion: row,
+                              items: data.items || [],
+                              onSuccess: refresh,
+                            })
+                          }
+                        >
+                          <Icon name="restart_alt" />
+                          Reativar
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="danger"
+                        onClick={() =>
+                          openModal('confirm', {
+                            message: `Excluir a promoção de ${productName(row.produto_id)}?`,
+                            confirmLabel: 'Excluir',
+                            successMessage: 'Promoção excluída.',
+                            errorMessage: 'Não foi possível excluir a promoção.',
+                            onConfirm: async () => {
+                              await removePromotion(row.id);
+                              refresh();
+                            },
+                          })
+                        }
+                      >
+                        <Icon name="delete" />
+                        Excluir
+                      </Button>
+                      </>
+                    }
+                  >
+                    <p className="text-sm text-on-surface-variant">
+                      {formatCatalogDate(row.data_inicio)} — {formatCatalogDate(row.data_termino)}
+                    </p>
+                    <p className="mt-auto font-headline text-xl font-extrabold text-on-surface">
+                      {Number(row.preco_promocional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                  </EntityCard>
+                );
+              })}
+            </EntityCardGrid>
             <Pagination state={promotionPage} />
           </div>
-        </section>
+        )
       ) : combos.length === 0 ? (
         <p className="text-on-surface-variant">Nenhum combo cadastrado.</p>
+      ) : filteredCombos.length === 0 ? (
+        <p className="text-on-surface-variant">Nenhum combo encontrado.</p>
+      ) : comboView === 'list' ? (
+          <div className="space-y-4">
+            <DataTable>
+              <THead>
+                <Th>Combo</Th>
+                <Th>Código</Th>
+                <Th>Itens</Th>
+                <Th align="right">Preço</Th>
+                <Th align="right">Ações</Th>
+              </THead>
+              <TBody>
+                {comboPage.rows.map((combo) => {
+                  const parts = partsOf(combo);
+                  return (
+                    <Tr key={combo.id}>
+                      <Td tone="strong">{combo.nome}</Td>
+                      <Td tone="muted">{combo.codigo}</Td>
+                      <Td>{parts.map((part) => part.nome).join(', ') || '—'}</Td>
+                      <Td align="right" tone="strong">
+                        {combo.valor_unitario}
+                      </Td>
+                      <Td align="right">
+                        <TableActions>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="secondary"
+                                aria-label="Editar combo"
+                                onClick={() =>
+                                  openModal('edit-combo', {
+                                    combo,
+                                    parts,
+                                    items: data.items || [],
+                                    onSuccess: refresh,
+                                  })
+                                }
+                              >
+                                <Icon name="edit" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="danger"
+                                aria-label="Excluir combo"
+                                onClick={() =>
+                                  openModal('confirm', {
+                                    message: `Excluir o combo ${combo.nome}?`,
+                                    confirmLabel: 'Excluir',
+                                    successMessage: 'Combo excluído.',
+                                    errorMessage: 'Não foi possível excluir o combo.',
+                                    onConfirm: async () => {
+                                      await removeCombo(combo.id);
+                                      refresh();
+                                    },
+                                  })
+                                }
+                              >
+                                <Icon name="delete" />
+                              </Button>
+                            </TableActions>
+                          </Td>
+                        </Tr>
+                      );
+                    })}
+                  </TBody>
+                </DataTable>
+            <Pagination state={comboPage} />
+          </div>
       ) : (
         <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <EntityCardGrid>
           {comboPage.rows.map((combo) => {
             const parts = partsOf(combo);
             return (
-              <article
+              <EntityCard
                 key={combo.id}
-                className="bg-surface-container-lowest rounded-2xl p-6 min-h-11"
+                image={combo.foto || combo.image}
+                icon="restaurant"
+                title={combo.nome}
+                onClick={() => openModal('combo-detail', { combo, parts })}
+                actions={
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() =>
+                        openModal('edit-combo', {
+                          combo,
+                          parts,
+                          items: data.items || [],
+                          onSuccess: refresh,
+                        })
+                      }
+                    >
+                      <Icon name="edit" />
+                      Editar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      onClick={() =>
+                        openModal('confirm', {
+                          message: `Excluir o combo ${combo.nome}?`,
+                          confirmLabel: 'Excluir',
+                          successMessage: 'Combo excluído.',
+                          errorMessage: 'Não foi possível excluir o combo.',
+                          onConfirm: async () => {
+                            await removeCombo(combo.id);
+                            refresh();
+                          },
+                        })
+                      }
+                    >
+                      <Icon name="delete" />
+                      Excluir
+                    </Button>
+                  </>
+                }
               >
-                <button
-                  type="button"
-                  onClick={() => openModal('combo-detail', { combo, parts })}
-                  className="w-full text-left min-h-11"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-4">
-                    <div>
-                      <h3 className="font-headline font-bold text-lg text-on-surface">{combo.nome}</h3>
-                      <p className="text-sm text-on-surface-variant">{combo.codigo}</p>
-                    </div>
-                    <p className="font-headline font-extrabold text-on-surface">{combo.valor_unitario}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {parts.map((part) => (
-                      <span
-                        key={part.id || part.produto_associado_id}
-                        className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-secondary-container text-on-secondary-container"
-                      >
-                        <img alt="" src={part.foto} className="w-6 h-6 rounded-full object-cover" />
-                        {part.nome}
-                      </span>
-                    ))}
-                  </div>
-                </button>
-                <div className="flex flex-wrap gap-2 mt-4">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() =>
-                      openModal('edit-combo', {
-                        combo,
-                        parts,
-                        items: data.items || [],
-                        onSuccess: refresh,
-                      })
-                    }
-                  >
-                    <Icon name="edit" />
-                    Editar
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    onClick={() =>
-                      openModal('confirm', {
-                        message: `Excluir o combo ${combo.nome}?`,
-                        confirmLabel: 'Excluir',
-                        successMessage: 'Combo excluído.',
-                        errorMessage: 'Não foi possível excluir o combo.',
-                        onConfirm: async () => {
-                          await removeCombo(combo.id);
-                          refresh();
-                        },
-                      })
-                    }
-                  >
-                    <Icon name="delete" />
-                    Excluir
-                  </Button>
+                <p className="text-sm text-on-surface-variant">{combo.codigo}</p>
+                <p className="font-headline text-xl font-extrabold text-on-surface">{combo.valor_unitario}</p>
+                <div className="flex flex-wrap gap-2">
+                  {parts.map((part) => (
+                    <span
+                      key={part.id || part.produto_associado_id}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-full border border-outline px-3 text-xs font-medium text-on-surface"
+                    >
+                      <EntityThumb src={part.foto} />
+                      {part.nome}
+                    </span>
+                  ))}
                 </div>
-              </article>
+              </EntityCard>
             );
           })}
-        </div>
+        </EntityCardGrid>
         <Pagination state={comboPage} />
         </div>
       )}

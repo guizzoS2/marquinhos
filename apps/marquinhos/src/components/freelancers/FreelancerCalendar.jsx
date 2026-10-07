@@ -19,9 +19,9 @@ const messages = {
 
 function FreelancerCalendarComponent({ events, date, view, onSelectShift }) {
   return (
-    <section className="bg-surface-container-lowest rounded-2xl p-4 md:p-6">
+    <section className="overflow-hidden rounded-3xl border border-outline bg-surface p-4">
       <div className="overflow-x-auto">
-        <div className={view === 'week' ? 'min-w-[720px] h-[36rem]' : 'h-[36rem]'}>
+        <div className={`fnl-calendar ${view === 'week' ? 'min-w-[720px] h-[36rem]' : 'h-[36rem]'}`}>
           <Calendar
             localizer={localizer}
             events={events}
@@ -36,7 +36,6 @@ function FreelancerCalendarComponent({ events, date, view, onSelectShift }) {
             onNavigate={() => {}}
             onView={() => {}}
             onSelectEvent={(event) => onSelectShift(event.resource.shift)}
-            eventPropGetter={() => ({ className: '!bg-primary !text-on-primary' })}
           />
         </div>
       </div>

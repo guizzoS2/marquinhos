@@ -3,10 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { addStaffMember, fetchStaff } from '../services/dashboardService';
 import { roleLabel } from '../services/roles';
 import { Button } from '../components/ui/Button';
+import { Icon } from '../components/ui/Icon';
+import { DataTable, EmptyRow, StatusPill, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
+import { Dropdown } from '../components/ui/Dropdown';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Pagination } from '../components/ui/Pagination';
-import { usePagedList } from '../components/ui/usePagedList';
 import { useToast } from '../contexts/ToastContext';
 
 export function StaffPage() {
@@ -24,7 +25,6 @@ export function StaffPage() {
     role: 'stock',
   });
   const [error, setError] = useState('');
-  const memberPage = usePagedList(members, String(members.length));
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -46,14 +46,14 @@ export function StaffPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+    <div className="p-4 md:p-8 space-y-6">
       <PageHeader
         title="Equipe da casa"
         description="Logins internos do bar. Funcionário de estoque não vê caixa nem freelas da plataforma."
       />
 
       <form
-        className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-surface-container-lowest rounded-2xl p-4 md:p-6"
+        className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-surface border border-outline rounded-xl p-4 md:p-5"
         onSubmit={handleSubmit}
       >
         <Input
@@ -85,38 +85,50 @@ export function StaffPage() {
           <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
             Papel
           </label>
-          <select
-            className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11"
+          <Dropdown
+            label="Papel"
+            muted
             value={form.role}
-            onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}
-          >
-            <option value="stock">Funcionário (estoque)</option>
-            <option value="admin">Administrador</option>
-          </select>
+            onChange={(role) => setForm((prev) => ({ ...prev, role }))}
+            options={[
+              { value: 'stock', label: 'Funcionário (estoque)' },
+              { value: 'admin', label: 'Administrador' },
+            ]}
+          />
         </div>
         <div className="md:col-span-2">
           <Button type="submit" className="w-full md:w-auto">
+            <Icon name="add" />
             Cadastrar login
           </Button>
         </div>
         {error ? <p className="text-sm text-error md:col-span-2">{error}</p> : null}
       </form>
 
-      <ul className="space-y-3">
-        {memberPage.rows.map((member) => (
-          <li
-            key={member.uid}
-            className="bg-surface-container-lowest rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
-          >
-            <div>
-              <p className="font-bold">{member.name}</p>
-              <p className="text-sm text-on-surface-variant">{member.email}</p>
-            </div>
-            <p className="text-sm font-medium">{roleLabel(member.role)}</p>
-          </li>
-        ))}
-      </ul>
-      <Pagination state={memberPage} />
+      <DataTable>
+        <THead>
+          <Th>Nome</Th>
+          <Th>E-mail</Th>
+          <Th>Cargo</Th>
+          <Th>Papel</Th>
+        </THead>
+        <TBody>
+          {members.length === 0 ? (
+            <EmptyRow colSpan={4}>Nenhum login da casa.</EmptyRow>
+          ) : (
+            members.map((member) => (
+              <Tr key={member.uid}>
+                <Td tone="strong">{member.name}</Td>
+                <Td tone="muted">{member.email}</Td>
+                <Td>{member.title || '—'}</Td>
+                <Td>
+                  <StatusPill tone="accent">{roleLabel(member.role)}</StatusPill>
+                </Td>
+              </Tr>
+            ))
+          )}
+        </TBody>
+      </DataTable>
     </div>
   );
 }

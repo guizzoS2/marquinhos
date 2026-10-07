@@ -1,9 +1,16 @@
-export function SegmentedControl({ items, value, onChange, label = 'Opções' }) {
+export function SegmentedControl({
+  items,
+  value,
+  onChange,
+  label = 'Opções',
+  className = '',
+  variant = 'surface',
+}) {
   return (
     <div
       role="tablist"
       aria-label={label}
-      className="inline-flex w-fit items-center gap-1 rounded-xl bg-surface-container-low p-1"
+      className={`inline-flex h-11 items-stretch gap-1 rounded-xl border border-outline bg-surface p-1 ${className || 'w-fit'}`}
     >
       {items.map((item) => {
         const active = item.id === value;
@@ -14,10 +21,12 @@ export function SegmentedControl({ items, value, onChange, label = 'Opções' })
             role="tab"
             aria-selected={active}
             onClick={() => onChange(item.id)}
-            className={`min-h-11 px-4 rounded-lg text-sm whitespace-nowrap ${
+            className={`h-full min-h-0 flex-1 rounded-lg px-4 text-sm whitespace-nowrap ${
               active
-                ? 'bg-surface font-bold text-on-surface shadow-sm'
-                : 'font-medium text-on-surface-variant'
+                ? variant === 'primary'
+                  ? 'bg-primary font-bold text-on-primary'
+                  : 'bg-surface font-bold text-on-surface shadow-sm'
+                : 'font-normal text-on-surface'
             }`}
           >
             {item.label}

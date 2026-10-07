@@ -45,7 +45,7 @@ async function mapFirebaseUser(firebaseUser) {
     phone: profile.phone || '',
     company: profile.company || "Marquinho's",
     role: barRole,
-    photoURL: profile.photoURL || firebaseUser.photoURL || '',
+    photoURL: profile.photoURL != null ? profile.photoURL : firebaseUser.photoURL || '',
     tenantId: profile.tenantId,
     roles,
   };
@@ -103,10 +103,12 @@ export function subscribeAuth(callback) {
 export async function saveProfile(uid, data) {
   requireFirebase();
   if (auth.currentUser && data.name) {
-    await updateProfile(auth.currentUser, {
-      displayName: data.name,
-      photoURL: data.photoURL || auth.currentUser.photoURL,
-    });
+    const photo = typeof data.photoURL === 'string' ? data.photoURL : '';
+    const authUpdate = { displayName: data.name };
+    if (!photo.startsWith('data:') && photo.length <= 900) {
+      authUpdate.photoURL = photo || null;
+    }
+    await updateProfile(auth.currentUser, authUpdate);
   }
   return upsertUserProfile(uid, data);
 }
