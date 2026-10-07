@@ -5,6 +5,7 @@ import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Tabs } from '../components/ui/Tabs';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
@@ -227,7 +228,8 @@ export function InventoryPage() {
                 className="w-full pl-11 pr-4 min-h-11 bg-surface-container-low border-none rounded-full text-sm text-on-surface focus:ring-2 focus:ring-primary-container"
               />
             </div>
-            <Tabs
+            <SegmentedControl
+              label="Visualização do estoque"
               items={[
                 { id: 'list', label: 'Lista' },
                 { id: 'cards', label: 'Cards' },
