@@ -20,6 +20,11 @@ export function optionalComanda(value) {
   return assertComanda(value);
 }
 
+export function optionalNote(value, fallback = '') {
+  const source = value == null ? fallback : value;
+  return String(source || '').trim().slice(0, 500);
+}
+
 function cleanPayments(list) {
   return Array.isArray(list) ? list.filter((row) => Number(row?.valor) > 0) : [];
 }
@@ -38,6 +43,7 @@ export function normalizeSale(sale) {
   return {
     ...sale,
     numero_comanda: Number.isInteger(numero) && numero > 0 ? numero : null,
+    observacao: optionalNote(sale?.observacao),
     status: SALE_STATUSES.includes(sale?.status) ? sale.status : 'paga',
     pagamentos: cleanPayments(sale?.pagamentos),
     historico,

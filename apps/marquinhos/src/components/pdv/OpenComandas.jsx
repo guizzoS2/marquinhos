@@ -177,6 +177,7 @@ export function OpenComandas({ sales = [], customers = [] }) {
           }}
         >
           <p className="text-sm text-on-surface-variant">Cliente {detail.cliente_nome || 'Consumidor'}</p>
+          {detail.observacao ? <p className="break-words text-sm text-on-surface">{detail.observacao}</p> : null}
           <p className="text-sm text-on-surface">
             Total {money(detail.total)} · Pago {money(salePaidAmount(detail))} · Saldo {money(saleBalance(detail))}
           </p>

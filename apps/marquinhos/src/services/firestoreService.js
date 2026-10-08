@@ -37,6 +37,7 @@ import { aggregateOverview } from './overviewAggregate';
 import {
   assertComanda,
   optionalComanda,
+  optionalNote,
   normalizeSale,
   productTotals,
   saleBalance,
@@ -1737,6 +1738,14 @@ function deductSaleStock(inventory, resolved) {
   return items.map((item) => persistProduct(presentProduct(item, item.codigo)));
 }
 
+function pdvIncomeDescription(numero, clienteNome, observacao, tag) {
+  const who = clienteNome || 'Consumidor';
+  const base = numero != null ? `PDV · comanda ${numero} · ${who}` : `PDV · ${who}`;
+  const tagged = tag ? `${base} · ${tag}` : base;
+  const note = optionalNote(observacao);
+  return note ? `${tagged} · ${note}` : tagged;
+}
+
 function assertOpenComandaFree(sales, numero, saleId) {
   const clash = (sales || []).find(
     (sale) =>
@@ -1804,6 +1813,7 @@ export async function saveOpenSale(payload) {
       cliente_nome: cliente.nome,
       forma_pagamento: null,
       total,
+      observacao: optionalNote(payload.observacao, existing?.observacao),
       pagamentos: existing?.pagamentos || [],
       historico: existing?.historico || [],
       itens: saleItems(resolved),
@@ -1875,6 +1885,7 @@ export async function registerSale(payload) {
       troco,
       parcelas,
       total,
+      observacao: optionalNote(payload.observacao, existing?.observacao),
       pagamentos: payment ? [...(existing?.pagamentos || []), payment] : existing?.pagamentos || [],
       historico: existing?.historico || [],
       itens: saleItems(resolved),
@@ -1891,7 +1902,7 @@ export async function registerSale(payload) {
       ? {
           id: `inc-${payment.id}`,
           date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
-          description: numero != null ? `PDV · comanda ${numero} · ${cliente.nome}` : `PDV · ${cliente.nome}`,
+          description: pdvIncomeDescription(numero, cliente.nome, sale.observacao),
           category: 'Varejo',
           categoryIcon: 'payments',
           categoryTone: 'secondary',
@@ -2008,10 +2019,12 @@ export async function registerPartialPayment(payload) {
     const income = {
       id: `inc-${payment.id}`,
       date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
-      description:
-        numero != null
-          ? `PDV · comanda ${numero} · ${destino === 'fechar' ? 'fechamento' : destino === 'ativa' ? 'quitada' : 'parcial'} · ${sale.cliente_nome}`
-          : `PDV · ${destino === 'fechar' ? 'fechamento' : destino === 'ativa' ? 'quitada' : 'parcial'} · ${sale.cliente_nome}`,
+      description: pdvIncomeDescription(
+        numero,
+        sale.cliente_nome,
+        sale.observacao,
+        destino === 'fechar' ? 'fechamento' : destino === 'ativa' ? 'quitada' : 'parcial',
+      ),
       category: 'Varejo',
       categoryIcon: 'payments',
       categoryTone: 'secondary',

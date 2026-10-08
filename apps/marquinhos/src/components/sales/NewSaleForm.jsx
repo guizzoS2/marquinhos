@@ -35,6 +35,7 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
   const [forma, setForma] = useState('dinheiro');
   const [recebido, setRecebido] = useState('');
   const [parcelas, setParcelas] = useState('1');
+  const [observacao, setObservacao] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -116,6 +117,12 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
       ? Math.round((received - due) * 100) / 100
       : null;
 
+  function pickSale(id) {
+    setSaleId(id);
+    const sale = open.find((item) => String(item.id) === String(id));
+    setObservacao(sale?.observacao || '');
+  }
+
   function updateLine(index, patch) {
     setLines((prev) => prev.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
@@ -159,6 +166,7 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
         sale_id: selected.id,
         numero_comanda: Number(selected.numero_comanda),
         cliente_id: selected.cliente_id || null,
+        observacao,
         itens: payload,
       });
       invalidate();
@@ -189,6 +197,7 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
         sale_id: selected?.id || null,
         numero_comanda: selected ? Number(selected.numero_comanda) : null,
         cliente_id: selected?.cliente_id || null,
+        observacao,
         itens: payload,
         forma_pagamento: forma,
         valor_recebido: forma === 'dinheiro' && due > 0 ? received : null,
@@ -219,7 +228,7 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
             label="Comanda"
             muted
             value={selected ? selected.id : ''}
-            onChange={setSaleId}
+            onChange={pickSale}
             placeholder="Sem comanda"
             options={comandaOptions}
           />
@@ -246,6 +255,20 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
             </p>
           </div>
         ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="venda-observacao" className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">
+          Observação
+        </label>
+        <textarea
+          id="venda-observacao"
+          value={observacao}
+          onChange={(event) => setObservacao(event.target.value)}
+          placeholder="Opcional"
+          rows={3}
+          className="min-h-11 w-full rounded-2xl border border-outline bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface outline-none placeholder:font-normal placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-0"
+        />
       </div>
 
       <div className="space-y-3">
