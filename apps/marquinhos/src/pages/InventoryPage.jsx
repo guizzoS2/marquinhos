@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { isSameDay, isValid, parseISO } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchInventory, removeInventoryItem, removeProduction } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
@@ -16,13 +18,22 @@ import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdminRole } from '../services/roles';
+import { toIsoDate } from '../services/cashFlowUtils';
+import { DateField } from '../components/ui/DateField';
+import { CatalogPage } from './CatalogPage';
 
 export function InventoryPage() {
   const [filter, setFilter] = useState('Todos');
   const [query, setQuery] = useState('');
   const [productionQuery, setProductionQuery] = useState('');
+  const [productionDate, setProductionDate] = useState(toIsoDate);
   const [view, setView] = useState('list');
-  const [section, setSection] = useState('stock');
+  const [params, setParams] = useSearchParams();
+  const requested = params.get('aba');
+  const section = ['stock', 'production', 'promocoes', 'combos'].includes(requested) ? requested : 'stock';
+  function setSection(next) {
+    setParams(next === 'stock' ? {} : { aba: next }, { replace: true });
+  }
   const { openModal } = useModal();
   const { user } = useAuth();
   const canAdmin = isAdminRole(user?.role);
@@ -57,21 +68,18 @@ export function InventoryPage() {
     queryClient.invalidateQueries({ queryKey: ['suppliers'] });
   }
 
-  const todayProductions = useMemo(() => {
-    const now = new Date();
+  const dayProductions = useMemo(() => {
+    const day = parseISO(productionDate);
+    if (!isValid(day)) return [];
     return (data?.productions || []).filter((row) => {
-      const date = new Date(row.data_producao);
-      return (
-        date.getFullYear() === now.getFullYear() &&
-        date.getMonth() === now.getMonth() &&
-        date.getDate() === now.getDate()
-      );
+      const date = parseISO(String(row.data_producao || ''));
+      return isValid(date) && isSameDay(date, day);
     });
-  }, [data]);
+  }, [data, productionDate]);
   const filteredProductions = useMemo(() => {
     const term = productionQuery.trim().toLowerCase();
-    if (!term) return todayProductions;
-    return todayProductions.filter((row) => {
+    if (!term) return dayProductions;
+    return dayProductions.filter((row) => {
       const item = (data?.items || []).find((product) => String(product.id) === String(row.produto_id));
       const name = String(item?.nome || item?.name || '').toLowerCase();
       const time = new Date(row.data_producao).toLocaleTimeString('pt-BR', {
@@ -80,9 +88,9 @@ export function InventoryPage() {
       });
       return name.includes(term) || String(row.quantidade).includes(term) || time.includes(term);
     });
-  }, [todayProductions, productionQuery, data]);
+  }, [dayProductions, productionQuery, data]);
   const stockPage = usePagedList(items, `${filter}|${query}`);
-  const productionPage = usePagedList(filteredProductions, `${section}|${productionQuery}`);
+  const productionPage = usePagedList(filteredProductions, `${section}|${productionQuery}|${productionDate}`);
 
   function productName(produtoId) {
     const item = (data?.items || []).find((row) => String(row.id) === String(produtoId));
@@ -179,6 +187,8 @@ export function InventoryPage() {
           items={[
             { id: 'stock', label: 'Estoque' },
             { id: 'production', label: 'Produção' },
+            { id: 'promocoes', label: 'Promoções' },
+            { id: 'combos', label: 'Combos' },
           ]}
           value={section}
           onChange={setSection}
@@ -327,7 +337,7 @@ export function InventoryPage() {
           </div>
         )}
         </>
-        ) : (
+        ) : section === 'production' ? (
           <section className="space-y-6">
             <FilterBar
               actions={
@@ -343,6 +353,11 @@ export function InventoryPage() {
                 placeholder="Buscar produção"
                 label="Buscar produção"
               />
+              <DateField label="Data" value={productionDate} onChange={setProductionDate} />
+              <Button type="button" variant="secondary" onClick={() => setProductionDate(toIsoDate())}>
+                <Icon name="today" />
+                Hoje
+              </Button>
             </FilterBar>
             <div className="space-y-4">
             <DataTable>
@@ -354,8 +369,10 @@ export function InventoryPage() {
                 <Th align="right">Ações</Th>
               </THead>
               <TBody>
-                {todayProductions.length === 0 ? (
-                  <EmptyRow colSpan={5}>Nenhuma produção hoje.</EmptyRow>
+                {dayProductions.length === 0 ? (
+                  <EmptyRow colSpan={5}>
+                    {productionDate === toIsoDate() ? 'Nenhuma produção hoje.' : 'Nenhuma produção neste dia.'}
+                  </EmptyRow>
                 ) : productionPage.rows.length === 0 ? (
                   <EmptyRow colSpan={5}>Nenhuma produção encontrada.</EmptyRow>
                 ) : (
@@ -388,15 +405,33 @@ export function InventoryPage() {
             <Pagination state={productionPage} />
             </div>
           </section>
+        ) : (
+          <CatalogPage embedded tab={section} />
         )}
       </div>
 
       <Button
         type="button"
         size="icon"
-        onClick={section === 'production' ? openProduction : openNewProduct}
+        onClick={
+          section === 'production'
+            ? openProduction
+            : section === 'promocoes'
+              ? () => openModal('new-promotion', { items: data.items || [], onSuccess: refreshInventory })
+              : section === 'combos'
+                ? () => openModal('new-combo', { items: data.items || [], onSuccess: refreshInventory })
+                : openNewProduct
+        }
         className="fixed bottom-6 right-4 z-50 shadow-lg md:hidden"
-        aria-label={section === 'production' ? 'Registrar produção' : 'Novo produto'}
+        aria-label={
+          section === 'production'
+            ? 'Registrar produção'
+            : section === 'promocoes'
+              ? 'Nova promoção'
+              : section === 'combos'
+                ? 'Novo combo'
+                : 'Novo produto'
+        }
       >
         <Icon name="add" />
       </Button>

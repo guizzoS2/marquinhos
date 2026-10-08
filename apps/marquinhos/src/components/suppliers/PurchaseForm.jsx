@@ -212,6 +212,7 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
               muted
               value={supplierId}
               placeholder="Selecione"
+              search
               onChange={setSupplierId}
               options={[
                 { value: '', label: 'Selecione' },
@@ -242,6 +243,7 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
                   muted
                   value={line.produto_id}
                   placeholder="Selecione"
+                  search
                   onChange={(produtoId) =>
                     setLines((prev) =>
                       prev.map((row, rowIndex) =>

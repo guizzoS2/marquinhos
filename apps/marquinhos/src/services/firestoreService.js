@@ -817,6 +817,7 @@ function presentProduct(item, codigo) {
     volume_peso: volumePeso,
     medida,
     tipo: item.tipo === 'combo' ? 'combo' : 'simples',
+    produzido: Boolean(item.produzido),
     estoque_atual: estoqueAtual,
     estoque_sugerido: estoqueSugerido,
     valor_unitario: cost,
@@ -855,6 +856,7 @@ function persistProduct(item) {
     volume_peso: Number.isFinite(Number(item.volume_peso)) ? Number(item.volume_peso) : 0,
     medida: normalizeMedida(item.medida) || 'UN',
     tipo: item.tipo === 'combo' ? 'combo' : 'simples',
+    produzido: Boolean(item.produzido),
     estoque_atual: Number.isFinite(Number(item.estoque_atual)) ? Number(item.estoque_atual) : 0,
     estoque_sugerido: Number.isFinite(Number(item.estoque_sugerido)) ? Number(item.estoque_sugerido) : 0,
     valor_unitario: valor,
@@ -935,6 +937,7 @@ export async function createInventoryItem(payload) {
       estoque_atual: estoqueAtual,
       estoque_sugerido: estoqueSugerido,
       valor_unitario: payload.valor_unitario ?? payload.cost,
+      produzido: Boolean(payload.produzido),
       foto: payload.foto || payload.image || '',
       stock: formatStockLabel(estoqueAtual, 'un'),
       minStock: formatStockLabel(estoqueSugerido, 'un'),
@@ -987,6 +990,7 @@ export async function updateInventoryItem(itemId, payload) {
       estoque_atual: estoqueAtual,
       estoque_sugerido: estoqueSugerido,
       valor_unitario: payload.valor_unitario ?? payload.cost ?? currentItem.valor_unitario,
+      produzido: payload.produzido == null ? Boolean(currentItem.produzido) : Boolean(payload.produzido),
       foto: payload.foto || payload.image || currentItem.foto,
       stock: formatStockLabel(estoqueAtual, parseStockLabel(currentItem.stock).unit || 'un'),
       minStock: formatStockLabel(estoqueSugerido, parseStockLabel(currentItem.minStock).unit || 'un'),
@@ -1171,9 +1175,13 @@ export async function registerPurchase(payload) {
       category: category.name,
       categoryId: category.id,
       categoryIcon: category.icon,
-      nature: category.defaultNature || 'variable',
+      nature:
+        payload.nature === 'fixed' || payload.nature === 'variable'
+          ? payload.nature
+          : category.defaultNature || 'variable',
       value: formatCents(amountCents),
       amount: amountCents,
+      recurrence: payload.recurrence === 'monthly' ? 'monthly' : null,
       source: 'purchase',
       importKey: null,
       createdAt: now,
@@ -1327,6 +1335,9 @@ export async function createProduction(payload) {
   if (index < 0) throw new Error('Item não encontrado.');
 
   const item = items[index];
+  if (item.tipo === 'combo' || !item.produzido) {
+    throw new Error('Selecione um produto feito no bar.');
+  }
   const parsed = parseStockLabel(item.stock);
   const minParsed = parseStockLabel(item.minStock);
   const nextQty = parsed.qty + quantidade;
@@ -1384,6 +1395,9 @@ export async function updateProduction(productionId, payload) {
     items = replaceItem(items, existing.produto_id, applyStockDelta(previous, -Number(existing.quantidade)));
     const nextItem = items.find((row) => String(row.id) === produtoId);
     if (!nextItem) throw new Error('Item não encontrado.');
+    if (nextItem.tipo === 'combo' || !nextItem.produzido) {
+      throw new Error('Selecione um produto feito no bar.');
+    }
     items = replaceItem(items, produtoId, applyStockDelta(nextItem, quantidade));
   }
 

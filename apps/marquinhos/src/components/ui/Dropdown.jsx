@@ -30,13 +30,20 @@ export function Dropdown({
   className = 'w-full',
   muted = false,
   leading = '',
+  search = false,
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [box, setBox] = useState(null);
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
+  const searchRef = useRef(null);
   const listId = useId();
   const selected = options.find((option) => String(option.value) === String(value ?? ''));
+  const term = query.trim().toLowerCase();
+  const visible = search && term
+    ? options.filter((option) => String(option.label || '').toLowerCase().includes(term))
+    : options;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -51,6 +58,7 @@ export function Dropdown({
       if (buttonRef.current) setBox(menuBox(buttonRef.current));
     }
     move();
+    if (search) searchRef.current?.focus();
     document.addEventListener('mousedown', closeFromOutside);
     document.addEventListener('keydown', onKey);
     window.addEventListener('resize', move);
@@ -61,6 +69,10 @@ export function Dropdown({
       window.removeEventListener('resize', move);
       window.removeEventListener('scroll', move, true);
     };
+  }, [open, search]);
+
+  useEffect(() => {
+    if (!open) setQuery('');
   }, [open]);
 
   return (
@@ -95,21 +107,38 @@ export function Dropdown({
       </button>
       {open && box
         ? createPortal(
-            <ul
+            <div
               ref={menuRef}
-              id={listId}
-              role="listbox"
-              aria-label={label}
               style={{
                 position: 'fixed',
                 left: box.left,
                 width: box.width,
-                maxHeight: box.maxHeight,
                 ...(box.bottom != null ? { bottom: box.bottom } : { top: box.top }),
               }}
-              className="z-[110] overflow-y-auto rounded-2xl border border-outline bg-surface p-2 shadow-sm"
+              className="z-[110] rounded-2xl border border-outline bg-surface p-2 shadow-sm"
             >
-              {options.map((option) => {
+            {search ? (
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Buscar"
+                aria-label={`Buscar ${label}`}
+                className="mb-2 h-11 w-full rounded-lg border border-outline bg-surface px-3 text-sm font-normal text-on-surface outline-none placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-0 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
+              />
+            ) : null}
+            <ul
+              id={listId}
+              role="listbox"
+              aria-label={label}
+              style={{ maxHeight: search ? Math.max(96, box.maxHeight - 52) : box.maxHeight }}
+              className="overflow-y-auto"
+            >
+              {visible.length === 0 ? (
+                <li className="px-3 py-2 text-sm text-on-surface-variant">Nenhum resultado.</li>
+              ) : null}
+              {visible.map((option) => {
                 const active = String(option.value) === String(value ?? '');
                 return (
                   <li key={`${option.value}`} role="none">
@@ -133,7 +162,8 @@ export function Dropdown({
                   </li>
                 );
               })}
-            </ul>,
+            </ul>
+            </div>,
             document.body,
           )
         : null}

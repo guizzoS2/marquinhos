@@ -321,6 +321,7 @@ export function AppModal() {
     modal.type === 'combo-detail' ||
     modal.type === 'new-promotion' ||
     modal.type === 'edit-promotion' ||
+    modal.type === 'new-expense' ||
     modal.type === 'new-purchase' ||
     modal.type === 'close-day' ||
     modal.type === 'suppliers-list';

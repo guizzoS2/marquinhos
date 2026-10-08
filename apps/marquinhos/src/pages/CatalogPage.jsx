@@ -15,8 +15,9 @@ import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
 import { formatPromotionEnd, formatPromotionStart } from '../services/catalogRules';
 
-export function CatalogPage() {
-  const [tab, setTab] = useState('promocoes');
+export function CatalogPage({ embedded = false, tab: tabProp }) {
+  const [ownTab, setOwnTab] = useState('promocoes');
+  const tab = tabProp || ownTab;
   const [promotionView, setPromotionView] = useState('list');
   const [comboView, setComboView] = useState('cards');
   const [promotionQuery, setPromotionQuery] = useState('');
@@ -100,21 +101,28 @@ export function CatalogPage() {
   }
 
   if (isLoading || !data) {
-    return <div className="p-4 md:p-8 text-on-surface-variant">Carregando catálogo...</div>;
+    return (
+      <div className={embedded ? 'text-on-surface-variant' : 'p-4 text-on-surface-variant md:p-8'}>
+        Carregando catálogo...
+      </div>
+    );
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      <PageHeader title="Catálogo" description="Promoções e combos vendidos como produto." />
-
-      <Tabs
-        items={[
-          { id: 'promocoes', label: 'Promoções' },
-          { id: 'combos', label: 'Combos' },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
+    <div className={embedded ? 'space-y-6' : 'space-y-6 p-4 md:p-8'}>
+      {embedded ? null : (
+        <>
+          <PageHeader title="Catálogo" description="Promoções e combos vendidos como produto." />
+          <Tabs
+            items={[
+              { id: 'promocoes', label: 'Promoções' },
+              { id: 'combos', label: 'Combos' },
+            ]}
+            value={tab}
+            onChange={setOwnTab}
+          />
+        </>
+      )}
 
       <FilterBar
         actions={

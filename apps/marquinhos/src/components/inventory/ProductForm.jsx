@@ -15,6 +15,7 @@ import { moneyInputValue, parseReaisInput, PRODUCT_MEASURES } from '../../servic
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { readLocalImage } from '../../services/readLocalImage';
 import { Dropdown } from '../ui/Dropdown';
+import { SegmentedControl } from '../ui/SegmentedControl';
 
 export function ProductForm({ item, categories, onSuccess, onCancel }) {
   const toast = useToast();
@@ -42,6 +43,7 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
     estoque_sugerido: item ? String(item.estoque_sugerido ?? 0) : '0',
     valor_unitario: item ? moneyInputValue(item.valor_unitario || item.cost) : '',
     foto: item?.foto || item?.image || '',
+    produzido: Boolean(item?.produzido),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -77,6 +79,7 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
       estoque_atual: form.estoque_atual,
       estoque_sugerido: form.estoque_sugerido,
       valor_unitario: valor,
+      produzido: form.produzido,
       foto: form.foto,
     };
     try {
@@ -148,6 +151,22 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
             onChange={(categoria) => setForm((prev) => ({ ...prev, categoria }))}
             options={categoryOptions.map((category) => ({ value: category, label: category }))}
           />
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <p className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">Origem</p>
+          <SegmentedControl
+            className="w-full"
+            label="Origem do produto"
+            items={[
+              { id: 'comprado', label: 'Comprado' },
+              { id: 'produzido', label: 'Produzido no bar' },
+            ]}
+            value={form.produzido ? 'produzido' : 'comprado'}
+            onChange={(origem) => setForm((prev) => ({ ...prev, produzido: origem === 'produzido' }))}
+          />
+          <p className="pl-1 text-[11px] text-on-surface-variant">
+            Produzido no bar entra na produção. Comprado fica só no estoque, como lata e cerveja.
+          </p>
         </div>
         <Input
           label="Volume / Peso"

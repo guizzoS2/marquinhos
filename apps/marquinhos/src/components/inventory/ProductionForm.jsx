@@ -4,13 +4,17 @@ import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
 import { addProduction, editProduction } from '../../services/dashboardService';
-import { RoleSelect } from '../freelancers/RoleSelect';
+import { Dropdown } from '../ui/Dropdown';
 
 export function ProductionForm({ items = [], production = null, onSuccess, onCancel }) {
   const toast = useToast();
   const editing = Boolean(production?.id);
+  const made = items.filter((item) => item.produzido && item.tipo !== 'combo');
+  const current = items.find((item) => String(item.id) === String(production?.produto_id));
+  const choices =
+    current && !made.some((item) => String(item.id) === String(current.id)) ? [current, ...made] : made;
   const [produtoId, setProdutoId] = useState(
-    production?.produto_id ? String(production.produto_id) : items[0] ? String(items[0].id) : ''
+    production?.produto_id ? String(production.produto_id) : choices[0] ? String(choices[0].id) : ''
   );
   const [quantidade, setQuantidade] = useState(production?.quantidade != null ? String(production.quantidade) : '');
   const [saving, setSaving] = useState(false);
@@ -41,17 +45,29 @@ export function ProductionForm({ items = [], production = null, onSuccess, onCan
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
-      <RoleSelect
-        id="producao-produto"
-        label="Produto"
-        options={items.map((item) => ({
-          value: String(item.id),
-          label: item.nome || item.name,
-        }))}
-        value={produtoId}
-        onChange={setProdutoId}
-        required
-      />
+      <div className="space-y-2">
+        <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label" htmlFor="producao-produto">
+          Produto
+        </label>
+        <Dropdown
+          id="producao-produto"
+          label="Produto"
+          muted
+          search
+          placeholder="Selecione o produto"
+          value={produtoId}
+          onChange={setProdutoId}
+          options={choices.map((item) => ({
+            value: String(item.id),
+            label: item.nome || item.name,
+          }))}
+        />
+        {!choices.length ? (
+          <p className="pl-1 text-[11px] text-on-surface-variant">
+            Nenhum produto marcado como produzido no bar.
+          </p>
+        ) : null}
+      </div>
       <Input
         label="Quantidade"
         type="number"
@@ -67,7 +83,7 @@ export function ProductionForm({ items = [], production = null, onSuccess, onCan
           <Icon name="cancel" />
           Cancelar
         </Button>
-        <Button type="submit" disabled={saving || !items.length}>
+        <Button type="submit" disabled={saving || !choices.length}>
           <Icon name={editing ? 'save' : 'add'} />
           {saving ? 'Salvando...' : editing ? 'Salvar produção' : 'Registrar produção'}
         </Button>

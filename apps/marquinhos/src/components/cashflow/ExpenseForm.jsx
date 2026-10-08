@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Dropdown } from '../ui/Dropdown';
@@ -6,16 +6,21 @@ import { FieldModal } from '../ui/FieldModal';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { SegmentedControl } from '../ui/SegmentedControl';
+import { ProductForm } from '../inventory/ProductForm';
+import { NewSupplierForm } from '../suppliers/NewSupplierForm';
 import { useToast } from '../../contexts/ToastContext';
 import {
+  addPurchase,
   createCashExpense,
   createExpenseCategory,
   editCashExpense,
   fetchCashFlow,
   fetchFreelancers,
+  fetchInventory,
   fetchSuppliers,
 } from '../../services/dashboardService';
-import { expensePartyKind, parseCashFlowDate, toIsoDate } from '../../services/cashFlowUtils';
+import { parseReaisInput } from '../../services/inventoryProduct';
+import { expensePartyKind, parseCashFlowDate, parseMoneyToCents, toIsoDate } from '../../services/cashFlowUtils';
 import { expenseCategories } from '../../services/fallbacks';
 
 function cashFormDate(row) {
@@ -85,8 +90,15 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
   const cash = useQuery({ queryKey: ['cash-flow'], queryFn: fetchCashFlow });
   const suppliersQuery = useQuery({ queryKey: ['suppliers'], queryFn: fetchSuppliers });
   const freelancersQuery = useQuery({ queryKey: ['freelancers'], queryFn: fetchFreelancers });
+  const inventory = useQuery({ queryKey: ['inventory'], queryFn: fetchInventory });
   const [createdCategories, setCreatedCategories] = useState([]);
   const [creatingCategory, setCreatingCategory] = useState(false);
+  const [child, setChild] = useState(null);
+  const [extraProducts, setExtraProducts] = useState([]);
+  const [extraSuppliers, setExtraSuppliers] = useState([]);
+  const [lines, setLines] = useState([{ produto_id: '', quantidade: '1' }]);
+  const [total, setTotal] = useState('');
+  const [totalTouched, setTotalTouched] = useState(false);
   const baseCategories = cash.data?.categories?.length
     ? cash.data.categories
     : categoriesProp?.length
@@ -96,8 +108,16 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
     () => mergeById(baseCategories, createdCategories),
     [baseCategories, createdCategories]
   );
-  const suppliers = suppliersQuery.data?.suppliers || [];
+  const suppliers = useMemo(
+    () => mergeById(suppliersQuery.data?.suppliers || [], extraSuppliers),
+    [suppliersQuery.data, extraSuppliers]
+  );
   const people = freelancersQuery.data?.people || [];
+  const products = useMemo(
+    () =>
+      mergeById(inventory.data?.items || [], extraProducts).filter((item) => item.tipo !== 'combo'),
+    [inventory.data, extraProducts]
+  );
   const initialCategory = categories.find((item) => item.id === expense?.categoryId) || categories[0];
   const [form, setForm] = useState({
     date: editing ? cashFormDate(expense) : new Date().toISOString().slice(0, 10),
@@ -115,6 +135,21 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
 
   const selectedCategory = categories.find((item) => item.id === form.categoryId) || categories[0];
   const party = expensePartyKind(form.categoryId);
+  const stockPurchase = !editing && party === 'supplier';
+  const calculated = useMemo(() => {
+    const sum = lines.reduce((acc, line) => {
+      const product = products.find((item) => String(item.id) === String(line.produto_id));
+      const quantidade = Number(line.quantidade);
+      if (!product || !Number.isInteger(quantidade) || quantidade <= 0) return acc;
+      return acc + (parseMoneyToCents(product.valor_unitario || product.cost || 0) / 100) * quantidade;
+    }, 0);
+    return Math.round(sum * 100) / 100;
+  }, [lines, products]);
+
+  useEffect(() => {
+    if (!stockPurchase || totalTouched) return;
+    setTotal(calculated > 0 ? calculated.toFixed(2) : '');
+  }, [calculated, stockPurchase, totalTouched]);
 
   function handleCategoryChange(categoryId) {
     const nextCategory = categories.find((item) => item.id === categoryId);
@@ -145,6 +180,43 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
     event.preventDefault();
     if (party === 'supplier' && !form.supplierId) {
       setError('Selecione o fornecedor.');
+      return;
+    }
+    if (stockPurchase) {
+      const itens = lines
+        .filter((line) => line.produto_id)
+        .map((line) => ({ produto_id: line.produto_id, quantidade: Number(line.quantidade) }));
+      if (!itens.length) {
+        setError('Adicione ao menos um produto.');
+        return;
+      }
+      const manual = totalTouched ? parseReaisInput(total) : null;
+      if (totalTouched && (!Number.isFinite(manual) || manual <= 0)) {
+        setError('Valor total inválido.');
+        return;
+      }
+      setSaving(true);
+      setError('');
+      try {
+        await addPurchase({
+          date: form.date,
+          supplierId: form.supplierId,
+          categoryId: form.categoryId,
+          itens,
+          valor_total: manual,
+          nature: form.nature,
+          recurrence: form.recurrence || null,
+        });
+        toast.success('Despesa registrada.');
+        onSuccess?.();
+        onCancel();
+      } catch (err) {
+        const message = err?.message || 'Não foi possível registrar a despesa.';
+        setError(message);
+        toast.error(message);
+      } finally {
+        setSaving(false);
+      }
       return;
     }
     if (party === 'freelancer' && !form.freelancerId) {
@@ -232,14 +304,29 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
             <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">
               Fornecedor
             </label>
-            <Dropdown
-              label="Fornecedor"
-              muted
-              placeholder="Selecione o fornecedor"
-              value={form.supplierId}
-              onChange={(supplierId) => setForm((prev) => ({ ...prev, supplierId }))}
-              options={suppliers.map((item) => ({ value: item.id, label: item.name }))}
-            />
+            <div className="flex items-center gap-2">
+              <Dropdown
+                className="min-w-0 flex-1"
+                label="Fornecedor"
+                muted
+                search
+                placeholder="Selecione o fornecedor"
+                value={form.supplierId}
+                onChange={(supplierId) => setForm((prev) => ({ ...prev, supplierId }))}
+                options={suppliers.map((item) => ({ value: item.id, label: item.name }))}
+              />
+              {stockPurchase ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label="Novo fornecedor"
+                  onClick={() => setChild({ kind: 'supplier' })}
+                >
+                  <Icon name="add" />
+                </Button>
+              ) : null}
+            </div>
             {!suppliers.length ? (
               <p className="pl-1 text-[11px] text-on-surface-variant">Nenhum fornecedor cadastrado.</p>
             ) : (
@@ -247,6 +334,70 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
                 A despesa grava o fornecedor selecionado.
               </p>
             )}
+          </div>
+        ) : null}
+        {stockPurchase ? (
+          <div className="space-y-3">
+            <p className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">Produtos</p>
+            {lines.map((line, index) => (
+              <div key={`${index}-${line.produto_id}`} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="flex items-center gap-2">
+                  <Dropdown
+                    className="min-w-0 flex-1"
+                    label="Produto"
+                    muted
+                    search
+                    placeholder="Selecione o produto"
+                    value={line.produto_id}
+                    onChange={(produtoId) =>
+                      setLines((prev) =>
+                        prev.map((row, rowIndex) => (rowIndex === index ? { ...row, produto_id: produtoId } : row))
+                      )
+                    }
+                    options={products.map((item) => ({ value: item.id, label: item.nome || item.name }))}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="shrink-0"
+                    aria-label="Novo produto"
+                    onClick={() => setChild({ kind: 'product', lineIndex: index })}
+                  >
+                    <Icon name="add" />
+                  </Button>
+                </div>
+                <Input
+                  label="Quantidade"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={line.quantidade}
+                  onChange={(event) =>
+                    setLines((prev) =>
+                      prev.map((row, rowIndex) =>
+                        rowIndex === index ? { ...row, quantidade: event.target.value } : row
+                      )
+                    )
+                  }
+                  required
+                />
+                {lines.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setLines((prev) => prev.filter((_, rowIndex) => rowIndex !== index))}
+                  >
+                    <Icon name="delete" />
+                    Remover
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+            <Button type="button" variant="secondary" onClick={() => setLines((prev) => [...prev, { produto_id: '', quantidade: '1' }])}>
+              <Icon name="add" />
+              Adicionar produto
+            </Button>
+            <p className="text-sm text-on-surface-variant">Total dos itens {calculated.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
           </div>
         ) : null}
         {party === 'freelancer' ? (
@@ -257,6 +408,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
             <Dropdown
               label="Freelancer"
               muted
+              search
               placeholder="Selecione o freelancer"
               value={form.freelancerId}
               onChange={(freelancerId) => setForm((prev) => ({ ...prev, freelancerId }))}
@@ -303,16 +455,30 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
             {selectedCategory?.defaultNature === 'fixed' ? 'Fixa' : 'Variável'}
           </p>
         </div>
-        <Input
-          label="Valor (R$)"
-          name="value"
-          type="number"
-          min="0"
-          step="0.01"
-          value={form.value}
-          onChange={(event) => setForm((prev) => ({ ...prev, value: event.target.value }))}
-          required
-        />
+        {stockPurchase ? (
+          <Input
+            label="Valor total (R$)"
+            name="total"
+            inputMode="decimal"
+            value={total}
+            onChange={(event) => {
+              setTotalTouched(true);
+              setTotal(event.target.value);
+            }}
+            required
+          />
+        ) : (
+          <Input
+            label="Valor (R$)"
+            name="value"
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.value}
+            onChange={(event) => setForm((prev) => ({ ...prev, value: event.target.value }))}
+            required
+          />
+        )}
         <div className="space-y-2">
           <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">
             Recorrência
@@ -343,6 +509,40 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
       {creatingCategory ? (
         <FieldModal title="Nova categoria" icon="category" onClose={() => setCreatingCategory(false)}>
           <CategoryNameForm onCancel={() => setCreatingCategory(false)} onSuccess={handleCreatedCategory} />
+        </FieldModal>
+      ) : null}
+      {child?.kind === 'supplier' ? (
+        <FieldModal title="Novo Fornecedor" icon="local_shipping" onClose={() => setChild(null)}>
+          <NewSupplierForm
+            onCancel={() => setChild(null)}
+            onSuccess={(supplier) => {
+              if (supplier?.id != null) {
+                setExtraSuppliers((prev) => mergeById(prev, [supplier]));
+                setForm((prev) => ({ ...prev, supplierId: supplier.id }));
+                queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+              }
+              setChild(null);
+            }}
+          />
+        </FieldModal>
+      ) : null}
+      {child?.kind === 'product' ? (
+        <FieldModal title="Novo produto" icon="inventory_2" wide onClose={() => setChild(null)}>
+          <ProductForm
+            categories={inventory.data?.filters}
+            onCancel={() => setChild(null)}
+            onSuccess={(item) => {
+              if (item?.id) {
+                setExtraProducts((prev) => mergeById(prev, [item]));
+                const lineIndex = child.lineIndex;
+                setLines((prev) =>
+                  prev.map((row, index) => (index === lineIndex ? { ...row, produto_id: item.id } : row))
+                );
+                queryClient.invalidateQueries({ queryKey: ['inventory'] });
+              }
+              setChild(null);
+            }}
+          />
         </FieldModal>
       ) : null}
     </>

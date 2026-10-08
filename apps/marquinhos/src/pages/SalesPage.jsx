@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchInventory } from '../services/dashboardService';
 import { formatSaleStamp, paidSalesOnDay, productTotals, shiftAlreadyClosed, totalsByPayment } from '../services/saleRules';
@@ -17,6 +18,7 @@ function money(value) {
 
 export function SalesPage() {
   const { openModal } = useModal();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['inventory'],
@@ -73,10 +75,16 @@ export function SalesPage() {
       />
       <FilterBar
         actions={
-          <Button onClick={openClose}>
-            <Icon name="lock" />
-            Fechar caixa
-          </Button>
+          <>
+            <Button variant="secondary" onClick={openClose}>
+              <Icon name="lock" />
+              Fechar caixa
+            </Button>
+            <Button onClick={() => navigate('/pdv')}>
+              <Icon name="add" />
+              Nova venda
+            </Button>
+          </>
         }
       />
       <div className="space-y-4">
