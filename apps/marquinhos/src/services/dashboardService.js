@@ -36,6 +36,7 @@ import {
   registerSale,
   saveOpenSale,
   createOpenComanda,
+  registerPartialPayment,
   closeShift,
   deleteInventoryItem,
   createInventoryItem,
@@ -246,6 +247,10 @@ export function saveOpenTab(payload) {
 
 export function openComanda(payload) {
   return createOpenComanda(payload);
+}
+
+export function partialCloseComanda(payload) {
+  return registerPartialPayment(payload);
 }
 
 export function closeCashShift() {

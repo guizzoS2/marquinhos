@@ -10,6 +10,9 @@ import { useToast } from '../../contexts/ToastContext';
 import { useCartDispatch, useCartState } from '../../contexts/CartContext';
 import { checkoutSale, saveOpenTab } from '../../services/dashboardService';
 import { CARD_INSTALLMENTS, PAYMENT_OPTIONS, parseReaisInput } from '../../services/inventoryProduct';
+import { saleBalance, salePaidAmount } from '../../services/saleRules';
+import { PartialCloseForm } from './PartialCloseForm';
+import { PdvModal } from './PdvModal';
 
 function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -48,6 +51,7 @@ export function PdvSummary({ items = [], sales = [] }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [savingTab, setSavingTab] = useState(false);
+  const [partialOpen, setPartialOpen] = useState(false);
 
   const photos = useMemo(() => {
     const map = new Map();
@@ -133,9 +137,11 @@ export function PdvSummary({ items = [], sales = [] }) {
 
   const chargeTotal =
     Math.round(salePayload().itens.reduce((sum, line) => sum + Number(line.valor_total || 0), 0) * 100) / 100;
+  const alreadyPaid = selected ? salePaidAmount(selected) : 0;
+  const due = Math.round((chargeTotal - alreadyPaid) * 100) / 100;
   const troco =
     state.formaPagamento === 'dinheiro' && state.valorRecebido !== '' && Number.isFinite(recebido)
-      ? Math.round((recebido - chargeTotal) * 100) / 100
+      ? Math.round((recebido - due) * 100) / 100
       : null;
 
   function guardComanda() {
@@ -177,12 +183,16 @@ export function PdvSummary({ items = [], sales = [] }) {
       toast.error('O carrinho está vazio.');
       return;
     }
-    if (state.formaPagamento === 'dinheiro' && (troco == null || troco < 0)) {
-      toast.error('Informe um valor recebido que cubra o total.');
+    if (due < -0.001) {
+      toast.error('O total não pode ficar menor que o já pago.');
+      return;
+    }
+    if (due > 0 && state.formaPagamento === 'dinheiro' && (troco == null || troco < 0)) {
+      toast.error('Informe um valor recebido que cubra o saldo.');
       return;
     }
     openModal('confirm', {
-      message: 'Deseja confirmar a compra?',
+      message: alreadyPaid > 0 ? `Receber ${money(due)} e fechar a comanda?` : 'Deseja confirmar a compra?',
       confirmLabel: 'Confirmar',
       successMessage: 'Venda registrada.',
       errorMessage: 'Não foi possível finalizar a venda.',
@@ -288,6 +298,11 @@ export function PdvSummary({ items = [], sales = [] }) {
           {selected && (selected.itens || []).length ? (
             <p className="text-sm text-on-surface-variant">Inclui os itens que já estão na comanda.</p>
           ) : null}
+          {selected && alreadyPaid > 0 ? (
+            <p className="text-sm text-on-surface-variant">
+              Pago {money(alreadyPaid)} · Saldo {money(due)}
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -351,12 +366,34 @@ export function PdvSummary({ items = [], sales = [] }) {
             <Icon name="save" />
             {savingTab ? 'Salvando...' : 'Salvar comanda'}
           </Button>
-          <Button type="button" className="w-full" onClick={finish} disabled={!state.lines.length}>
+          {selected && saleBalance(selected) > 0 ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={() => {
+                if (state.lines.length) {
+                  toast.error('Salve os itens da comanda antes do fechamento parcial.');
+                  return;
+                }
+                setPartialOpen(true);
+              }}
+            >
+              <Icon name="payments" />
+              Fechamento parcial
+            </Button>
+          ) : null}
+          <Button type="button" className="w-full" onClick={finish} disabled={!salePayload().itens.length}>
             <Icon name="check" />
             Finalizar venda
           </Button>
         </div>
       </div>
+      {partialOpen && selected ? (
+        <PdvModal title={`Comanda ${selected.numero_comanda}`} icon="payments" onClose={() => setPartialOpen(false)}>
+          <PartialCloseForm sale={selected} onCancel={() => setPartialOpen(false)} onSuccess={() => setPartialOpen(false)} />
+        </PdvModal>
+      ) : null}
     </section>
   );
 }

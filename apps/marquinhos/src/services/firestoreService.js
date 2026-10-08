@@ -40,6 +40,9 @@ import {
   normalizeSale,
   paidSalesOnDay,
   productTotals,
+  saleBalance,
+  salePaidAmount,
+  salesWithReceiptsOnDay,
   shiftAlreadyClosed,
   totalsByPayment,
 } from './saleRules';
@@ -1790,6 +1793,9 @@ export async function saveOpenSale(payload) {
     if (payload.sale_id && (!existing || existing.status !== 'aberta')) {
       throw new Error('Comanda não encontrada.');
     }
+    if (existing && salePaidAmount(existing) - total > 0.001) {
+      throw new Error('O total não pode ficar menor que o já pago.');
+    }
     const sale = normalizeSale({
       id: existing?.id || `sale-${Date.now()}`,
       numero_comanda: numero,
@@ -1798,6 +1804,7 @@ export async function saveOpenSale(payload) {
       cliente_nome: cliente.nome,
       forma_pagamento: null,
       total,
+      pagamentos: existing?.pagamentos || [],
       itens: saleItems(resolved),
       created_at: existing?.created_at || now.toISOString(),
       updated_at: now.toISOString(),
@@ -1823,15 +1830,6 @@ export async function registerSale(payload) {
     const inventory = normalizeInventory(ops.inventory);
     const resolved = resolveSaleLines(inventory, payload.itens, now);
     const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
-    let valorRecebido = null;
-    let troco = null;
-    let parcelas = null;
-    if (forma === 'dinheiro') {
-      valorRecebido = assertPrice(payload.valor_recebido);
-      if (valorRecebido < total) throw new Error('Valor recebido menor que o total.');
-      troco = Math.round((valorRecebido - total) * 100) / 100;
-    }
-    if (forma === 'cartao_credito') parcelas = assertInstallments(payload.parcelas);
     const cliente = customerFromOps(ops, payload.cliente_id);
     if (numero != null) assertOpenComandaFree(inventory.sales, numero, payload.sale_id);
     const existing = payload.sale_id
@@ -1840,7 +1838,31 @@ export async function registerSale(payload) {
     if (payload.sale_id && (!existing || existing.status !== 'aberta')) {
       throw new Error('Comanda não encontrada.');
     }
+    const already = salePaidAmount(existing);
+    if (already - total > 0.001) throw new Error('O total não pode ficar menor que o já pago.');
+    const due = Math.round((total - already) * 100) / 100;
+    let valorRecebido = null;
+    let troco = null;
+    let parcelas = null;
+    if (forma === 'dinheiro' && due > 0) {
+      valorRecebido = assertPrice(payload.valor_recebido);
+      if (valorRecebido < due) throw new Error('Valor recebido menor que o saldo.');
+      troco = Math.round((valorRecebido - due) * 100) / 100;
+    }
+    if (forma === 'cartao_credito' && due > 0) parcelas = assertInstallments(payload.parcelas);
     const stored = deductSaleStock(inventory, resolved);
+    const payment =
+      due > 0
+        ? {
+            id: `pay-${Date.now()}`,
+            valor: due,
+            forma_pagamento: forma,
+            valor_recebido: valorRecebido,
+            troco,
+            parcelas,
+            created_at: now.toISOString(),
+          }
+        : null;
     const sale = normalizeSale({
       id: existing?.id || `sale-${Date.now()}`,
       numero_comanda: numero,
@@ -1852,6 +1874,7 @@ export async function registerSale(payload) {
       troco,
       parcelas,
       total,
+      pagamentos: payment ? [...(existing?.pagamentos || []), payment] : existing?.pagamentos || [],
       itens: saleItems(resolved),
       created_at: existing?.created_at || now.toISOString(),
       updated_at: now.toISOString(),
@@ -1861,11 +1884,116 @@ export async function registerSale(payload) {
       ? inventory.sales.map((item) => (item.id === sale.id ? sale : item))
       : [sale, ...(inventory.sales || [])];
     const cash = ops.cashFlow || cashFlowFallback;
-    const amountCents = Math.round(total * 100);
+    const amountCents = Math.round(due * 100);
+    const income = payment
+      ? {
+          id: `inc-${payment.id}`,
+          date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
+          description: numero != null ? `PDV · comanda ${numero} · ${cliente.nome}` : `PDV · ${cliente.nome}`,
+          category: 'Varejo',
+          categoryIcon: 'payments',
+          categoryTone: 'secondary',
+          value: formatCents(amountCents),
+          amount: amountCents,
+          source: 'pdv',
+          importKey: null,
+          createdAt: now.toISOString(),
+        }
+      : null;
+    const incomes = payment ? [income, ...(cash.incomes || [])] : cash.incomes || [];
+    const summary = buildCashFlowSummary(incomes, cash.expenses || [], {
+      revenueDelta: cash.summary?.revenueDelta,
+      expensesDelta: cash.summary?.expensesDelta,
+    });
+    return {
+      ops: {
+        ...ops,
+        inventory: {
+          ...inventory,
+          items: stored,
+          sales,
+        },
+        cashFlow: {
+          ...cash,
+          incomes,
+          summary: { ...cash.summary, ...summary },
+        },
+      },
+      value: sale,
+    };
+  });
+}
+
+function storedSaleLines(inventory, itens) {
+  return (itens || []).map((item) => {
+    const produto = (inventory.items || []).find((row) => String(row.id) === String(item.produto_id));
+    if (!produto) throw new Error('Produto não encontrado.');
+    const quantidade = Number(item.quantidade);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+    return { produto, quantidade };
+  });
+}
+
+export async function registerPartialPayment(payload) {
+  const forma = assertPaymentMethod(payload.forma_pagamento);
+  const saleId = String(payload.sale_id || '').trim();
+  if (!saleId) throw new Error('Comanda não encontrada.');
+  const valor = assertPrice(payload.valor);
+  if (valor <= 0) throw new Error('Informe o valor do pagamento.');
+  const usuarioId = await actorId();
+  await ensureDashboardSeed();
+  const now = await readServerNow();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const existing = (inventory.sales || []).find((sale) => String(sale.id) === saleId);
+    if (!existing || existing.status !== 'aberta') throw new Error('Comanda não encontrada.');
+    const saldo = saleBalance(existing);
+    if (saldo <= 0) throw new Error('Essa comanda não tem saldo.');
+    if (valor - saldo > 0.001) throw new Error('O valor passa do saldo.');
+    let valorRecebido = null;
+    let troco = null;
+    let parcelas = null;
+    if (forma === 'dinheiro') {
+      valorRecebido = assertPrice(payload.valor_recebido);
+      if (valorRecebido < valor) throw new Error('Valor recebido menor que o pagamento.');
+      troco = Math.round((valorRecebido - valor) * 100) / 100;
+    }
+    if (forma === 'cartao_credito') parcelas = assertInstallments(payload.parcelas);
+    const closes = saldo - valor <= 0.001;
+    const payment = {
+      id: `pay-${Date.now()}`,
+      valor,
+      forma_pagamento: forma,
+      valor_recebido: valorRecebido,
+      troco,
+      parcelas,
+      created_at: now.toISOString(),
+    };
+    const sale = normalizeSale({
+      ...existing,
+      status: closes ? 'paga' : 'aberta',
+      forma_pagamento: closes ? forma : existing.forma_pagamento,
+      valor_recebido: closes ? valorRecebido : existing.valor_recebido ?? null,
+      troco: closes ? troco : existing.troco ?? null,
+      parcelas: closes ? parcelas : existing.parcelas ?? null,
+      pagamentos: [...(existing.pagamentos || []), payment],
+      updated_at: now.toISOString(),
+      usuario_id: existing.usuario_id || usuarioId,
+    });
+    const sales = inventory.sales.map((item) => (item.id === existing.id ? sale : item));
+    const stored = closes
+      ? deductSaleStock(inventory, storedSaleLines(inventory, existing.itens))
+      : ops.inventory?.items || inventory.items;
+    const cash = ops.cashFlow || cashFlowFallback;
+    const amountCents = Math.round(valor * 100);
+    const numero = sale.numero_comanda;
     const income = {
-      id: `inc-${sale.id}`,
+      id: `inc-${payment.id}`,
       date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
-      description: numero != null ? `PDV · comanda ${numero} · ${cliente.nome}` : `PDV · ${cliente.nome}`,
+      description:
+        numero != null
+          ? `PDV · comanda ${numero} · ${closes ? 'fechamento' : 'parcial'} · ${sale.cliente_nome}`
+          : `PDV · ${closes ? 'fechamento' : 'parcial'} · ${sale.cliente_nome}`,
       category: 'Varejo',
       categoryIcon: 'payments',
       categoryTone: 'secondary',
@@ -1909,13 +2037,14 @@ export async function closeShift() {
       throw new Error('O turno de hoje já foi consolidado.');
     }
     const paid = paidSalesOnDay(inventory.sales, now);
-    if (!paid.length) throw new Error('Não há vendas pagas hoje.');
-    const totais = totalsByPayment(paid);
+    const touched = salesWithReceiptsOnDay(inventory.sales, now);
+    if (!touched.length) throw new Error('Não há vendas pagas hoje.');
+    const totais = totalsByPayment(inventory.sales, now);
     const closing = {
       id: `close-${Date.now()}`,
       closed_at: now.toISOString(),
-      sale_ids: paid.map((sale) => sale.id),
-      vendas: paid.length,
+      sale_ids: touched.map((sale) => sale.id),
+      vendas: touched.length,
       produtos: productTotals(paid),
       totais,
       usuario_id: usuarioId,

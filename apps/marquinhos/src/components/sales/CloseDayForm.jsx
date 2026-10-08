@@ -42,7 +42,7 @@ export function CloseDayForm({ payload, onCancel }) {
       <p className="font-body text-on-surface-variant">
         {readOnly
           ? 'Produtos e valores deste fechamento.'
-          : 'Vendas pagas de hoje. O fechamento grava o montante e os produtos.'}
+          : 'Valores recebidos hoje, inclusive fechamento parcial. Os produtos são das vendas quitadas.'}
       </p>
       <DataTable>
         <THead>

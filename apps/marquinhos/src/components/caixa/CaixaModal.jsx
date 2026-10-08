@@ -12,7 +12,7 @@ import { isAdminRole } from '../../services/roles';
 import {
   formatSaleStamp,
   isSaleOnDay,
-  paidSalesOnDay,
+  salesWithReceiptsOnDay,
   shiftAlreadyClosed,
   totalsByPayment,
 } from '../../services/saleRules';
@@ -45,8 +45,8 @@ export default function CaixaModal({ onClose }) {
 
   if (!isAdminRole(user?.role)) return null;
 
-  const paid = paidSalesOnDay(inventory.data?.sales || []);
-  const totais = totalsByPayment(paid);
+  const sales = inventory.data?.sales || [];
+  const totais = totalsByPayment(sales, new Date());
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -116,7 +116,7 @@ export default function CaixaModal({ onClose }) {
               payload={{
                 byMethod: totais.byMethod,
                 total: totais.total,
-                count: paid.length,
+                count: salesWithReceiptsOnDay(sales).length,
                 alreadyClosed: shiftAlreadyClosed(inventory.data.closings || []),
               }}
               onCancel={onClose}

@@ -22,11 +22,25 @@ export function optionalComanda(value) {
 
 export function normalizeSale(sale) {
   const numero = Number(sale?.numero_comanda);
+  const pagamentos = Array.isArray(sale?.pagamentos)
+    ? sale.pagamentos.filter((row) => Number(row?.valor) > 0)
+    : [];
   return {
     ...sale,
     numero_comanda: Number.isInteger(numero) && numero > 0 ? numero : null,
     status: SALE_STATUSES.includes(sale?.status) ? sale.status : 'paga',
+    pagamentos,
   };
+}
+
+export function salePaidAmount(sale) {
+  return Math.round(
+    (sale?.pagamentos || []).reduce((sum, row) => sum + Number(row.valor || 0), 0) * 100
+  ) / 100;
+}
+
+export function saleBalance(sale) {
+  return Math.round((Number(sale?.total || 0) - salePaidAmount(sale)) * 100) / 100;
 }
 
 export function isSaleOnDay(sale, day = new Date()) {
@@ -48,13 +62,33 @@ export function paidSalesOnDay(sales, day = new Date()) {
   return (sales || []).filter((sale) => sale.status === 'paga' && isSaleOnDay(sale, day));
 }
 
-export function totalsByPayment(sales) {
+function addMethod(byMethod, method, amount) {
+  if (byMethod[method] == null) return;
+  byMethod[method] = Math.round((byMethod[method] + Number(amount || 0)) * 100) / 100;
+}
+
+export function salesWithReceiptsOnDay(sales, day = new Date()) {
+  return (sales || []).filter((sale) => {
+    const payments = Array.isArray(sale.pagamentos) ? sale.pagamentos : [];
+    if (payments.some((payment) => isSaleOnDay({ created_at: payment.created_at }, day))) return true;
+    return !payments.length && sale.status === 'paga' && isSaleOnDay(sale, day);
+  });
+}
+
+export function totalsByPayment(sales, day = null) {
   const byMethod = Object.fromEntries(PAYMENT_METHODS.map((method) => [method, 0]));
   (sales || []).forEach((sale) => {
+    const payments = Array.isArray(sale.pagamentos) ? sale.pagamentos : [];
+    if (payments.length) {
+      payments.forEach((payment) => {
+        if (day && !isSaleOnDay({ created_at: payment.created_at }, day)) return;
+        addMethod(byMethod, payment.forma_pagamento, payment.valor);
+      });
+      return;
+    }
     if (sale.status !== 'paga') return;
-    if (byMethod[sale.forma_pagamento] == null) return;
-    byMethod[sale.forma_pagamento] =
-      Math.round((byMethod[sale.forma_pagamento] + Number(sale.total || 0)) * 100) / 100;
+    if (day && !isSaleOnDay(sale, day)) return;
+    addMethod(byMethod, sale.forma_pagamento, sale.total);
   });
   const total = Math.round(Object.values(byMethod).reduce((sum, value) => sum + value, 0) * 100) / 100;
   return { byMethod, total };

@@ -37,7 +37,7 @@ export function CloseShiftReport({ payload, onCancel }) {
   return (
     <div className="space-y-6">
       <p className="text-on-surface-variant font-body">
-        Faturamento de hoje. Só entram vendas pagas.
+        Faturamento de hoje. Entram os valores recebidos, inclusive fechamento parcial.
       </p>
       <DataTable>
         <THead>
