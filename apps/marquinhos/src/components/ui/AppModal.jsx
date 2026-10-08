@@ -14,6 +14,7 @@ import {
 } from '../../services/dashboardService';
 import { ExpenseForm } from '../cashflow/ExpenseForm';
 import { CloseDayForm } from '../sales/CloseDayForm';
+import { NewSaleForm } from '../sales/NewSaleForm';
 import { NewFreelancerForm } from '../freelancers/NewFreelancerForm';
 import { DailyForm } from '../freelancers/DailyForm';
 import { ShiftDetailForm } from '../freelancers/ShiftDetailForm';
@@ -32,6 +33,7 @@ import { SuppliersList } from '../suppliers/SuppliersList';
 
 const titles = {
   'new-order': 'Nova Venda',
+  'new-sale': 'Nova venda',
   'new-product': 'Novo produto',
   'edit-product': 'Editar produto',
   'product-detail': 'Detalhes do Produto',
@@ -305,7 +307,7 @@ export function AppModal() {
             ? 'payments'
             : modal.type === 'close-day'
               ? 'lock'
-            : modal.type === 'new-order'
+            : modal.type === 'new-order' || modal.type === 'new-sale'
                 ? 'point_of_sale'
                 : modal.type === 'confirm'
                   ? 'warning'
@@ -324,6 +326,7 @@ export function AppModal() {
     modal.type === 'new-expense' ||
     modal.type === 'new-purchase' ||
     modal.type === 'close-day' ||
+    modal.type === 'new-sale' ||
     modal.type === 'suppliers-list';
 
   return (
@@ -418,6 +421,14 @@ export function AppModal() {
           />
         ) : modal.type === 'close-day' ? (
           <CloseDayForm payload={modal.payload} onCancel={closeModal} />
+        ) : modal.type === 'new-sale' ? (
+          <NewSaleForm
+            items={modal.payload?.items || []}
+            promotions={modal.payload?.promotions || []}
+            serverNow={modal.payload?.serverNow}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
         ) : modal.type === 'new-order' ? (
           <NewOrderForm
             income={modal.payload?.income}

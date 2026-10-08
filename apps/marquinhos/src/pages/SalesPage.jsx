@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchInventory } from '../services/dashboardService';
 import { formatSaleStamp, productTotals, salesWithReceiptsOnDay, settledLinesOnDay, shiftAlreadyClosed, totalsByPayment } from '../services/saleRules';
@@ -18,7 +17,6 @@ function money(value) {
 
 export function SalesPage({ embedded = false }) {
   const { openModal } = useModal();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['inventory'],
@@ -86,7 +84,16 @@ export function SalesPage({ embedded = false }) {
               <Icon name="lock" />
               Fechar caixa
             </Button>
-            <Button onClick={() => navigate('/pdv')}>
+            <Button
+              onClick={() =>
+                openModal('new-sale', {
+                  items: data?.items || [],
+                  promotions: data?.promotions || [],
+                  serverNow: data?.serverNow,
+                  onSuccess: refresh,
+                })
+              }
+            >
               <Icon name="add" />
               Nova venda
             </Button>
