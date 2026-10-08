@@ -13,7 +13,7 @@ import { EntityCard, EntityCardGrid, EntityThumb } from '../components/ui/Entity
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
-import { formatCatalogDate } from '../services/catalogRules';
+import { formatPromotionEnd, formatPromotionStart } from '../services/catalogRules';
 
 export function CatalogPage() {
   const [tab, setTab] = useState('promocoes');
@@ -40,7 +40,8 @@ export function CatalogPage() {
       const product = (data?.items || []).find((item) => String(item.id) === String(row.produto_id));
       const name = String(product?.nome || product?.name || '').toLowerCase();
       const status = row.status === 'Ativa' ? 'ativa' : 'inativa';
-      return name.includes(term) || status.includes(term);
+      const when = `${formatPromotionStart(row)} ${formatPromotionEnd(row)}`.toLowerCase();
+      return name.includes(term) || status.includes(term) || when.includes(term);
     });
   }, [data, promotionQuery]);
   const filteredCombos = useMemo(() => {
@@ -168,8 +169,8 @@ export function CatalogPage() {
                         currency: 'BRL',
                       })}
                     </Td>
-                    <Td tone="muted">{formatCatalogDate(row.data_inicio)}</Td>
-                    <Td tone="muted">{formatCatalogDate(row.data_termino)}</Td>
+                    <Td tone="muted">{formatPromotionStart(row)}</Td>
+                    <Td tone="muted">{formatPromotionEnd(row)}</Td>
                     <Td>
                       <StatusPill tone={row.status === 'Ativa' ? 'accent' : 'neutral'}>
                         {row.status === 'Ativa' ? 'Ativa' : 'Inativa'}
@@ -192,7 +193,7 @@ export function CatalogPage() {
                           >
                             <Icon name="edit" />
                           </Button>
-                          {row.status !== 'Ativa' ? (
+                          {row.status !== 'Ativa' && row.vigencia !== 'semana' ? (
                             <Button
                               type="button"
                               size="icon"
@@ -275,7 +276,7 @@ export function CatalogPage() {
                         <Icon name="edit" />
                         Editar
                       </Button>
-                      {row.status !== 'Ativa' ? (
+                      {row.status !== 'Ativa' && row.vigencia !== 'semana' ? (
                         <Button
                           type="button"
                           variant="secondary"
@@ -315,7 +316,7 @@ export function CatalogPage() {
                     }
                   >
                     <p className="text-sm text-on-surface-variant">
-                      {formatCatalogDate(row.data_inicio)} — {formatCatalogDate(row.data_termino)}
+                      {formatPromotionStart(row)} — {formatPromotionEnd(row)}
                     </p>
                     <p className="mt-auto font-headline text-xl font-extrabold text-on-surface">
                       {Number(row.preco_promocional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}

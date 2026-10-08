@@ -31,7 +31,7 @@ import {
   nextProductCode,
   normalizeMedida,
 } from './inventoryProduct';
-import { assertPrice, assertPromotionWindow, promotionStatus, saleUnitPrice } from './catalogRules';
+import { assertPrice, promotionSchedule, promotionStatus, saleUnitPrice } from './catalogRules';
 import { aggregateOverview } from './overviewAggregate';
 import {
   assertComanda,
@@ -668,12 +668,15 @@ function formatStockLabel(qty, unit) {
 }
 
 function promotionRecord(row) {
+  const weekday = row.vigencia === 'semana';
   return {
     id: row.id,
     produto_id: row.produto_id,
     preco_promocional: row.preco_promocional,
-    data_inicio: row.data_inicio,
-    data_termino: row.data_termino,
+    vigencia: weekday ? 'semana' : 'periodo',
+    dia_semana: weekday ? Number(row.dia_semana) : null,
+    data_inicio: weekday ? null : row.data_inicio,
+    data_termino: weekday ? null : row.data_termino,
   };
 }
 
@@ -1347,13 +1350,12 @@ export async function createPromotion(payload) {
   if (!produto) throw new Error('Produto não encontrado. Cadastre em Estoque.');
 
   const preco = assertPrice(payload.preco_promocional);
-  const janela = assertPromotionWindow(payload.data_inicio, payload.data_termino);
+  const agenda = promotionSchedule(payload);
   const promotion = {
     id: `promo-${Date.now()}`,
     produto_id: produtoId,
     preco_promocional: preco,
-    data_inicio: janela.data_inicio,
-    data_termino: janela.data_termino,
+    ...agenda,
   };
   const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
   const next = await saveInventory(
@@ -1371,13 +1373,12 @@ export async function updatePromotion(promotionId, payload) {
   const produto = (current.items || []).find((item) => String(item.id) === produtoId);
   if (!produto) throw new Error('Produto não encontrado. Cadastre em Estoque.');
   const preco = assertPrice(payload.preco_promocional);
-  const janela = assertPromotionWindow(payload.data_inicio, payload.data_termino);
+  const agenda = promotionSchedule(payload);
   const promotion = {
     id: existing.id,
     produto_id: produtoId,
     preco_promocional: preco,
-    data_inicio: janela.data_inicio,
-    data_termino: janela.data_termino,
+    ...agenda,
   };
   const promotions = current.promotions.map((row) => (row.id === existing.id ? promotion : row));
   const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));

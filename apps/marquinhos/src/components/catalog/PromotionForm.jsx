@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
+import { SegmentedControl } from '../ui/SegmentedControl';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { useToast } from '../../contexts/ToastContext';
 import { addPromotion, editPromotion } from '../../services/dashboardService';
 import { moneyInputValue, parseReaisInput } from '../../services/inventoryProduct';
-import { toDateTimeLocal } from '../../services/catalogRules';
+import { WEEKDAYS, toDateTimeLocal } from '../../services/catalogRules';
 
 export function PromotionForm({ items = [], promotion = null, reactivate = false, onSuccess, onCancel }) {
   const toast = useToast();
@@ -16,6 +17,12 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
   );
   const [preco, setPreco] = useState(
     promotion?.preco_promocional != null ? moneyInputValue(promotion.preco_promocional) : ''
+  );
+  const [vigencia, setVigencia] = useState(promotion?.vigencia === 'semana' ? 'semana' : 'periodo');
+  const [diaSemana, setDiaSemana] = useState(
+    promotion?.vigencia === 'semana' && WEEKDAYS.some((day) => day.value === Number(promotion.dia_semana))
+      ? Number(promotion.dia_semana)
+      : 1
   );
   const [inicio, setInicio] = useState(promotion ? toDateTimeLocal(promotion.data_inicio) : '');
   const [termino, setTermino] = useState(promotion ? toDateTimeLocal(promotion.data_termino) : '');
@@ -36,6 +43,8 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
       const payload = {
         produto_id: produtoId,
         preco_promocional: precoPromocional,
+        vigencia,
+        dia_semana: diaSemana,
         data_inicio: inicio,
         data_termino: termino,
       };
@@ -73,22 +82,64 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
         onChange={(event) => setPreco(event.target.value)}
         required
       />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Input
-          label="Início"
-          type="datetime-local"
-          value={inicio}
-          onChange={(event) => setInicio(event.target.value)}
-          required
-        />
-        <Input
-          label="Término"
-          type="datetime-local"
-          value={termino}
-          onChange={(event) => setTermino(event.target.value)}
-          required
+      <div className="space-y-2">
+        <p className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">Vigência</p>
+        <SegmentedControl
+          className="w-full"
+          label="Vigência da promoção"
+          items={[
+            { id: 'periodo', label: 'Período' },
+            { id: 'semana', label: 'Dia da semana' },
+          ]}
+          value={vigencia}
+          onChange={setVigencia}
         />
       </div>
+      {vigencia === 'semana' ? (
+        <div className="space-y-2">
+          <p className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
+            Dia da semana
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Dia da semana">
+            {WEEKDAYS.map((day) => {
+              const selected = diaSemana === day.value;
+              return (
+                <button
+                  key={day.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setDiaSemana(day.value)}
+                  className={`min-h-11 rounded-xl border px-3 text-sm ${
+                    selected
+                      ? 'border-primary bg-primary font-bold text-on-primary'
+                      : 'border-outline bg-surface font-normal text-on-surface'
+                  }`}
+                >
+                  {day.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Input
+            label="Início"
+            type="datetime-local"
+            value={inicio}
+            onChange={(event) => setInicio(event.target.value)}
+            required
+          />
+          <Input
+            label="Término"
+            type="datetime-local"
+            value={termino}
+            onChange={(event) => setTermino(event.target.value)}
+            required
+          />
+        </div>
+      )}
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
