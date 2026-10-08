@@ -2174,7 +2174,7 @@ export async function addSupplier(payload) {
     id: nextId,
     name: payload.name.trim(),
     contact: payload.contact.trim(),
-    cnpj: payload.cnpj.trim(),
+    cnpj: String(payload.cnpj || '').trim(),
     lastPurchase: '',
     lastValue: '',
     lastAmount: 0,
@@ -2194,7 +2194,7 @@ export async function updateSupplier(supplierId, payload) {
   const name = String(payload.name || '').trim();
   const contact = String(payload.contact || '').trim();
   const cnpj = String(payload.cnpj || '').trim();
-  if (!name || !contact || !cnpj) throw new Error('Informe nome, contato e CNPJ.');
+  if (!name || !contact) throw new Error('Informe nome e contato.');
   let found = false;
   const suppliers = (current.suppliers || []).map((item) => {
     if (String(item.id) !== String(supplierId)) return item;

@@ -55,7 +55,6 @@ export function NewSupplierForm({ supplier = null, onSuccess, onCancel }) {
         name="cnpj"
         value={form.cnpj}
         onChange={(e) => setForm((prev) => ({ ...prev, cnpj: e.target.value }))}
-        required
       />
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
