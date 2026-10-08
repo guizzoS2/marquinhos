@@ -39,14 +39,18 @@ import {
   optionalComanda,
   optionalNote,
   normalizeSale,
-  productTotals,
   saleBalance,
   salePaidAmount,
-  salesWithReceiptsOnDay,
-  settledLinesOnDay,
-  shiftAlreadyClosed,
-  totalsByPayment,
 } from './saleRules';
+import {
+  latestCutoff,
+  openMovements,
+  settledInWindow,
+  snapshotLine,
+  sumReais,
+  totalsInWindow,
+  windowFor,
+} from './cashClose';
 import { format } from 'date-fns';
 import { isValidPhone, maskPhone } from './freelancerSchedule';
 
@@ -2062,24 +2066,42 @@ export async function registerPartialPayment(payload) {
   });
 }
 
-export async function closeShift() {
+export async function closeShift(input = {}) {
   const usuarioId = await actorId();
   await ensureDashboardSeed();
   return commitOps((ops) => {
     const inventory = normalizeInventory(ops.inventory);
+    const cash = ops.cashFlow || cashFlowFallback;
     const now = new Date();
-    if (shiftAlreadyClosed(inventory.closings, now)) {
-      throw new Error('O turno de hoje já foi consolidado.');
-    }
-    const touched = salesWithReceiptsOnDay(inventory.sales, now);
-    if (!touched.length) throw new Error('Não há vendas pagas hoje.');
-    const totais = totalsByPayment(inventory.sales, now);
+    const open = openMovements(cash.incomes, cash.expenses, inventory.closings);
+    const span = windowFor({
+      modo: input.modo,
+      day: input.day || format(now, 'yyyy-MM-dd'),
+      time: input.time || format(now, 'HH:mm'),
+      openIncomes: open.incomes,
+      openExpenses: open.expenses,
+      now,
+    });
+    if (span.error) throw new Error(span.error);
+    const entradas = sumReais(span.incomes);
+    const saidas = sumReais(span.expenses);
+    const range = { from: latestCutoff(inventory.closings), until: span.until, day: span.day };
+    const totais = totalsInWindow(inventory.sales, range);
     const closing = {
       id: `close-${Date.now()}`,
+      from: span.from ? span.from.toISOString() : null,
+      until: span.until.toISOString(),
       closed_at: now.toISOString(),
-      sale_ids: touched.map((sale) => sale.id),
-      vendas: touched.length,
-      produtos: productTotals(settledLinesOnDay(inventory.sales, now)),
+      modo: span.modo,
+      income_ids: span.incomes.map((row) => row.id),
+      expense_ids: span.expenses.map((row) => row.id),
+      entradas_linhas: span.incomes.map(snapshotLine),
+      saidas_linhas: span.expenses.map(snapshotLine),
+      entradas,
+      saidas,
+      saldo: Math.round((entradas - saidas) * 100) / 100,
+      vendas: span.incomes.filter((row) => row.source === 'pdv' || String(row.description || '').startsWith('PDV')).length,
+      produtos: settledInWindow(inventory.sales, range),
       totais,
       usuario_id: usuarioId,
     };
@@ -2088,7 +2110,7 @@ export async function closeShift() {
         ...ops,
         inventory: { ...inventory, closings: [closing, ...(inventory.closings || [])] },
       },
-      value: { closing, ...totais, count: touched.length },
+      value: closing,
     };
   });
 }

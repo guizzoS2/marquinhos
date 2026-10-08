@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchCashFlow, fetchInventory, removeCashIncome } from '../services/dashboardService';
 import { unifyCashMovements } from '../services/cashFlowUtils';
 import { PAYMENT_OPTIONS } from '../services/inventoryProduct';
-import { formatSaleStamp, productTotals, salesWithReceiptsOnDay, settledLinesOnDay, shiftAlreadyClosed, totalsByPayment } from '../services/saleRules';
 import { Button } from '../components/ui/Button';
 import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
 import { FilterBar } from '../components/ui/FilterBar';
@@ -12,10 +11,6 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
-
-function money(value) {
-  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
 
 function isPdvEntry(row) {
   return row.source === 'pdv' || String(row.description || '').startsWith('PDV');
@@ -79,44 +74,12 @@ export function SalesPage({ embedded = false }) {
   const entries = useMemo(() => {
     return unifyCashMovements(cash.data?.incomes || [], []).filter(isPdvEntry);
   }, [cash.data]);
-  const closings = useMemo(() => {
-    return [...(data?.closings || [])].sort((left, right) =>
-      String(right.closed_at || '').localeCompare(String(left.closed_at || ''))
-    );
-  }, [data]);
   const entryPage = usePagedList(entries, entries.map((row) => row.id).join('|'));
-  const closingPage = usePagedList(closings, closings.map((row) => row.id).join('|'));
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
     queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
     queryClient.invalidateQueries({ queryKey: ['caixa-shift'] });
-  }
-
-  function openClose() {
-    const sales = data?.sales || [];
-    const totais = totalsByPayment(sales, new Date());
-    openModal('close-day', {
-      lines: productTotals(settledLinesOnDay(sales)),
-      byMethod: totais.byMethod,
-      total: totais.total,
-      count: salesWithReceiptsOnDay(sales).length,
-      alreadyClosed: shiftAlreadyClosed(data?.closings || []),
-      onSuccess: refresh,
-    });
-  }
-
-  function openClosing(closing) {
-    const ids = new Set((closing.sale_ids || []).map(String));
-    const linked = (data?.sales || []).filter((sale) => ids.has(String(sale.id)));
-    const lines = closing.produtos?.length ? closing.produtos : productTotals(linked);
-    openModal('close-day', {
-      lines,
-      byMethod: closing.totais?.byMethod || {},
-      total: closing.totais?.total || 0,
-      count: closing.vendas ?? closing.sale_ids?.length ?? linked.length,
-      readOnly: true,
-    });
   }
 
   function openEdit(row) {
@@ -154,26 +117,20 @@ export function SalesPage({ embedded = false }) {
       )}
       <FilterBar
         actions={
-          <>
-            <Button variant="secondary" onClick={openClose}>
-              <Icon name="lock" />
-              Fechar caixa
-            </Button>
-            <Button
-              onClick={() =>
-                openModal('new-sale', {
-                  items: data?.items || [],
-                  promotions: data?.promotions || [],
-                  sales: data?.sales || [],
-                  serverNow: data?.serverNow,
-                  onSuccess: refresh,
-                })
-              }
-            >
-              <Icon name="add" />
-              Nova venda
-            </Button>
-          </>
+          <Button
+            onClick={() =>
+              openModal('new-sale', {
+                items: data?.items || [],
+                promotions: data?.promotions || [],
+                sales: data?.sales || [],
+                serverNow: data?.serverNow,
+                onSuccess: refresh,
+              })
+            }
+          >
+            <Icon name="add" />
+            Nova venda
+          </Button>
         }
       />
       <div className="space-y-4">
@@ -242,52 +199,6 @@ export function SalesPage({ embedded = false }) {
         </DataTable>
         <Pagination state={entryPage} />
       </div>
-      <section className="space-y-4">
-        <h3 className="font-headline text-xl font-bold text-on-surface">Fechamentos</h3>
-        <DataTable>
-          <THead>
-            <Th>Data</Th>
-            <Th>Hora</Th>
-            <Th align="right">Vendas</Th>
-            <Th align="right">Total</Th>
-            <Th align="right">Ações</Th>
-          </THead>
-          <TBody>
-            {closings.length === 0 ? (
-              <EmptyRow colSpan={5}>Nenhum fechamento registrado.</EmptyRow>
-            ) : (
-              closingPage.rows.map((closing) => {
-                const stamp = formatSaleStamp(closing.closed_at);
-                const count = closing.vendas ?? closing.sale_ids?.length ?? 0;
-                return (
-                  <Tr key={closing.id}>
-                    <Td tone="muted">{stamp.data}</Td>
-                    <Td tone="muted">{stamp.hora}</Td>
-                    <Td align="right">{count}</Td>
-                    <Td align="right" tone="strong">
-                      {money(closing.totais?.total)}
-                    </Td>
-                    <Td align="right">
-                      <TableActions>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="secondary"
-                          onClick={() => openClosing(closing)}
-                          aria-label="Ver fechamento"
-                        >
-                          <Icon name="visibility" />
-                        </Button>
-                      </TableActions>
-                    </Td>
-                  </Tr>
-                );
-              })
-            )}
-          </TBody>
-        </DataTable>
-        <Pagination state={closingPage} />
-      </section>
     </div>
   );
 }

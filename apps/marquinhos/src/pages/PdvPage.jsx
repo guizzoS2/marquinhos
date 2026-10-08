@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { fetchInventory } from '../services/dashboardService';
 import { CartProvider } from '../contexts/CartContext';
 import { PdvCatalog } from '../components/pdv/PdvCatalog';
@@ -10,11 +10,9 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdminRole } from '../services/roles';
 
-const CaixaModal = lazy(() => import('../components/caixa/CaixaModal'));
-
 export function PdvPage() {
   const { user } = useAuth();
-  const [showCaixa, setShowCaixa] = useState(false);
+  const navigate = useNavigate();
   const inventory = useQuery({ queryKey: ['inventory'], queryFn: fetchInventory });
   const canClose = isAdminRole(user?.role);
 
@@ -27,7 +25,7 @@ export function PdvPage() {
       <div className="p-4 md:p-8 space-y-6">
         <PageHeader title="PDV" description="Monte a venda e confirme tudo de uma vez.">
           {canClose ? (
-            <Button type="button" className="w-full md:w-auto" onClick={() => setShowCaixa(true)}>
+            <Button type="button" className="w-full md:w-auto" onClick={() => navigate('/compras?aba=fechamento')}>
               <Icon name="lock" />
               Fechar caixa
             </Button>
@@ -48,11 +46,6 @@ export function PdvPage() {
           </div>
         </div>
       </div>
-      {showCaixa ? (
-        <Suspense fallback={null}>
-          <CaixaModal onClose={() => setShowCaixa(false)} />
-        </Suspense>
-      ) : null}
     </CartProvider>
   );
 }

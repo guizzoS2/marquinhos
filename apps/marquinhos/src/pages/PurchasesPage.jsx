@@ -7,6 +7,7 @@ import { fetchCashFlow, fetchCustomers, fetchInventory, removeCashExpense, remov
 import { natureLabel, parseCashFlowDate, toIsoDate } from '../services/cashFlowUtils';
 import { OpenComandas } from '../components/pdv/OpenComandas';
 import { SuppliersList } from '../components/suppliers/SuppliersList';
+import { CloseShiftPage } from './CloseShiftPage';
 import { SalesPage } from './SalesPage';
 import { Button } from '../components/ui/Button';
 import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
@@ -37,7 +38,10 @@ export function PurchasesPage() {
   const [query, setQuery] = useState('');
   const [params, setParams] = useSearchParams();
   const requested = params.get('aba');
-  const tab = requested === 'vendas' || requested === 'fornecedores' || requested === 'comandas' ? requested : 'compras';
+  const tab =
+    requested === 'vendas' || requested === 'fornecedores' || requested === 'comandas' || requested === 'fechamento'
+      ? requested
+      : 'compras';
   const { openModal } = useModal();
   const queryClient = useQueryClient();
   const cash = useQuery({ queryKey: ['cash-flow'], queryFn: fetchCashFlow });
@@ -185,7 +189,7 @@ export function PurchasesPage() {
     <div className="space-y-6 p-4 font-body md:p-8">
       <PageHeader
         title="Compras e vendas"
-        description="Compras, vendas, comandas e fornecedores."
+        description="Compras, vendas, comandas, fechamento e fornecedores."
       />
       <Tabs
         label="Compras e vendas"
@@ -193,6 +197,7 @@ export function PurchasesPage() {
           { id: 'compras', label: 'Compras' },
           { id: 'vendas', label: 'Vendas' },
           { id: 'comandas', label: 'Comandas' },
+          { id: 'fechamento', label: 'Fechamento' },
           { id: 'fornecedores', label: 'Fornecedores' },
         ]}
         value={tab}
@@ -319,6 +324,8 @@ export function PurchasesPage() {
       {tab === 'comandas' ? (
         <OpenComandas sales={inventory.data.sales || []} customers={customers.data?.customers || []} />
       ) : null}
+
+      {tab === 'fechamento' ? <CloseShiftPage /> : null}
 
       {tab === 'fornecedores' ? (
         <SuppliersList

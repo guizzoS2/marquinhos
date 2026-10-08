@@ -253,9 +253,9 @@ export function partialCloseComanda(payload) {
   return registerPartialPayment(payload);
 }
 
-export function closeCashShift() {
+export function closeCashShift(payload) {
   requireAdmin();
-  return closeShift();
+  return closeShift(payload);
 }
 
 export function addInventoryProduct(payload) {
