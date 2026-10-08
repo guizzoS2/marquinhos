@@ -73,7 +73,6 @@ export function CashFlowPage() {
     { label: 'Despesas totais', value: summary.totalExpenses, icon: 'money_off' },
     { label: 'Despesas fixas', value: summary.fixedExpenses, icon: 'lock' },
     { label: 'Despesas variáveis', value: summary.variableExpenses, icon: 'tune' },
-    { label: 'Margem contribuição', value: summary.contributionMargin, icon: 'pie_chart' },
     { label: 'Lucro estimado', value: summary.estimatedProfit, icon: 'trending_up' },
     { label: 'Lucro líquido', value: summary.netProfit, icon: 'account_balance' },
   ];
