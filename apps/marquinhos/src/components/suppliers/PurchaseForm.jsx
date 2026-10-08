@@ -307,7 +307,9 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
               muted
               value={categoryId}
               onChange={setCategoryId}
-              options={categories.map((item) => ({ value: item.id, label: item.name }))}
+              options={categories
+                .filter((item) => item.id !== 'freelancer')
+                .map((item) => ({ value: item.id, label: item.name }))}
             />
             <Button
               type="button"

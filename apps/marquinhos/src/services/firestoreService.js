@@ -17,6 +17,7 @@ import {
 import {
   buildCashFlowSummary,
   formatCents,
+  expensePartyKind,
   parseMoneyToCents,
   unifyCashMovements,
 } from './cashFlowUtils';
@@ -38,6 +39,7 @@ import {
   optionalComanda,
   normalizeSale,
   paidSalesOnDay,
+  productTotals,
   shiftAlreadyClosed,
   totalsByPayment,
 } from './saleRules';
@@ -275,11 +277,22 @@ async function patchDocument(path, data) {
   return data;
 }
 
+function ensureExpenseCategories(categories) {
+  const list = categories?.length
+    ? categories.map((item) => ({ ...item }))
+    : expenseCategories.map((item) => ({ ...item }));
+  expenseCategories.forEach((seed) => {
+    if (seed.id !== 'fornecedor' && seed.id !== 'freelancer') return;
+    if (!list.some((item) => item.id === seed.id)) list.push({ ...seed });
+  });
+  return list;
+}
+
 function migrateCashFlow(raw) {
   if (!raw) return cashFlowFallback;
   const { movements: _movements, ...source } = raw;
 
-  const categories = source.categories?.length ? source.categories : expenseCategories;
+  const categories = ensureExpenseCategories(source.categories);
   const incomes = (source.incomes || []).map((row, index) => ({
     ...row,
     id: row.id || `inc-${index + 1}`,
@@ -302,6 +315,8 @@ function migrateCashFlow(raw) {
       categoryId: row.categoryId || categoryMeta?.id || row.category?.toLowerCase(),
       categoryIcon: row.categoryIcon || categoryMeta?.icon || 'payments',
       nature,
+      supplierId: row.supplierId || null,
+      freelancerId: row.freelancerId || null,
       amount: row.amount ?? parseMoneyToCents(row.value),
       recurrence: row.recurrence ?? null,
       source: row.source || 'manual',
@@ -337,8 +352,11 @@ export async function ensureDashboardSeed() {
   const cashFlow = ops.cashFlow;
   if (!cashFlow) return;
   const migrated = migrateCashFlow(cashFlow);
+  const categoryIds = new Set((cashFlow.categories || []).map((item) => item.id));
   const needsWrite =
     !cashFlow.categories?.length ||
+    !categoryIds.has('fornecedor') ||
+    !categoryIds.has('freelancer') ||
     (cashFlow.expenses || []).some((row) => !row.nature || row.amount == null);
   if (needsWrite) {
     await writeDocument(DOCS.cashFlow, migrated);
@@ -449,13 +467,44 @@ function formatExpenseDate(isoDate) {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 }
 
+async function partyFromSupplier(supplierId, missingMessage) {
+  const current = await getSuppliers();
+  const supplier = (current.suppliers || []).find((item) => String(item.id) === String(supplierId));
+  if (!supplier) throw new Error(missingMessage);
+  return { supplier: supplier.name, supplierId: supplier.id, freelancerId: null };
+}
+
+async function partyFromFreelancer(freelancerId, missingMessage) {
+  const current = await getFreelancers();
+  const person = (current.people || []).find((item) => String(item.id) === String(freelancerId));
+  if (!person) throw new Error(missingMessage);
+  return { supplier: person.name, supplierId: null, freelancerId: person.id };
+}
+
+async function resolveExpenseParties(payload, category) {
+  const kind = expensePartyKind(category.id);
+  if (kind === 'supplier') {
+    if (!payload.supplierId) throw new Error('Selecione o fornecedor.');
+    return partyFromSupplier(payload.supplierId, 'Fornecedor não encontrado.');
+  }
+  if (kind === 'freelancer') {
+    if (!payload.freelancerId) throw new Error('Selecione o freelancer.');
+    return partyFromFreelancer(payload.freelancerId, 'Freelancer não encontrado.');
+  }
+  if (payload.supplierId) return partyFromSupplier(payload.supplierId, 'Fornecedor não encontrado.');
+  if (payload.freelancerId) return partyFromFreelancer(payload.freelancerId, 'Freelancer não encontrado.');
+  const label = String(payload.supplier || '').trim();
+  if (!label) throw new Error('Informe a descrição.');
+  return { supplier: label, supplierId: null, freelancerId: null };
+}
+
 export async function createExpense(payload) {
   const current = await getCashFlow();
-  const category =
-    (current.categories || expenseCategories).find(
-      (item) => item.id === payload.categoryId
-    ) || expenseCategories[0];
+  const categories = current.categories?.length ? current.categories : expenseCategories;
+  const category = categories.find((item) => item.id === payload.categoryId);
+  if (!category) throw new Error('Selecione a categoria.');
 
+  const parties = await resolveExpenseParties(payload, category);
   const amountCents =
     payload.amount ?? parseMoneyToCents(payload.value ?? payload.dailyRate);
   const nature = payload.nature || category.defaultNature || 'variable';
@@ -463,8 +512,9 @@ export async function createExpense(payload) {
   const expense = {
     id: payload.id || `exp-${Date.now()}`,
     date: formatExpenseDate(payload.date),
-    supplier: payload.supplier.trim(),
-    supplierId: payload.supplierId || null,
+    supplier: parties.supplier,
+    supplierId: parties.supplierId,
+    freelancerId: parties.freelancerId,
     category: category.name,
     categoryId: category.id,
     categoryIcon: category.icon,
@@ -494,9 +544,9 @@ export async function createExpense(payload) {
 
   await writeDocument(DOCS.cashFlow, next);
 
-  if (payload.supplierId) {
+  if (parties.supplierId) {
     await recordSupplierPurchase({
-      supplierId: payload.supplierId,
+      supplierId: parties.supplierId,
       date: expense.date,
       category: category.name,
       value: expense.value,
@@ -578,17 +628,19 @@ export async function updateExpense(expenseId, payload) {
   const current = await getCashFlow();
   const existing = (current.expenses || []).find((row) => String(row.id) === String(expenseId));
   if (!existing) throw new Error('Despesa não encontrada.');
-  const category =
-    (current.categories || expenseCategories).find((item) => item.id === payload.categoryId) ||
-    expenseCategories[0];
+  const categories = current.categories?.length ? current.categories : expenseCategories;
+  const category = categories.find((item) => item.id === payload.categoryId);
+  if (!category) throw new Error('Selecione a categoria.');
+  const parties = await resolveExpenseParties(payload, category);
   const amountCents = payload.amount ?? parseMoneyToCents(payload.value);
   const nature = payload.nature || category.defaultNature || existing.nature || 'variable';
   const expense = {
     ...existing,
     date: formatExpenseDate(payload.date),
     createdAt: shiftCreatedAt(existing.createdAt, payload.date),
-    supplier: String(payload.supplier || '').trim(),
-    supplierId: payload.supplierId || null,
+    supplier: parties.supplier,
+    supplierId: parties.supplierId,
+    freelancerId: parties.freelancerId,
     category: category.name,
     categoryId: category.id,
     categoryIcon: category.icon,
@@ -601,6 +653,16 @@ export async function updateExpense(expenseId, payload) {
     String(row.id) === String(expenseId) ? expense : row
   );
   await saveCashFlow(current, { expenses });
+  if (parties.supplierId && String(parties.supplierId) !== String(existing.supplierId || '')) {
+    await recordSupplierPurchase({
+      supplierId: parties.supplierId,
+      date: expense.date,
+      category: category.name,
+      value: expense.value,
+      amount: amountCents,
+      expenseId: expense.id,
+    });
+  }
   return expense;
 }
 
@@ -1032,6 +1094,9 @@ export async function registerPurchase(payload) {
     const categories = cash.categories?.length ? cash.categories : expenseCategories;
     const category = categories.find((item) => item.id === payload.categoryId);
     if (!category) throw new Error('Selecione a categoria.');
+    if (expensePartyKind(category.id) === 'freelancer') {
+      throw new Error('Compra de estoque não usa a categoria Freelancer.');
+    }
 
     const grouped = new Map();
     linhas.forEach((linha) => {
@@ -1102,6 +1167,7 @@ export async function registerPurchase(payload) {
       date: formatExpenseDate(date),
       supplier: supplier.name,
       supplierId: supplier.id,
+      freelancerId: null,
       category: category.name,
       categoryId: category.id,
       categoryIcon: category.icon,
@@ -1839,6 +1905,8 @@ export async function closeShift() {
       id: `close-${Date.now()}`,
       closed_at: now.toISOString(),
       sale_ids: paid.map((sale) => sale.id),
+      vendas: paid.length,
+      produtos: productTotals(paid),
       totais,
       usuario_id: usuarioId,
     };
@@ -1975,10 +2043,12 @@ export async function registerDaily(payload) {
   const person = (current.people || []).find(
     (item) => String(item.id) === String(payload.freelancerId)
   );
+  if (!person) throw new Error('Selecione o freelancer.');
   const amountCents = dailyAmountCents(payload.value, person?.dailyRate);
   const expense = await createExpense({
     date: payload.date,
-    supplier: person?.name || `Freelancer #${payload.freelancerId}`,
+    supplier: person.name,
+    freelancerId: person.id,
     categoryId: 'freelancer',
     nature: 'variable',
     amount: amountCents,
@@ -2010,6 +2080,7 @@ export async function updateDaily(target, payload) {
   const person = (current.people || []).find(
     (item) => String(item.id) === String(payload.freelancerId)
   );
+  if (!person) throw new Error('Selecione o freelancer.');
   const previousPerson = (current.people || []).find(
     (item) => String(item.id) === String(existing.freelancerId)
   );
@@ -2036,20 +2107,28 @@ export async function updateDaily(target, payload) {
   if (matchIndex >= 0) {
     const row = expenses[matchIndex];
     expenseId = row.id;
+    const dailyCategory =
+      (cash.categories || expenseCategories).find((item) => item.id === 'freelancer') ||
+      expenseCategories.find((item) => item.id === 'freelancer');
     expenses[matchIndex] = {
       ...row,
       date: formatExpenseDate(payload.date),
-      supplier: person?.name || row.supplier,
+      supplier: person.name,
+      supplierId: null,
+      freelancerId: person.id,
+      category: dailyCategory?.name || 'Freelancer',
+      categoryId: 'freelancer',
+      categoryIcon: dailyCategory?.icon || 'person',
       value: formatCents(amountCents),
       amount: amountCents,
       source: 'freelancer_daily',
-      categoryId: row.categoryId || 'freelancer',
     };
     await saveCashFlow(cash, { expenses });
   } else {
     const expense = await createExpense({
       date: payload.date,
-      supplier: person?.name || `Freelancer #${payload.freelancerId}`,
+      supplier: person.name,
+      freelancerId: person.id,
       categoryId: 'freelancer',
       nature: 'variable',
       amount: amountCents,

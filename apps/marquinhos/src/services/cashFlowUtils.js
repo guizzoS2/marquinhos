@@ -28,6 +28,12 @@ export function formatCompactCents(cents) {
   })}`;
 }
 
+export function expensePartyKind(categoryId) {
+  if (categoryId === 'fornecedor') return 'supplier';
+  if (categoryId === 'freelancer') return 'freelancer';
+  return 'none';
+}
+
 export function natureLabel(nature) {
   return nature === 'fixed' ? 'Fixa' : 'Variável';
 }
@@ -246,6 +252,8 @@ export function unifyCashMovements(incomes = [], expenses = []) {
       entidade: row.supplier || null,
       supplier: row.supplier || '',
       supplierId: row.supplierId || '',
+      freelancerId: row.freelancerId || '',
+      source: row.source || 'manual',
       categoria: row.category || '',
       categoryId: row.categoryId || '',
       categoryIcon: row.categoryIcon || 'payments',

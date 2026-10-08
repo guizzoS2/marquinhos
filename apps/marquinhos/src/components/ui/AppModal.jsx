@@ -1,25 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Icon } from './Icon';
 import { Button } from './Button';
 import { DataTable, EmptyRow, TBody, Td, Th, THead, Tr } from './DataTable';
-import { SegmentedControl } from './SegmentedControl';
 import { Dropdown } from './Dropdown';
 import { Input } from './Input';
 import { useModal } from '../../contexts/ModalContext';
 import { useToast } from '../../contexts/ToastContext';
 import {
-  createCashExpense,
   createCashIncome,
-  editCashExpense,
   editCashIncome,
-  fetchCashFlow,
   fetchSuppliers,
 } from '../../services/dashboardService';
+import { ExpenseForm } from '../cashflow/ExpenseForm';
+import { CloseDayForm } from '../sales/CloseDayForm';
 import { NewFreelancerForm } from '../freelancers/NewFreelancerForm';
 import { DailyForm } from '../freelancers/DailyForm';
 import { ShiftDetailForm } from '../freelancers/ShiftDetailForm';
-import { expenseCategories } from '../../services/fallbacks';
 import { parseCashFlowDate, toIsoDate } from '../../services/cashFlowUtils';
 import { ProductForm } from '../inventory/ProductForm';
 import { ProductDetail } from '../inventory/ProductDetail';
@@ -56,6 +53,7 @@ const titles = {
   'suppliers-list': 'Fornecedores',
   'supplier-detail': 'Histórico do fornecedor',
   'new-expense': 'Nova Despesa',
+  'close-day': 'Fechar caixa',
   'import-statement': 'Importar Extrato',
   confirm: 'Confirmar ação',
 };
@@ -137,189 +135,6 @@ function cashFormDate(row) {
 
 function reaisInput(cents) {
   return (Number(cents || 0) / 100).toFixed(2);
-}
-
-function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp, expense = null }) {
-  const toast = useToast();
-  const editing = Boolean(expense?.id);
-  const categories = categoriesProp?.length ? categoriesProp : expenseCategories;
-  const initialCategory = categories.find((item) => item.id === expense?.categoryId) || categories[0];
-  const { data: suppliersData } = useQuery({
-    queryKey: ['suppliers'],
-    queryFn: fetchSuppliers,
-  });
-  const suppliers = suppliersData?.suppliers || [];
-  const [form, setForm] = useState({
-    date: editing ? cashFormDate(expense) : new Date().toISOString().slice(0, 10),
-    supplier: expense?.supplier || '',
-    supplierId: expense?.supplierId || '',
-    categoryId: initialCategory?.id || 'bebidas',
-    nature: expense?.nature || initialCategory?.defaultNature || 'variable',
-    value: editing ? reaisInput(expense.amount) : '',
-    recurrence: expense?.recurrence || '',
-  });
-  const [natureTouched, setNatureTouched] = useState(editing);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const selectedCategory =
-    categories.find((item) => item.id === form.categoryId) || categories[0];
-
-  function handleCategoryChange(categoryId) {
-    const nextCategory = categories.find((item) => item.id === categoryId);
-    setForm((prev) => ({
-      ...prev,
-      categoryId,
-      nature: natureTouched ? prev.nature : nextCategory?.defaultNature || 'variable',
-    }));
-  }
-
-  function handleSupplierSelect(supplierId) {
-    const selected = suppliers.find((item) => String(item.id) === String(supplierId));
-    setForm((prev) => ({
-      ...prev,
-      supplierId,
-      supplier: selected ? selected.name : prev.supplier,
-    }));
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      const payload = {
-        date: form.date,
-        supplier: form.supplier,
-        supplierId: form.supplierId || null,
-        categoryId: form.categoryId,
-        nature: form.nature,
-        amount: Math.round(Number(form.value) * 100),
-        recurrence: form.recurrence || null,
-        source: 'manual',
-      };
-      if (editing) await editCashExpense(expense.id, payload);
-      else await createCashExpense(payload);
-      toast.success(editing ? 'Despesa atualizada.' : 'Despesa registrada.');
-      onSuccess?.();
-      onCancel();
-    } catch {
-      setError(editing ? 'Não foi possível atualizar a despesa.' : 'Não foi possível registrar a despesa.');
-      toast.error(editing ? 'Falha ao atualizar despesa.' : 'Falha ao registrar despesa.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
-      <Input
-        label="Data"
-        name="date"
-        type="date"
-        value={form.date}
-        onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
-        required
-      />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-          Fornecedor cadastrado
-        </label>
-        <Dropdown
-          label="Fornecedor cadastrado"
-          muted
-          value={form.supplierId}
-          onChange={handleSupplierSelect}
-          options={[
-            { value: '', label: 'Nenhum / avulso' },
-            ...suppliers.map((item) => ({ value: item.id, label: item.name })),
-          ]}
-        />
-        <p className="text-[11px] text-on-surface-variant pl-1">
-          Marcar um fornecedor atualiza a última compra e o valor na lista.
-        </p>
-      </div>
-      <Input
-        label="Fornecedor / descrição"
-        name="supplier"
-        value={form.supplier}
-        onChange={(e) =>
-          setForm((prev) => ({ ...prev, supplier: e.target.value, supplierId: prev.supplierId }))
-        }
-        required
-      />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-          Categoria
-        </label>
-        <Dropdown
-          label="Categoria"
-          muted
-          value={form.categoryId}
-          onChange={handleCategoryChange}
-          options={categories.map((item) => ({ value: item.id, label: item.name }))}
-        />
-      </div>
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-          Natureza
-        </label>
-        <SegmentedControl
-          className="w-full"
-          label="Natureza"
-          items={[
-            { id: 'fixed', label: 'Fixa' },
-            { id: 'variable', label: 'Variável' },
-          ]}
-          value={form.nature}
-          onChange={(nature) => {
-            setNatureTouched(true);
-            setForm((prev) => ({ ...prev, nature }));
-          }}
-        />
-        <p className="text-[11px] text-on-surface-variant pl-1">
-          Default da categoria {selectedCategory?.name}:{' '}
-          {selectedCategory?.defaultNature === 'fixed' ? 'Fixa' : 'Variável'}
-        </p>
-      </div>
-      <Input
-        label="Valor (R$)"
-        name="value"
-        type="number"
-        min="0"
-        step="0.01"
-        value={form.value}
-        onChange={(e) => setForm((prev) => ({ ...prev, value: e.target.value }))}
-        required
-      />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-          Recorrência
-        </label>
-        <Dropdown
-          label="Recorrência"
-          muted
-          value={form.recurrence}
-          onChange={(recurrence) => setForm((prev) => ({ ...prev, recurrence }))}
-          options={[
-            { value: '', label: 'Única' },
-            { value: 'monthly', label: 'Mensal' },
-          ]}
-        />
-      </div>
-      {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
-      <div className="flex flex-wrap gap-3 justify-end">
-        <Button variant="secondary" type="button" onClick={onCancel}>
-          <Icon name="cancel" />
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={saving}>
-          <Icon name={editing ? 'save' : 'add'} />
-          {saving ? 'Salvando...' : editing ? 'Salvar' : 'Registrar despesa'}
-        </Button>
-      </div>
-    </form>
-  );
 }
 
 function NewOrderForm({ onSuccess, onCancel, income = null }) {
@@ -462,22 +277,6 @@ function ConfirmForm({ payload, onCancel }) {
 
 export function AppModal() {
   const { modal, isOpen, closeModal, openModal } = useModal();
-  const [categories, setCategories] = useState(expenseCategories);
-
-  useEffect(() => {
-    if (!isOpen || modal.type !== 'new-expense') return undefined;
-    let active = true;
-    fetchCashFlow()
-      .then((data) => {
-        if (active && data?.categories?.length) setCategories(data.categories);
-      })
-      .catch(() => {
-        if (active) setCategories(expenseCategories);
-      });
-    return () => {
-      active = false;
-    };
-  }, [isOpen, modal.type]);
 
   if (!isOpen) return null;
 
@@ -488,6 +287,8 @@ export function AppModal() {
         ? 'Editar Freelancer'
         : modal.type === 'new-expense' && modal.payload?.expense
           ? 'Editar despesa'
+          : modal.type === 'close-day' && modal.payload?.readOnly
+            ? 'Fechamento'
           : modal.type === 'new-order' && modal.payload?.income
             ? 'Editar entrada'
             : titles[modal.type] || 'Confirmação';
@@ -502,6 +303,8 @@ export function AppModal() {
           ? 'receipt_long'
           : modal.type === 'new-expense'
             ? 'payments'
+            : modal.type === 'close-day'
+              ? 'lock'
             : modal.type === 'new-order'
                 ? 'point_of_sale'
                 : modal.type === 'confirm'
@@ -519,6 +322,7 @@ export function AppModal() {
     modal.type === 'new-promotion' ||
     modal.type === 'edit-promotion' ||
     modal.type === 'new-purchase' ||
+    modal.type === 'close-day' ||
     modal.type === 'suppliers-list';
 
   return (
@@ -604,12 +408,14 @@ export function AppModal() {
             onCancel={closeModal}
           />
         ) : modal.type === 'new-expense' ? (
-          <NewExpenseForm
-            categories={modal.payload?.categories || categories}
+          <ExpenseForm
+            categories={modal.payload?.categories}
             expense={modal.payload?.expense}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
+        ) : modal.type === 'close-day' ? (
+          <CloseDayForm payload={modal.payload} onCancel={closeModal} />
         ) : modal.type === 'new-order' ? (
           <NewOrderForm
             income={modal.payload?.income}

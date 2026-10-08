@@ -26,7 +26,7 @@ function money(value) {
 }
 
 export function SuppliersPage() {
-  const [tab, setTab] = useState('compras');
+  const [tab, setTab] = useState('entradas');
   const [purchaseQuery, setPurchaseQuery] = useState('');
   const { openModal } = useModal();
   const queryClient = useQueryClient();
@@ -101,21 +101,21 @@ export function SuppliersPage() {
   return (
     <div className="p-4 md:p-8 space-y-6">
       <PageHeader
-        title="Compras"
-        description="Histórico das compras. Uma compra finalizada só pode ser estornada."
+        title="Fornecedores"
+        description="Cadastro de fornecedores e entradas no estoque."
       />
 
       <Tabs
-        label="Compras"
+        label="Fornecedores"
         items={[
-          { id: 'compras', label: 'Compras' },
+          { id: 'entradas', label: 'Entradas' },
           { id: 'fornecedores', label: 'Fornecedores' },
         ]}
         value={tab}
         onChange={setTab}
       />
 
-      {tab === 'compras' ? (
+      {tab === 'entradas' ? (
       <section className="space-y-6">
         <FilterBar
           actions={

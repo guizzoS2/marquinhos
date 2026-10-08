@@ -39,6 +39,7 @@ export const overviewFallback = {
 
 export const expenseCategories = [
   { id: 'bebidas', name: 'Bebidas', type: 'expense', defaultNature: 'variable', icon: 'local_shipping' },
+  { id: 'fornecedor', name: 'Fornecedor', type: 'expense', defaultNature: 'variable', icon: 'local_shipping' },
   { id: 'freelancer', name: 'Freelancer', type: 'expense', defaultNature: 'variable', icon: 'person' },
   { id: 'suprimentos', name: 'Suprimentos', type: 'expense', defaultNature: 'variable', icon: 'ac_unit' },
   { id: 'utilidades', name: 'Utilidades', type: 'expense', defaultNature: 'fixed', icon: 'bolt' },

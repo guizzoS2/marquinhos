@@ -60,6 +60,30 @@ export function totalsByPayment(sales) {
   return { byMethod, total };
 }
 
+export function productTotals(sales) {
+  const grouped = new Map();
+  (sales || []).forEach((sale) => {
+    (sale.itens || []).forEach((item) => {
+      const key = String(item.produto_id || item.nome || '');
+      const quantidade = Number(item.quantidade || 0);
+      const valor = Number(item.valor_total || 0);
+      const prev = grouped.get(key);
+      if (prev) {
+        prev.quantidade += quantidade;
+        prev.valor_total = Math.round((prev.valor_total + valor) * 100) / 100;
+        return;
+      }
+      grouped.set(key, {
+        produto_id: item.produto_id || null,
+        nome: item.nome || 'Produto',
+        quantidade,
+        valor_total: Math.round(valor * 100) / 100,
+      });
+    });
+  });
+  return [...grouped.values()];
+}
+
 export function shiftAlreadyClosed(closings, day = new Date()) {
   return (closings || []).some((closing) => {
     const date = parseISO(String(closing.closed_at || ''));
