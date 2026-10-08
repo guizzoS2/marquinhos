@@ -1909,6 +1909,8 @@ export async function registerSale(payload) {
           value: formatCents(amountCents),
           amount: amountCents,
           source: 'pdv',
+          saleId: sale.id,
+          cliente: cliente.nome,
           importKey: null,
           createdAt: now.toISOString(),
         }
@@ -2031,6 +2033,8 @@ export async function registerPartialPayment(payload) {
       value: formatCents(amountCents),
       amount: amountCents,
       source: 'pdv',
+      saleId: sale.id,
+      cliente: sale.cliente_nome,
       importKey: null,
       createdAt: now.toISOString(),
     };

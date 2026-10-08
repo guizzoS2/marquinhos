@@ -234,6 +234,8 @@ export function unifyCashMovements(incomes = [], expenses = []) {
       descricao: row.description || '—',
       description: row.description || '',
       entidade: row.cliente || row.customer || null,
+      source: row.source || 'manual',
+      saleId: row.saleId || null,
       categoria: row.category || '',
       categoryIcon: row.categoryIcon || 'payments',
       categoryTone: row.categoryTone || 'secondary',
