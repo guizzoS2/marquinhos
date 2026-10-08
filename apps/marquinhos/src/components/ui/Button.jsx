@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 const variants = {
@@ -16,10 +16,13 @@ const sizes = {
 
 function placeHint(anchor, tip) {
   const rect = anchor.getBoundingClientRect();
-  const width = tip?.width || 0;
-  const height = tip?.height || 28;
-  let left = rect.left + rect.width / 2 - width / 2;
-  left = Math.max(8, Math.min(left, window.innerWidth - Math.max(width, 8) - 8));
+  const tipRect = tip?.getBoundingClientRect();
+  const width = tipRect?.width || 0;
+  const height = tipRect?.height || 28;
+  const edge = 8;
+  let left = rect.left + (rect.width - width) / 2;
+  if (width > window.innerWidth - edge * 2) left = edge;
+  else left = Math.max(edge, Math.min(left, window.innerWidth - width - edge));
   if (rect.top > height + 12) {
     return { left, bottom: window.innerHeight - rect.top + 8 };
   }
@@ -30,11 +33,15 @@ function IconHint({ anchor, label, id }) {
   const tipRef = useRef(null);
   const [box, setBox] = useState(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = anchor;
     if (!node) return undefined;
     function place() {
-      setBox(placeHint(node, tipRef.current));
+      const tip = tipRef.current;
+      setBox(placeHint(node, tip));
+      if (tip && tip.getBoundingClientRect().width === 0) {
+        requestAnimationFrame(() => setBox(placeHint(node, tipRef.current)));
+      }
     }
     place();
     window.addEventListener('resize', place);
