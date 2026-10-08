@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchCashFlow, removeCashExpense, removeCashIncome } from '../services/dashboardService';
+import { fetchCashFlow, fetchInventory, removeCashExpense, removeCashIncome } from '../services/dashboardService';
+import { linkedPurchase, linkedSale } from '../services/movementLink';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { DateRangeField } from '../components/ui/DateRangeField';
@@ -41,6 +42,10 @@ export function CashFlowPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['cash-flow'],
     queryFn: fetchCashFlow,
+  });
+  const inventory = useQuery({
+    queryKey: ['inventory'],
+    queryFn: fetchInventory,
   });
 
   const filteredIncomes = useMemo(() => {
@@ -93,6 +98,16 @@ export function CashFlowPage() {
     const stamp = new Date().toISOString().slice(0, 10);
     downloadCsv(`fluxo-caixa-${stamp}.csv`, csv);
     toast.success('Relatório CSV exportado.');
+  }
+
+  function openDetail(row) {
+    const sales = inventory.data?.sales || [];
+    const purchases = inventory.data?.purchases || [];
+    openModal('movement-detail', {
+      movement: row,
+      sale: row.tipo === 'entrada' ? linkedSale(sales, row) : null,
+      purchase: row.tipo === 'saida' ? linkedPurchase(purchases, row.id) : null,
+    });
   }
 
   function openEdit(row) {
@@ -188,6 +203,7 @@ export function CashFlowPage() {
             <Tr
               key={`${row.tipo}-${row.id}`}
               tone={row.tipo === 'saida' && movementFilter !== 'saida' ? 'out' : undefined}
+              onClick={() => openDetail(row)}
             >
               <Td tone="muted" className="whitespace-nowrap">
                 {row.data_hora}
@@ -216,7 +232,10 @@ export function CashFlowPage() {
                     type="button"
                     size="icon"
                     variant="secondary"
-                    onClick={() => openEdit(row)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEdit(row);
+                    }}
                     aria-label={row.tipo === 'entrada' ? 'Editar entrada' : 'Editar despesa'}
                   >
                     <Icon name="edit" />
@@ -225,7 +244,10 @@ export function CashFlowPage() {
                     type="button"
                     size="icon"
                     variant="danger"
-                    onClick={() => confirmDelete(row)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      confirmDelete(row);
+                    }}
                     aria-label={row.tipo === 'entrada' ? 'Excluir entrada' : 'Excluir despesa'}
                   >
                     <Icon name="delete" />

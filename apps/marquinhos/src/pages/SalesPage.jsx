@@ -1,14 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchCashFlow, fetchInventory, removeCashIncome } from '../services/dashboardService';
 import { unifyCashMovements } from '../services/cashFlowUtils';
-import { PAYMENT_OPTIONS } from '../services/inventoryProduct';
+import { linkedSale, paymentText, productText } from '../services/movementLink';
 import { Button } from '../components/ui/Button';
 import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
 import { FilterBar } from '../components/ui/FilterBar';
 import { Icon } from '../components/ui/Icon';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Pagination } from '../components/ui/Pagination';
+import { SearchField } from '../components/ui/SearchField';
 import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
 
@@ -16,49 +17,8 @@ function isPdvEntry(row) {
   return row.source === 'pdv' || String(row.description || '').startsWith('PDV');
 }
 
-function payLabel(value) {
-  return PAYMENT_OPTIONS.find((item) => item.value === value)?.label || '';
-}
-
-function linkedSale(sales, row) {
-  if (row.saleId) {
-    const found = (sales || []).find((sale) => String(sale.id) === String(row.saleId));
-    if (found) return found;
-  }
-  const payId = String(row.id || '').replace(/^inc-/, '');
-  if (!payId || payId === String(row.id || '')) return null;
-  return (
-    (sales || []).find((sale) => {
-      const current = (sale.pagamentos || []).some((pay) => String(pay.id) === payId);
-      const past = (sale.historico || []).some((cycle) =>
-        (cycle.pagamentos || []).some((pay) => String(pay.id) === payId)
-      );
-      return current || past;
-    }) || null
-  );
-}
-
-function productText(sale, row) {
-  const payId = String(row.id || '').replace(/^inc-/, '');
-  const past = (sale?.historico || []).find((cycle) =>
-    (cycle.pagamentos || []).some((pay) => String(pay.id) === payId)
-  );
-  const itens = past?.itens?.length ? past.itens : sale?.itens || [];
-  const line = itens.map((item) => `${item.nome || 'Produto'} × ${item.quantidade}`).join(', ');
-  return line || '—';
-}
-
-function paymentText(sale, row) {
-  const payId = String(row.id || '').replace(/^inc-/, '');
-  const lists = [
-    ...(sale?.pagamentos || []),
-    ...(sale?.historico || []).flatMap((cycle) => cycle.pagamentos || []),
-  ];
-  const payment = lists.find((pay) => String(pay.id) === payId);
-  return payLabel(payment?.forma_pagamento) || '—';
-}
-
 export function SalesPage({ embedded = false }) {
+  const [query, setQuery] = useState('');
   const { openModal } = useModal();
   const queryClient = useQueryClient();
   const inventory = useQuery({
@@ -72,14 +32,42 @@ export function SalesPage({ embedded = false }) {
   const data = inventory.data;
 
   const entries = useMemo(() => {
-    return unifyCashMovements(cash.data?.incomes || [], []).filter(isPdvEntry);
-  }, [cash.data]);
-  const entryPage = usePagedList(entries, entries.map((row) => row.id).join('|'));
+    const sales = inventory.data?.sales || [];
+    const rows = unifyCashMovements(cash.data?.incomes || [], []).filter(isPdvEntry);
+    const term = query.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((row) => {
+      const sale = linkedSale(sales, row);
+      return [
+        row.data_hora,
+        row.descricao,
+        row.entidade,
+        sale?.cliente_nome,
+        sale?.numero_comanda,
+        sale?.observacao,
+        sale ? productText(sale, row) : '',
+        sale ? paymentText(sale, row) : '',
+        row.categoria,
+        row.valor,
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(term);
+    });
+  }, [cash.data, inventory.data, query]);
+  const entryPage = usePagedList(entries, `${query}|${entries.map((row) => row.id).join('|')}`);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
     queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
     queryClient.invalidateQueries({ queryKey: ['caixa-shift'] });
+  }
+
+  function openDetail(row) {
+    openModal('movement-detail', {
+      movement: row,
+      sale: linkedSale(data?.sales || [], row),
+    });
   }
 
   function openEdit(row) {
@@ -132,7 +120,9 @@ export function SalesPage({ embedded = false }) {
             Nova venda
           </Button>
         }
-      />
+      >
+        <SearchField value={query} onChange={setQuery} placeholder="Buscar venda" label="Buscar venda" />
+      </FilterBar>
       <div className="space-y-4">
         <DataTable>
           <THead>
@@ -147,12 +137,12 @@ export function SalesPage({ embedded = false }) {
           </THead>
           <TBody>
             {entries.length === 0 ? (
-              <EmptyRow colSpan={8}>Nenhuma venda registrada.</EmptyRow>
+              <EmptyRow colSpan={8}>{query ? 'Nenhuma venda encontrada.' : 'Nenhuma venda registrada.'}</EmptyRow>
             ) : (
               entryPage.rows.map((row) => {
                 const sale = linkedSale(data?.sales || [], row);
                 return (
-                  <Tr key={row.id}>
+                  <Tr key={row.id} onClick={() => openDetail(row)}>
                     <Td tone="muted" className="whitespace-nowrap">
                       {row.data_hora}
                     </Td>
@@ -175,7 +165,10 @@ export function SalesPage({ embedded = false }) {
                           type="button"
                           size="icon"
                           variant="secondary"
-                          onClick={() => openEdit(row)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEdit(row);
+                          }}
                           aria-label="Editar entrada"
                         >
                           <Icon name="edit" />
@@ -184,7 +177,10 @@ export function SalesPage({ embedded = false }) {
                           type="button"
                           size="icon"
                           variant="danger"
-                          onClick={() => confirmDelete(row)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            confirmDelete(row);
+                          }}
                           aria-label="Excluir entrada"
                         >
                           <Icon name="delete" />

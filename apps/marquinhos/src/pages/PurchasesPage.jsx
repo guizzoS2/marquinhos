@@ -132,6 +132,24 @@ export function PurchasesPage() {
     });
   }
 
+  function openDetail(row) {
+    openModal('movement-detail', {
+      kind: 'compra',
+      purchase: row.purchase,
+      movement: {
+        tipo: 'saida',
+        id: row.expense?.id || row.purchase?.id,
+        data_hora: row.date,
+        descricao: row.description,
+        entidade: row.purchase?.supplierName || row.expense?.supplier || row.description,
+        supplier: row.expense?.supplier || row.purchase?.supplierName || '',
+        categoria: row.category,
+        valor: row.value,
+        nature: row.nature,
+      },
+    });
+  }
+
   function openEdit(row) {
     if (!row.expense) return;
     openModal('new-expense', {
@@ -242,7 +260,7 @@ export function PurchasesPage() {
                   page.rows.map((row) => {
                     const cancelled = row.status === 'cancelada';
                     return (
-                      <Tr key={row.id}>
+                      <Tr key={row.id} onClick={() => openDetail(row)}>
                         <Td tone="muted" className="whitespace-nowrap">
                           {row.date}
                         </Td>
@@ -277,7 +295,10 @@ export function PurchasesPage() {
                                   type="button"
                                   size="icon"
                                   variant="secondary"
-                                  onClick={() => openEdit(row)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openEdit(row);
+                                  }}
                                   aria-label="Editar compra"
                                 >
                                   <Icon name="edit" />
@@ -288,7 +309,10 @@ export function PurchasesPage() {
                                   type="button"
                                   size="icon"
                                   variant="danger"
-                                  onClick={() => confirmCancel(row.purchase)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    confirmCancel(row.purchase);
+                                  }}
                                   aria-label="Cancelar compra"
                                 >
                                   <Icon name="cancel" />
@@ -299,7 +323,10 @@ export function PurchasesPage() {
                                   type="button"
                                   size="icon"
                                   variant="danger"
-                                  onClick={() => confirmDeleteExpense(row.expense)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    confirmDeleteExpense(row.expense);
+                                  }}
                                   aria-label="Excluir compra"
                                 >
                                   <Icon name="delete" />

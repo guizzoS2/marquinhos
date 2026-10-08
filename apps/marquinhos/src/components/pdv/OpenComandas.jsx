@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Dropdown } from '../ui/Dropdown';
@@ -6,6 +6,7 @@ import { FilterBar } from '../ui/FilterBar';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { Pagination } from '../ui/Pagination';
+import { SearchField } from '../ui/SearchField';
 import { usePagedList } from '../ui/usePagedList';
 import { useModal } from '../../contexts/ModalContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -23,14 +24,27 @@ export function OpenComandas({ sales = [], customers = [] }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { openModal } = useModal();
-  const open = sales.filter((sale) => sale.status === 'aberta');
-  const page = usePagedList(open, open.map((sale) => sale.id).join('|'));
+  const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [numero, setNumero] = useState('');
   const [clienteId, setClienteId] = useState('');
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState(null);
   const [paying, setPaying] = useState(false);
+  const open = useMemo(() => sales.filter((sale) => sale.status === 'aberta'), [sales]);
+  const visible = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return open;
+    return open.filter((sale) => {
+      const quitada = saleBalance(sale) <= 0 && (sale.historico || []).length ? 'quitada' : '';
+      const saldo = salePaidAmount(sale) > 0 && saleBalance(sale) > 0 ? 'saldo' : '';
+      return [sale.numero_comanda, sale.cliente_nome, sale.observacao, quitada, saldo, 'aberta', 'comanda']
+        .join(' ')
+        .toLowerCase()
+        .includes(term);
+    });
+  }, [open, query]);
+  const page = usePagedList(visible, `${query}|${visible.map((sale) => sale.id).join('|')}`);
 
   const clienteOptions = [
     { value: '', label: 'Consumidor' },
@@ -71,7 +85,7 @@ export function OpenComandas({ sales = [], customers = [] }) {
           )
         }
       >
-        <h3 className="font-headline text-xl font-bold text-on-surface">Comandas abertas</h3>
+        <SearchField value={query} onChange={setQuery} placeholder="Buscar comanda" label="Buscar comanda" />
       </FilterBar>
 
       {creating ? (
@@ -125,6 +139,10 @@ export function OpenComandas({ sales = [], customers = [] }) {
       {open.length === 0 ? (
         <p className="rounded-2xl border border-outline bg-surface p-4 text-on-surface-variant">
           Nenhuma comanda aberta.
+        </p>
+      ) : visible.length === 0 ? (
+        <p className="rounded-2xl border border-outline bg-surface p-4 text-on-surface-variant">
+          Nenhuma comanda encontrada.
         </p>
       ) : (
         <div className="space-y-4">

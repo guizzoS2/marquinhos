@@ -13,6 +13,7 @@ import {
   fetchSuppliers,
 } from '../../services/dashboardService';
 import { ExpenseForm } from '../cashflow/ExpenseForm';
+import { MovementDetail } from '../cashflow/MovementDetail';
 import { CloseDayForm } from '../sales/CloseDayForm';
 import { NewSaleForm } from '../sales/NewSaleForm';
 import { NewFreelancerForm } from '../freelancers/NewFreelancerForm';
@@ -232,6 +233,14 @@ function NewOrderForm({ onSuccess, onCancel, income = null }) {
   );
 }
 
+function movementTitle(payload) {
+  if (payload?.sale) {
+    return payload.sale.numero_comanda ? `Comanda ${payload.sale.numero_comanda}` : 'Venda';
+  }
+  if (payload?.kind === 'compra' || payload?.purchase) return 'Compra';
+  return payload?.movement?.tipo === 'saida' ? 'Saída' : 'Entrada';
+}
+
 function confirmActionIcon(label) {
   const text = String(label || 'Confirmar');
   if (text.startsWith('Excluir') || text.startsWith('Remover') || text.startsWith('Apagar')) return 'delete';
@@ -283,7 +292,9 @@ export function AppModal() {
   if (!isOpen) return null;
 
   const title =
-    modal.type === 'new-promotion' && modal.payload?.reactivate
+    modal.type === 'movement-detail'
+      ? movementTitle(modal.payload)
+      : modal.type === 'new-promotion' && modal.payload?.reactivate
       ? 'Reativar promoção'
       : modal.type === 'new-freelancer' && modal.payload?.person
         ? 'Editar Freelancer'
@@ -307,6 +318,10 @@ export function AppModal() {
             ? 'payments'
             : modal.type === 'close-day'
               ? 'lock'
+            : modal.type === 'movement-detail'
+              ? modal.payload?.sale || modal.payload?.movement?.tipo === 'entrada'
+                ? 'point_of_sale'
+                : 'payments'
             : modal.type === 'new-order' || modal.type === 'new-sale'
                 ? 'point_of_sale'
                 : modal.type === 'confirm'
@@ -327,6 +342,7 @@ export function AppModal() {
     modal.type === 'new-purchase' ||
     modal.type === 'close-day' ||
     modal.type === 'new-sale' ||
+    modal.type === 'movement-detail' ||
     modal.type === 'suppliers-list';
 
   return (
@@ -421,6 +437,13 @@ export function AppModal() {
           />
         ) : modal.type === 'close-day' ? (
           <CloseDayForm payload={modal.payload} onCancel={closeModal} />
+        ) : modal.type === 'movement-detail' ? (
+          <MovementDetail
+            movement={modal.payload?.movement}
+            sale={modal.payload?.sale}
+            purchase={modal.payload?.purchase}
+            onCancel={closeModal}
+          />
         ) : modal.type === 'new-sale' ? (
           <NewSaleForm
             items={modal.payload?.items || []}
