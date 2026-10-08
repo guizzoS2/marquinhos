@@ -31,16 +31,32 @@ export function weekdayByValue(value) {
   return WEEKDAYS.find((item) => item.value === Number(value)) || null;
 }
 
-function promotionApplies(promotion, now) {
-  if (isWeekdayPromotion(promotion)) {
-    const day = weekdayByValue(promotion.dia_semana);
-    return Boolean(day) && now.getDay() === day.value;
-  }
+function endStillOpen(value, now) {
+  if (value == null || String(value).trim() === '') return true;
+  const end = parseISO(String(value));
+  if (!isValid(end)) return false;
+  return isBefore(now, end) || isEqual(now, end);
+}
+
+function promotionWindowOpen(promotion, now) {
   const start = parseISO(String(promotion?.data_inicio || ''));
   const end = parseISO(String(promotion?.data_termino || ''));
   if (!isValid(start) || !isValid(end)) return false;
   if (!(isBefore(start, end) || isEqual(start, end))) return false;
   return isWithinInterval(now, { start, end });
+}
+
+export function promotionIsActive(promotion, now) {
+  if (promotion?.inativa) return false;
+  if (isWeekdayPromotion(promotion)) return endStillOpen(promotion?.data_termino, now);
+  return promotionWindowOpen(promotion, now);
+}
+
+function promotionApplies(promotion, now) {
+  if (!promotionIsActive(promotion, now)) return false;
+  if (!isWeekdayPromotion(promotion)) return true;
+  const day = weekdayByValue(promotion.dia_semana);
+  return Boolean(day) && now.getDay() === day.value;
 }
 
 function promotionRank(promotion) {
@@ -77,13 +93,20 @@ export function assertWeekday(value) {
   return day.value;
 }
 
+export function assertOptionalEnd(value) {
+  if (value == null || String(value).trim() === '') return null;
+  const parsed = parse(String(value), DATE_TIME, new Date(0));
+  if (!isValid(parsed)) throw new Error('Informe um fim válido.');
+  return formatISO(parsed);
+}
+
 export function promotionSchedule(payload) {
   if (payload?.vigencia === 'semana') {
     return {
       vigencia: 'semana',
       dia_semana: assertWeekday(payload.dia_semana),
       data_inicio: null,
-      data_termino: null,
+      data_termino: assertOptionalEnd(payload.data_termino),
     };
   }
   const janela = assertPromotionWindow(payload?.data_inicio, payload?.data_termino);
@@ -96,7 +119,7 @@ export function promotionSchedule(payload) {
 }
 
 export function promotionStatus(promotion, now) {
-  return promotionApplies(promotion, now) ? 'Ativa' : 'Inativa';
+  return promotionIsActive(promotion, now) ? 'Ativa' : 'Inativa';
 }
 
 export function toDateTimeLocal(value) {
@@ -137,6 +160,6 @@ export function formatPromotionStart(promotion) {
 }
 
 export function formatPromotionEnd(promotion) {
-  if (isWeekdayPromotion(promotion)) return 'Sempre';
+  if (isWeekdayPromotion(promotion) && !promotion?.data_termino) return 'Sempre';
   return formatCatalogDate(promotion?.data_termino);
 }

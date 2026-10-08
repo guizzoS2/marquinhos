@@ -420,6 +420,7 @@ function confirmActionIcon(label) {
   if (text.startsWith('Excluir') || text.startsWith('Remover') || text.startsWith('Apagar')) return 'delete';
   if (text.startsWith('Cancelar')) return 'cancel';
   if (text.startsWith('Reativar')) return 'restart_alt';
+  if (text.startsWith('Inativar')) return 'block';
   return 'check';
 }
 

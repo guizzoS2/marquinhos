@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchInventory, removeCombo, removePromotion } from '../services/dashboardService';
+import { fetchInventory, inactivatePromotion, removeCombo, removePromotion } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -79,6 +79,19 @@ export function CatalogPage() {
           foto: product?.foto || product?.image,
         };
       });
+  }
+
+  function inactivate(row) {
+    openModal('confirm', {
+      message: `Inativar a promoção de ${productName(row.produto_id)}? O preço promocional deixa de valer.`,
+      confirmLabel: 'Inativar',
+      successMessage: 'Promoção inativada.',
+      errorMessage: 'Não foi possível inativar a promoção.',
+      onConfirm: async () => {
+        await inactivatePromotion(row.id);
+        refresh();
+      },
+    });
   }
 
   function productName(produtoId) {
@@ -193,7 +206,17 @@ export function CatalogPage() {
                           >
                             <Icon name="edit" />
                           </Button>
-                          {row.status !== 'Ativa' && row.vigencia !== 'semana' ? (
+                          {row.status === 'Ativa' ? (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="secondary"
+                              aria-label="Inativar promoção"
+                              onClick={() => inactivate(row)}
+                            >
+                              <Icon name="block" />
+                            </Button>
+                          ) : (
                             <Button
                               type="button"
                               size="icon"
@@ -210,7 +233,7 @@ export function CatalogPage() {
                             >
                               <Icon name="restart_alt" />
                             </Button>
-                          ) : null}
+                          )}
                           <Button
                             type="button"
                             size="icon"
@@ -276,7 +299,12 @@ export function CatalogPage() {
                         <Icon name="edit" />
                         Editar
                       </Button>
-                      {row.status !== 'Ativa' && row.vigencia !== 'semana' ? (
+                      {row.status === 'Ativa' ? (
+                        <Button type="button" variant="secondary" onClick={() => inactivate(row)}>
+                          <Icon name="block" />
+                          Inativar
+                        </Button>
+                      ) : (
                         <Button
                           type="button"
                           variant="secondary"
@@ -292,7 +320,7 @@ export function CatalogPage() {
                           <Icon name="restart_alt" />
                           Reativar
                         </Button>
-                      ) : null}
+                      )}
                       <Button
                         type="button"
                         variant="danger"

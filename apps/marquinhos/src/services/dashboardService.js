@@ -27,6 +27,7 @@ import {
   createPromotion,
   updatePromotion,
   deletePromotion,
+  deactivatePromotion,
   createCombo,
   updateCombo,
   deleteCombo,
@@ -209,6 +210,10 @@ export function editPromotion(promotionId, payload) {
 
 export function removePromotion(promotionId) {
   return deletePromotion(promotionId);
+}
+
+export function inactivatePromotion(promotionId) {
+  return deactivatePromotion(promotionId);
 }
 
 export function addCombo(payload) {

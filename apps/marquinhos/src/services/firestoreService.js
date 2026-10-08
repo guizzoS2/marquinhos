@@ -398,10 +398,13 @@ export async function getInventory() {
   const inventory = normalizeInventory((await readDocument(DOCS.inventory)) || inventoryFallback);
   return {
     ...inventory,
-    promotions: (inventory.promotions || []).map((row) => ({
-      ...promotionRecord(row),
-      status: promotionStatus(row, now),
-    })),
+    promotions: (inventory.promotions || []).map((row) => {
+      const recorded = promotionRecord(row);
+      return {
+        ...recorded,
+        status: promotionStatus(recorded, now),
+      };
+    }),
     serverNow: now.toISOString(),
   };
 }
@@ -676,7 +679,8 @@ function promotionRecord(row) {
     vigencia: weekday ? 'semana' : 'periodo',
     dia_semana: weekday ? Number(row.dia_semana) : null,
     data_inicio: weekday ? null : row.data_inicio,
-    data_termino: weekday ? null : row.data_termino,
+    data_termino: row.data_termino || null,
+    inativa: Boolean(row.inativa),
   };
 }
 
@@ -1355,6 +1359,7 @@ export async function createPromotion(payload) {
     id: `promo-${Date.now()}`,
     produto_id: produtoId,
     preco_promocional: preco,
+    inativa: false,
     ...agenda,
   };
   const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
@@ -1378,12 +1383,25 @@ export async function updatePromotion(promotionId, payload) {
     id: existing.id,
     produto_id: produtoId,
     preco_promocional: preco,
+    inativa: false,
     ...agenda,
   };
   const promotions = current.promotions.map((row) => (row.id === existing.id ? promotion : row));
   const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
   const next = await saveInventory({ ...current, promotions }, stored);
   return { promotion, inventory: next };
+}
+
+export async function deactivatePromotion(promotionId) {
+  const current = await getInventory();
+  const existing = (current.promotions || []).find((row) => String(row.id) === String(promotionId));
+  if (!existing) throw new Error('Promoção não encontrada.');
+  const promotions = current.promotions.map((row) =>
+    String(row.id) === String(existing.id) ? { ...promotionRecord(row), inativa: true } : row
+  );
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  await saveInventory({ ...current, promotions }, stored);
+  return promotions.find((row) => String(row.id) === String(existing.id));
 }
 
 export async function deletePromotion(promotionId) {

@@ -48,7 +48,7 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
         data_inicio: inicio,
         data_termino: termino,
       };
-      if (editing) await editPromotion(promotion.id, payload);
+      if (promotion?.id) await editPromotion(promotion.id, payload);
       else await addPromotion(payload);
       toast.success(editing ? 'Promoção atualizada.' : reactivate ? 'Promoção reativada.' : 'Promoção cadastrada.');
       onSuccess?.();
@@ -96,30 +96,41 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
         />
       </div>
       {vigencia === 'semana' ? (
-        <div className="space-y-2">
-          <p className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-            Dia da semana
-          </p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Dia da semana">
-            {WEEKDAYS.map((day) => {
-              const selected = diaSemana === day.value;
-              return (
-                <button
-                  key={day.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  onClick={() => setDiaSemana(day.value)}
-                  className={`min-h-11 rounded-xl border px-3 text-sm ${
-                    selected
-                      ? 'border-primary bg-primary font-bold text-on-primary'
-                      : 'border-outline bg-surface font-normal text-on-surface'
-                  }`}
-                >
-                  {day.label}
-                </button>
-              );
-            })}
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
+              Dia da semana
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Dia da semana">
+              {WEEKDAYS.map((day) => {
+                const selected = diaSemana === day.value;
+                return (
+                  <button
+                    key={day.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setDiaSemana(day.value)}
+                    className={`min-h-11 rounded-xl border px-3 text-sm ${
+                      selected
+                        ? 'border-primary bg-primary font-bold text-on-primary'
+                        : 'border-outline bg-surface font-normal text-on-surface'
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Input
+              label="Fim"
+              type="datetime-local"
+              value={termino}
+              onChange={(event) => setTermino(event.target.value)}
+            />
+            <p className="text-sm text-on-surface-variant">Sem data, fica para sempre.</p>
           </div>
         </div>
       ) : (
