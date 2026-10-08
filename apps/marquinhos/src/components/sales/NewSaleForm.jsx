@@ -230,8 +230,8 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
             {(selected.itens || []).length ? (
               <ul className="space-y-2">
                 {selected.itens.map((item, index) => (
-                  <li key={`${item.produto_id}-${index}`} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 text-on-surface">
+                  <li key={`${item.produto_id}-${index}`} className="flex items-start justify-between gap-3 text-sm">
+                    <span className="min-w-0 break-words text-on-surface">
                       {item.nome || 'Produto'} × {item.quantidade}
                     </span>
                     <span className="shrink-0 font-semibold text-on-surface">{money(item.valor_total)}</span>
@@ -241,20 +241,9 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
             ) : (
               <p className="text-sm text-on-surface-variant">Nenhum item nesta comanda.</p>
             )}
-            <div className="grid grid-cols-3 gap-3 border-t border-outline pt-3">
-              <div className="min-w-0">
-                <FieldLabel>Total</FieldLabel>
-                <p className="font-semibold text-on-surface">{money(selected.total)}</p>
-              </div>
-              <div className="min-w-0">
-                <FieldLabel>Pago</FieldLabel>
-                <p className="font-semibold text-on-surface">{money(alreadyPaid)}</p>
-              </div>
-              <div className="min-w-0">
-                <FieldLabel>Saldo</FieldLabel>
-                <p className="font-semibold text-on-surface">{money(Math.max(saleBalance(selected), 0))}</p>
-              </div>
-            </div>
+            <p className="border-t border-outline pt-3 text-sm text-on-surface">
+              Total {money(selected.total)} · Pago {money(alreadyPaid)} · Saldo {money(Math.max(saleBalance(selected), 0))}
+            </p>
           </div>
         ) : null}
       </div>
