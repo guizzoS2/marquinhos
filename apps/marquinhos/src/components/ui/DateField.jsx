@@ -53,6 +53,7 @@ export function DateField({
   required = false,
   disabled = false,
   containerClassName = '',
+  inline = false,
 }) {
   const [open, setOpen] = useState(false);
   const [box, setBox] = useState(null);
@@ -127,8 +128,8 @@ export function DateField({
   const shown = selected ? format(selected, 'dd/MM/yyyy', { locale: ptBR }) : 'Selecionar data';
 
   return (
-    <div className={`relative space-y-2 ${containerClassName}`.trim()}>
-      {label ? (
+    <div className={inline ? 'relative w-full shrink-0 sm:w-max' : `relative space-y-2 ${containerClassName}`.trim()}>
+      {!inline && label ? (
         <label htmlFor={id} className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           {label}
         </label>
@@ -147,16 +148,17 @@ export function DateField({
         id={id}
         type="button"
         disabled={disabled}
+        aria-label={label || 'Data'}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={openPanel}
-        className={`flex h-11 w-full items-center justify-start gap-2 rounded-2xl border bg-surface-container-low px-4 text-left text-sm font-semibold outline-none focus:border-primary focus:outline-none focus:ring-0 disabled:opacity-60 ${
-          open ? 'border-primary' : 'border-outline'
-        }`}
+        className={`flex h-11 w-full items-center justify-start gap-2 rounded-2xl border px-4 text-left text-sm font-semibold outline-none focus:border-primary focus:outline-none focus:ring-0 disabled:opacity-60 ${
+          inline ? 'bg-surface sm:w-max' : 'bg-surface-container-low'
+        } ${open ? 'border-primary' : 'border-outline'}`}
       >
         <Icon name="calendar_month" className="shrink-0 text-xl text-on-surface-variant" />
-        <span className={`text-sm font-semibold ${selected ? 'text-on-surface' : 'text-on-surface-variant'}`}>{shown}</span>
+        <span className={`whitespace-nowrap text-sm font-semibold ${selected ? 'text-on-surface' : 'text-on-surface-variant'}`}>{shown}</span>
       </button>
       {open && box
         ? createPortal(

@@ -353,7 +353,7 @@ export function InventoryPage() {
                 placeholder="Buscar produção"
                 label="Buscar produção"
               />
-              <DateField label="Data" value={productionDate} onChange={setProductionDate} />
+              <DateField inline label="Data da produção" value={productionDate} onChange={setProductionDate} />
               <Button type="button" variant="secondary" onClick={() => setProductionDate(toIsoDate())}>
                 <Icon name="today" />
                 Hoje
