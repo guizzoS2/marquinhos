@@ -63,7 +63,7 @@ export function ProfilePage() {
     if (!file) return;
     setError('');
     try {
-      const photoURL = await readLocalImage(file);
+      const photoURL = await readLocalImage(file, { maxEdge: 160, maxChars: 1800 });
       setForm((prev) => ({ ...prev, photoURL }));
     } catch (err) {
       const text = err?.message || 'Não foi possível ler a foto.';
