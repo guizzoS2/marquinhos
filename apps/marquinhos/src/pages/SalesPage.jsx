@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchInventory } from '../services/dashboardService';
-import { formatSaleStamp, paidSalesOnDay, productTotals, salesWithReceiptsOnDay, shiftAlreadyClosed, totalsByPayment } from '../services/saleRules';
+import { formatSaleStamp, productTotals, salesWithReceiptsOnDay, settledLinesOnDay, shiftAlreadyClosed, totalsByPayment } from '../services/saleRules';
 import { Button } from '../components/ui/Button';
 import { DataTable, EmptyRow, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
 import { FilterBar } from '../components/ui/FilterBar';
@@ -39,10 +39,9 @@ export function SalesPage({ embedded = false }) {
 
   function openClose() {
     const sales = data?.sales || [];
-    const paid = paidSalesOnDay(sales);
     const totais = totalsByPayment(sales, new Date());
     openModal('close-day', {
-      lines: productTotals(paid),
+      lines: productTotals(settledLinesOnDay(sales)),
       byMethod: totais.byMethod,
       total: totais.total,
       count: salesWithReceiptsOnDay(sales).length,

@@ -38,11 +38,11 @@ import {
   assertComanda,
   optionalComanda,
   normalizeSale,
-  paidSalesOnDay,
   productTotals,
   saleBalance,
   salePaidAmount,
   salesWithReceiptsOnDay,
+  settledLinesOnDay,
   shiftAlreadyClosed,
   totalsByPayment,
 } from './saleRules';
@@ -1805,6 +1805,7 @@ export async function saveOpenSale(payload) {
       forma_pagamento: null,
       total,
       pagamentos: existing?.pagamentos || [],
+      historico: existing?.historico || [],
       itens: saleItems(resolved),
       created_at: existing?.created_at || now.toISOString(),
       updated_at: now.toISOString(),
@@ -1875,6 +1876,7 @@ export async function registerSale(payload) {
       parcelas,
       total,
       pagamentos: payment ? [...(existing?.pagamentos || []), payment] : existing?.pagamentos || [],
+      historico: existing?.historico || [],
       itens: saleItems(resolved),
       created_at: existing?.created_at || now.toISOString(),
       updated_at: now.toISOString(),
@@ -1959,7 +1961,10 @@ export async function registerPartialPayment(payload) {
       troco = Math.round((valorRecebido - valor) * 100) / 100;
     }
     if (forma === 'cartao_credito') parcelas = assertInstallments(payload.parcelas);
-    const closes = saldo - valor <= 0.001;
+    const covers = saldo - valor <= 0.001;
+    const destino = payload.destino === 'ativa' || payload.destino === 'fechar' ? payload.destino : 'parcial';
+    if (covers && destino === 'parcial') throw new Error('Escolha fechar a comanda ou deixá-la ativa.');
+    if (!covers && destino !== 'parcial') throw new Error('Ainda há saldo nesta comanda.');
     const payment = {
       id: `pay-${Date.now()}`,
       valor,
@@ -1969,19 +1974,32 @@ export async function registerPartialPayment(payload) {
       parcelas,
       created_at: now.toISOString(),
     };
+    const keepOpen = destino === 'ativa';
+    const cycle = keepOpen
+      ? {
+          id: `hist-${Date.now()}`,
+          quitado_em: now.toISOString(),
+          total: existing.total,
+          itens: existing.itens || [],
+          pagamentos: [...(existing.pagamentos || []), payment],
+        }
+      : null;
     const sale = normalizeSale({
       ...existing,
-      status: closes ? 'paga' : 'aberta',
-      forma_pagamento: closes ? forma : existing.forma_pagamento,
-      valor_recebido: closes ? valorRecebido : existing.valor_recebido ?? null,
-      troco: closes ? troco : existing.troco ?? null,
-      parcelas: closes ? parcelas : existing.parcelas ?? null,
-      pagamentos: [...(existing.pagamentos || []), payment],
+      status: destino === 'fechar' ? 'paga' : 'aberta',
+      forma_pagamento: destino === 'fechar' ? forma : null,
+      valor_recebido: destino === 'fechar' ? valorRecebido : null,
+      troco: destino === 'fechar' ? troco : null,
+      parcelas: destino === 'fechar' ? parcelas : null,
+      total: keepOpen ? 0 : existing.total,
+      itens: keepOpen ? [] : existing.itens,
+      pagamentos: keepOpen ? [] : [...(existing.pagamentos || []), payment],
+      historico: cycle ? [...(existing.historico || []), cycle] : existing.historico || [],
       updated_at: now.toISOString(),
       usuario_id: existing.usuario_id || usuarioId,
     });
     const sales = inventory.sales.map((item) => (item.id === existing.id ? sale : item));
-    const stored = closes
+    const stored = covers
       ? deductSaleStock(inventory, storedSaleLines(inventory, existing.itens))
       : ops.inventory?.items || inventory.items;
     const cash = ops.cashFlow || cashFlowFallback;
@@ -1992,8 +2010,8 @@ export async function registerPartialPayment(payload) {
       date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
       description:
         numero != null
-          ? `PDV · comanda ${numero} · ${closes ? 'fechamento' : 'parcial'} · ${sale.cliente_nome}`
-          : `PDV · ${closes ? 'fechamento' : 'parcial'} · ${sale.cliente_nome}`,
+          ? `PDV · comanda ${numero} · ${destino === 'fechar' ? 'fechamento' : destino === 'ativa' ? 'quitada' : 'parcial'} · ${sale.cliente_nome}`
+          : `PDV · ${destino === 'fechar' ? 'fechamento' : destino === 'ativa' ? 'quitada' : 'parcial'} · ${sale.cliente_nome}`,
       category: 'Varejo',
       categoryIcon: 'payments',
       categoryTone: 'secondary',
@@ -2036,7 +2054,6 @@ export async function closeShift() {
     if (shiftAlreadyClosed(inventory.closings, now)) {
       throw new Error('O turno de hoje já foi consolidado.');
     }
-    const paid = paidSalesOnDay(inventory.sales, now);
     const touched = salesWithReceiptsOnDay(inventory.sales, now);
     if (!touched.length) throw new Error('Não há vendas pagas hoje.');
     const totais = totalsByPayment(inventory.sales, now);
@@ -2045,7 +2062,7 @@ export async function closeShift() {
       closed_at: now.toISOString(),
       sale_ids: touched.map((sale) => sale.id),
       vendas: touched.length,
-      produtos: productTotals(paid),
+      produtos: productTotals(settledLinesOnDay(inventory.sales, now)),
       totais,
       usuario_id: usuarioId,
     };
@@ -2054,7 +2071,7 @@ export async function closeShift() {
         ...ops,
         inventory: { ...inventory, closings: [closing, ...(inventory.closings || [])] },
       },
-      value: { closing, ...totais, count: paid.length },
+      value: { closing, ...totais, count: touched.length },
     };
   });
 }

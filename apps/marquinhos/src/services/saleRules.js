@@ -20,17 +20,35 @@ export function optionalComanda(value) {
   return assertComanda(value);
 }
 
+function cleanPayments(list) {
+  return Array.isArray(list) ? list.filter((row) => Number(row?.valor) > 0) : [];
+}
+
 export function normalizeSale(sale) {
   const numero = Number(sale?.numero_comanda);
-  const pagamentos = Array.isArray(sale?.pagamentos)
-    ? sale.pagamentos.filter((row) => Number(row?.valor) > 0)
+  const historico = Array.isArray(sale?.historico)
+    ? sale.historico
+        .filter((row) => row && row.id)
+        .map((row) => ({
+          ...row,
+          itens: Array.isArray(row.itens) ? row.itens : [],
+          pagamentos: cleanPayments(row.pagamentos),
+        }))
     : [];
   return {
     ...sale,
     numero_comanda: Number.isInteger(numero) && numero > 0 ? numero : null,
     status: SALE_STATUSES.includes(sale?.status) ? sale.status : 'paga',
-    pagamentos,
+    pagamentos: cleanPayments(sale?.pagamentos),
+    historico,
   };
+}
+
+export function salePayments(sale) {
+  return [
+    ...(sale?.pagamentos || []),
+    ...(sale?.historico || []).flatMap((cycle) => cycle.pagamentos || []),
+  ];
 }
 
 export function salePaidAmount(sale) {
@@ -69,7 +87,7 @@ function addMethod(byMethod, method, amount) {
 
 export function salesWithReceiptsOnDay(sales, day = new Date()) {
   return (sales || []).filter((sale) => {
-    const payments = Array.isArray(sale.pagamentos) ? sale.pagamentos : [];
+    const payments = salePayments(sale);
     if (payments.some((payment) => isSaleOnDay({ created_at: payment.created_at }, day))) return true;
     return !payments.length && sale.status === 'paga' && isSaleOnDay(sale, day);
   });
@@ -78,7 +96,7 @@ export function salesWithReceiptsOnDay(sales, day = new Date()) {
 export function totalsByPayment(sales, day = null) {
   const byMethod = Object.fromEntries(PAYMENT_METHODS.map((method) => [method, 0]));
   (sales || []).forEach((sale) => {
-    const payments = Array.isArray(sale.pagamentos) ? sale.pagamentos : [];
+    const payments = salePayments(sale);
     if (payments.length) {
       payments.forEach((payment) => {
         if (day && !isSaleOnDay({ created_at: payment.created_at }, day)) return;
@@ -92,6 +110,20 @@ export function totalsByPayment(sales, day = null) {
   });
   const total = Math.round(Object.values(byMethod).reduce((sum, value) => sum + value, 0) * 100) / 100;
   return { byMethod, total };
+}
+
+export function settledLinesOnDay(sales, day = new Date()) {
+  const rows = [];
+  (sales || []).forEach((sale) => {
+    const closedToday =
+      sale.status === 'paga' &&
+      (isSaleOnDay(sale, day) || isSaleOnDay({ created_at: sale.updated_at }, day));
+    if (closedToday) rows.push(sale);
+    (sale.historico || []).forEach((cycle) => {
+      if (isSaleOnDay({ created_at: cycle.quitado_em }, day)) rows.push({ itens: cycle.itens });
+    });
+  });
+  return rows;
 }
 
 export function productTotals(sales) {

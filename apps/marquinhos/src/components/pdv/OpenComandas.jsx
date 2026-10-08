@@ -154,7 +154,9 @@ export function OpenComandas({ sales = [], customers = [] }) {
                   <span className="block font-headline font-extrabold text-on-surface">
                     {money(salePaidAmount(sale) > 0 ? saleBalance(sale) : sale.total)}
                   </span>
-                  {salePaidAmount(sale) > 0 ? (
+                  {saleBalance(sale) <= 0 && (sale.historico || []).length ? (
+                    <span className="block text-xs text-on-surface-variant">Quitada</span>
+                  ) : salePaidAmount(sale) > 0 ? (
                     <span className="block text-xs text-on-surface-variant">Saldo</span>
                   ) : null}
                 </span>
@@ -180,7 +182,7 @@ export function OpenComandas({ sales = [], customers = [] }) {
           </p>
           {(detail.itens || []).length === 0 ? (
             <p className="rounded-2xl border border-outline bg-surface p-4 text-on-surface-variant">
-              Nenhum item nesta comanda.
+              {(detail.historico || []).length ? 'Nenhum consumo neste período.' : 'Nenhum item nesta comanda.'}
             </p>
           ) : (
             <ul className="space-y-3">
@@ -198,6 +200,38 @@ export function OpenComandas({ sales = [], customers = [] }) {
               ))}
             </ul>
           )}
+          {(detail.historico || []).length ? (
+            <section className="space-y-3">
+              <p className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">Histórico</p>
+              {detail.historico.map((cycle) => {
+                const stamp = formatSaleStamp(cycle.quitado_em);
+                return (
+                  <div key={cycle.id} className="space-y-3 rounded-2xl border border-outline bg-surface p-3">
+                    <p className="text-sm font-semibold text-on-surface">
+                      {stamp.data} {stamp.hora} · {money(cycle.total)}
+                    </p>
+                    {(cycle.itens || []).map((item, index) => (
+                      <p key={`${cycle.id}-${item.produto_id}-${index}`} className="text-sm text-on-surface-variant">
+                        {item.nome} · {item.quantidade} × {money(item.valor_unitario)}
+                      </p>
+                    ))}
+                    {(cycle.pagamentos || []).map((payment) => {
+                      const paidAt = formatSaleStamp(payment.created_at);
+                      const method = PAYMENT_OPTIONS.find((option) => option.value === payment.forma_pagamento);
+                      return (
+                        <p key={payment.id} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="min-w-0 text-on-surface-variant">
+                            {paidAt.data} {paidAt.hora} · {method?.label || 'Pagamento'}
+                          </span>
+                          <span className="shrink-0 font-semibold text-on-surface">{money(payment.valor)}</span>
+                        </p>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </section>
+          ) : null}
           {(detail.pagamentos || []).length ? (
             <ul className="space-y-2">
               {detail.pagamentos.map((payment) => {

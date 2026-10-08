@@ -32,19 +32,23 @@ export function PartialCloseForm({ sale, onSuccess, onCancel }) {
   const [error, setError] = useState('');
   const amount = parseReaisInput(valor);
   const received = parseReaisInput(recebido);
+  const covers = Number.isFinite(amount) && amount > 0 && saldo - amount <= 0.001;
   const troco =
     forma === 'dinheiro' && valor !== '' && Number.isFinite(received)
       ? Math.round((received - amount) * 100) / 100
       : null;
 
-  async function submit(event) {
-    event.preventDefault();
+  async function send(destino) {
     if (!Number.isFinite(amount) || amount <= 0) {
       setError('Informe o valor do pagamento.');
       return;
     }
     if (amount - saldo > 0.001) {
       setError('O valor passa do saldo.');
+      return;
+    }
+    if (covers && destino === 'parcial') {
+      setError('Escolha fechar a comanda ou deixá-la ativa.');
       return;
     }
     if (forma === 'dinheiro' && (troco == null || troco < 0)) {
@@ -60,11 +64,14 @@ export function PartialCloseForm({ sale, onSuccess, onCancel }) {
         forma_pagamento: forma,
         valor_recebido: forma === 'dinheiro' ? received : null,
         parcelas: forma === 'cartao_credito' ? Number(parcelas) : null,
+        destino,
       });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
       queryClient.invalidateQueries({ queryKey: ['caixa-shift'] });
-      toast.success(next.status === 'paga' ? 'Comanda quitada.' : 'Pagamento parcial registrado.');
+      toast.success(
+        destino === 'ativa' ? 'Comanda quitada e ainda aberta.' : destino === 'fechar' ? 'Comanda fechada.' : 'Pagamento parcial registrado.',
+      );
       onSuccess?.(next);
     } catch (err) {
       const message = err?.message || 'Não foi possível registrar o pagamento.';
@@ -76,9 +83,21 @@ export function PartialCloseForm({ sale, onSuccess, onCancel }) {
   }
 
   return (
-    <form className="space-y-4" onSubmit={submit}>
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (covers) {
+          setError('Escolha fechar a comanda ou deixá-la ativa.');
+          return;
+        }
+        send('parcial');
+      }}
+    >
       <p className="text-sm text-on-surface-variant">
-        Saldo {money(saldo)}. A comanda continua aberta com o restante. Se o valor cobrir o saldo, ela fecha.
+        {covers
+          ? `Saldo ${money(saldo)}. Este valor quita a comanda. Feche ela ou deixe ativa, sem saldo, com o histórico.`
+          : `Saldo ${money(saldo)}. A comanda continua aberta com o restante.`}
       </p>
       <Input
         label="Valor deste pagamento (R$)"
@@ -146,10 +165,23 @@ export function PartialCloseForm({ sale, onSuccess, onCancel }) {
           <Icon name="cancel" />
           Cancelar
         </Button>
-        <Button type="submit" disabled={saving || saldo <= 0}>
-          <Icon name="payments" />
-          {saving ? 'Salvando...' : 'Registrar pagamento'}
-        </Button>
+        {covers ? (
+          <>
+            <Button type="button" variant="secondary" onClick={() => send('ativa')} disabled={saving}>
+              <Icon name="receipt_long" />
+              {saving ? 'Salvando...' : 'Deixar ativa'}
+            </Button>
+            <Button type="button" onClick={() => send('fechar')} disabled={saving}>
+              <Icon name="lock" />
+              {saving ? 'Salvando...' : 'Fechar comanda'}
+            </Button>
+          </>
+        ) : (
+          <Button type="button" onClick={() => send('parcial')} disabled={saving || saldo <= 0}>
+            <Icon name="payments" />
+            {saving ? 'Salvando...' : 'Registrar pagamento'}
+          </Button>
+        )}
       </div>
     </form>
   );
