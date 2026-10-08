@@ -32,14 +32,14 @@ function titleCase(value) {
 function placePanel(node) {
   const rect = node.getBoundingClientRect();
   const width = Math.min(336, window.innerWidth - 16);
-  const height = 400;
   const below = window.innerHeight - rect.bottom;
-  const up = below < height && rect.top > below;
-  return {
-    left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
-    top: up ? Math.max(8, rect.top - height - 6) : rect.bottom + 6,
-    width,
-  };
+  const above = rect.top;
+  const up = below < 400 && above > below;
+  let left = rect.left;
+  if (left + width > window.innerWidth - 8) left = rect.right - width;
+  left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+  if (up) return { left, width, bottom: window.innerHeight - rect.top + 6 };
+  return { left, width, top: rect.bottom + 6 };
 }
 
 export function DateField({
@@ -165,7 +165,12 @@ export function DateField({
               id={panelId}
               role="dialog"
               aria-label={label || 'Selecionar data'}
-              style={{ position: 'fixed', left: box.left, top: box.top, width: box.width }}
+              style={{
+                position: 'fixed',
+                left: box.left,
+                width: box.width,
+                ...(box.bottom != null ? { bottom: box.bottom } : { top: box.top }),
+              }}
               className="z-[110] rounded-2xl border border-outline bg-surface p-3 shadow-sm"
             >
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -185,6 +190,7 @@ export function DateField({
                   <button
                     type="button"
                     aria-label="Mês anterior"
+                    title="Mês anterior"
                     className="inline-flex h-11 w-11 items-center justify-center rounded-full text-on-surface"
                     onClick={() => setCursor((current) => addMonths(current, -1))}
                   >
@@ -193,6 +199,7 @@ export function DateField({
                   <button
                     type="button"
                     aria-label="Próximo mês"
+                    title="Próximo mês"
                     className="inline-flex h-11 w-11 items-center justify-center rounded-full text-on-surface"
                     onClick={() => setCursor((current) => addMonths(current, 1))}
                   >

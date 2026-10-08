@@ -98,7 +98,7 @@ export function HouseStaffDialog({
           <h3 className="font-headline text-2xl font-extrabold tracking-tight">
             {person?.name || 'Novo funcionário'}
           </h3>
-          <button type="button" className="min-h-11 min-w-11" aria-label="Fechar" onClick={onClose}>
+          <button type="button" className="min-h-11 min-w-11" aria-label="Fechar" title="Fechar" onClick={onClose}>
             <Icon name="close" />
           </button>
         </div>

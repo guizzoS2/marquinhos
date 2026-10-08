@@ -4,18 +4,19 @@ import { Icon } from './Icon';
 
 function menuBox(node) {
   const rect = node.getBoundingClientRect();
-  const room = 240;
-  const below = window.innerHeight - rect.bottom;
-  const up = below < 160 && rect.top > below;
-  const maxHeight = Math.max(120, Math.min(room, (up ? rect.top : below) - 12));
-  const width = Math.max(rect.width, 180);
-  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
-  return {
-    left,
-    width,
-    top: up ? Math.max(8, rect.top - maxHeight - 6) : rect.bottom + 6,
-    maxHeight,
-  };
+  const gap = 6;
+  const width = Math.max(rect.width, Math.min(220, window.innerWidth - 16));
+  let left = rect.left;
+  if (left + width > window.innerWidth - 8) left = rect.right - width;
+  left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+  const below = window.innerHeight - rect.bottom - gap;
+  const above = rect.top - gap;
+  const up = below < 160 && above > below;
+  const maxHeight = Math.max(96, Math.min(280, up ? above : below));
+  if (up) {
+    return { left, width, bottom: window.innerHeight - rect.top + gap, maxHeight };
+  }
+  return { left, width, top: rect.bottom + gap, maxHeight };
 }
 
 export function Dropdown({
@@ -102,9 +103,9 @@ export function Dropdown({
               style={{
                 position: 'fixed',
                 left: box.left,
-                top: box.top,
                 width: box.width,
                 maxHeight: box.maxHeight,
+                ...(box.bottom != null ? { bottom: box.bottom } : { top: box.top }),
               }}
               className="z-[110] overflow-y-auto rounded-2xl border border-outline bg-surface p-2 shadow-sm"
             >

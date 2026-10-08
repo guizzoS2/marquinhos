@@ -1,3 +1,6 @@
+import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+
 const variants = {
   primary: 'bg-primary text-on-primary hover:bg-primary-dim',
   secondary: 'bg-surface text-on-surface border border-outline hover:bg-surface-container-low',
@@ -11,6 +14,56 @@ const sizes = {
   icon: 'h-11 w-11',
 };
 
+function placeHint(anchor, tip) {
+  const rect = anchor.getBoundingClientRect();
+  const width = tip?.width || 0;
+  const height = tip?.height || 28;
+  let left = rect.left + rect.width / 2 - width / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - Math.max(width, 8) - 8));
+  if (rect.top > height + 12) {
+    return { left, bottom: window.innerHeight - rect.top + 8 };
+  }
+  return { left, top: rect.bottom + 8 };
+}
+
+function IconHint({ anchor, label, id }) {
+  const tipRef = useRef(null);
+  const [box, setBox] = useState(null);
+
+  useEffect(() => {
+    const node = anchor;
+    if (!node) return undefined;
+    function place() {
+      setBox(placeHint(node, tipRef.current));
+    }
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [anchor, label]);
+
+  return createPortal(
+    <span
+      ref={tipRef}
+      id={id}
+      role="tooltip"
+      style={{
+        position: 'fixed',
+        left: box?.left ?? 0,
+        visibility: box ? 'visible' : 'hidden',
+        ...(box?.bottom != null ? { bottom: box.bottom } : { top: box?.top ?? 0 }),
+      }}
+      className="pointer-events-none z-[130] whitespace-nowrap rounded-lg bg-on-surface px-2 py-1 text-xs font-semibold text-white"
+    >
+      {label}
+    </span>,
+    document.body,
+  );
+}
+
 export function Button({
   children,
   variant = 'primary',
@@ -18,16 +71,47 @@ export function Button({
   type = 'button',
   className = '',
   icon,
+  title,
+  onMouseEnter,
+  onMouseLeave,
+  onFocus,
+  onBlur,
   ...props
 }) {
+  const buttonRef = useRef(null);
+  const [showHint, setShowHint] = useState(false);
+  const hintId = useId();
+  const hint = size === 'icon' ? title || props['aria-label'] || '' : '';
+
   return (
-    <button
-      type={type}
-      className={`inline-flex items-center justify-center gap-2 rounded-full text-sm font-semibold leading-5 transition-colors disabled:opacity-60 [&_.material-symbols-outlined]:text-xl ${sizes[size] || sizes.md} ${variants[variant] || variants.primary} ${className}`.trim()}
-      {...props}
-    >
-      {icon}
-      {children}
-    </button>
+    <>
+      <button
+        ref={buttonRef}
+        type={type}
+        className={`inline-flex items-center justify-center gap-2 rounded-full text-sm font-semibold leading-5 transition-colors disabled:opacity-60 [&_.material-symbols-outlined]:text-xl ${sizes[size] || sizes.md} ${variants[variant] || variants.primary} ${className}`.trim()}
+        {...props}
+        aria-describedby={showHint && hint ? hintId : props['aria-describedby']}
+        onMouseEnter={(event) => {
+          if (hint) setShowHint(true);
+          onMouseEnter?.(event);
+        }}
+        onMouseLeave={(event) => {
+          setShowHint(false);
+          onMouseLeave?.(event);
+        }}
+        onFocus={(event) => {
+          if (hint) setShowHint(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setShowHint(false);
+          onBlur?.(event);
+        }}
+      >
+        {icon}
+        {children}
+      </button>
+      {showHint && hint ? <IconHint anchor={buttonRef.current} label={hint} id={hintId} /> : null}
+    </>
   );
 }

@@ -42,6 +42,7 @@ function NavButton({ label, icon, disabled, onClick }) {
     <button
       type="button"
       aria-label={label}
+      title={label}
       disabled={disabled}
       onClick={onClick}
       className="inline-flex shrink-0 items-center justify-center h-11 w-11 rounded-full border border-outline bg-surface text-on-surface disabled:opacity-40 [&_.material-symbols-outlined]:text-xl"
