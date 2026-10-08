@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, isValid, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { fetchCashFlow, fetchInventory, fetchSuppliers, removeCashExpense, removeSupplier, reversePurchase } from '../services/dashboardService';
-import { natureLabel } from '../services/cashFlowUtils';
+import { fetchCashFlow, fetchInventory, removeCashExpense, removeSupplier, reversePurchase } from '../services/dashboardService';
+import { natureLabel, parseCashFlowDate, toIsoDate } from '../services/cashFlowUtils';
 import { SuppliersList } from '../components/suppliers/SuppliersList';
 import { SalesPage } from './SalesPage';
 import { Button } from '../components/ui/Button';
@@ -28,51 +28,89 @@ function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-const TABS = ['compras', 'vendas', 'despesas', 'fornecedores'];
+function productLine(row) {
+  return (row?.itens || []).map((item) => `${item.nome} × ${item.quantidade}`).join(', ');
+}
 
 export function PurchasesPage() {
-  const [purchaseQuery, setPurchaseQuery] = useState('');
-  const [expenseQuery, setExpenseQuery] = useState('');
+  const [query, setQuery] = useState('');
   const [params, setParams] = useSearchParams();
   const requested = params.get('aba');
-  const tab = TABS.includes(requested) ? requested : 'compras';
+  const tab = requested === 'vendas' || requested === 'fornecedores' ? requested : 'compras';
   const { openModal } = useModal();
   const queryClient = useQueryClient();
   const cash = useQuery({ queryKey: ['cash-flow'], queryFn: fetchCashFlow });
   const inventory = useQuery({ queryKey: ['inventory'], queryFn: fetchInventory });
-  const suppliersQuery = useQuery({ queryKey: ['suppliers'], queryFn: fetchSuppliers });
+
+  useEffect(() => {
+    if (requested === 'despesas') setParams({}, { replace: true });
+  }, [requested, setParams]);
 
   function setTab(next) {
     setParams(next === 'compras' ? {} : { aba: next }, { replace: true });
   }
 
-  const purchases = useMemo(() => {
-    const rows = inventory.data?.purchases || [];
-    const term = purchaseQuery.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((row) => {
-      const products = (row.itens || []).map((item) => `${item.nome} ${item.quantidade}`).join(' ');
-      const status = row.status === 'cancelada' ? 'cancelada' : 'ativa';
-      return [row.supplierName, row.categoryName, products, formatPurchaseDate(row.date), status, money(row.total)]
-        .join(' ')
-        .toLowerCase()
-        .includes(term);
+  const rows = useMemo(() => {
+    const purchaseRows = inventory.data?.purchases || [];
+    const expenseRows = cash.data?.expenses || [];
+    const purchaseByExpense = new Map();
+    purchaseRows.forEach((purchase) => {
+      if (purchase.expenseId) purchaseByExpense.set(String(purchase.expenseId), purchase);
     });
-  }, [inventory.data, purchaseQuery]);
-
-  const expenses = useMemo(() => {
-    const term = expenseQuery.trim().toLowerCase();
-    return [...(cash.data?.expenses || [])]
-      .sort((left, right) => String(right.createdAt || '').localeCompare(String(left.createdAt || '')))
+    const used = new Set();
+    const merged = [];
+    expenseRows.forEach((expense) => {
+      const purchase = purchaseByExpense.get(String(expense.id)) || null;
+      if (purchase) used.add(String(purchase.id));
+      const iso = parseCashFlowDate(expense.date) || toIsoDate(expense.createdAt) || '';
+      merged.push({
+        id: `exp-${expense.id}`,
+        sort: `${iso} ${expense.createdAt || ''}`,
+        date: iso ? formatPurchaseDate(iso) : expense.date || '—',
+        description: expense.supplier || '—',
+        category: expense.category || '—',
+        categoryIcon: expense.categoryIcon,
+        products: productLine(purchase),
+        nature: expense.nature,
+        value: expense.value,
+        status: purchase ? (purchase.status === 'cancelada' ? 'cancelada' : 'ativa') : '',
+        expense,
+        purchase,
+      });
+    });
+    purchaseRows.forEach((purchase) => {
+      if (used.has(String(purchase.id))) return;
+      const iso = /^\d{4}-\d{2}-\d{2}$/.test(String(purchase.date || '')) ? purchase.date : '';
+      merged.push({
+        id: `buy-${purchase.id}`,
+        sort: purchase.created_at || iso,
+        date: formatPurchaseDate(purchase.date),
+        description: purchase.supplierName || '—',
+        category: purchase.categoryName || '—',
+        categoryIcon: '',
+        products: productLine(purchase),
+        nature: '',
+        value: money(purchase.total),
+        status: purchase.status === 'cancelada' ? 'cancelada' : 'ativa',
+        expense: null,
+        purchase,
+      });
+    });
+    const term = query.trim().toLowerCase();
+    return merged
       .filter((row) => {
         if (!term) return true;
-        return [row.supplier, row.category, row.value].join(' ').toLowerCase().includes(term);
-      });
-  }, [cash.data, expenseQuery]);
+        const nature = row.nature ? natureLabel(row.nature) : '';
+        const status = row.status === 'cancelada' ? 'cancelada' : row.status === 'ativa' ? 'ativa' : '';
+        return [row.date, row.description, row.category, row.products, nature, row.value, status]
+          .join(' ')
+          .toLowerCase()
+          .includes(term);
+      })
+      .sort((left, right) => String(right.sort).localeCompare(String(left.sort)));
+  }, [inventory.data, cash.data, query]);
 
-  const purchasePage = usePagedList(purchases, purchaseQuery);
-  const expensePage = usePagedList(expenses, expenseQuery);
-  const suppliers = suppliersQuery.data?.suppliers || [];
+  const page = usePagedList(rows, query);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
@@ -89,8 +127,10 @@ export function PurchasesPage() {
   }
 
   function openEdit(row) {
+    if (!row.expense) return;
     openModal('new-expense', {
-      expense: row,
+      expense: row.expense,
+      purchase: row.purchase,
       categories: cash.data?.categories,
       onSuccess: refresh,
     });
@@ -98,10 +138,10 @@ export function PurchasesPage() {
 
   function confirmDeleteExpense(row) {
     openModal('confirm', {
-      message: `Excluir a despesa "${row.supplier}" (${row.value})?`,
+      message: `Excluir "${row.supplier}" (${row.value})?`,
       confirmLabel: 'Excluir',
-      successMessage: 'Despesa removida.',
-      errorMessage: 'Falha ao excluir despesa.',
+      successMessage: 'Compra removida.',
+      errorMessage: 'Falha ao excluir.',
       onConfirm: async () => {
         await removeCashExpense(row.id);
         refresh();
@@ -143,14 +183,13 @@ export function PurchasesPage() {
     <div className="space-y-6 p-4 font-body md:p-8">
       <PageHeader
         title="Compras e vendas"
-        description="Vendas do dia, compras de estoque, despesas e fornecedores."
+        description="Vendas do dia, compras e fornecedores."
       />
       <Tabs
         label="Compras e vendas"
         items={[
           { id: 'compras', label: 'Compras' },
           { id: 'vendas', label: 'Vendas' },
-          { id: 'despesas', label: 'Despesas' },
           { id: 'fornecedores', label: 'Fornecedores' },
         ]}
         value={tab}
@@ -161,23 +200,15 @@ export function PurchasesPage() {
         <section className="space-y-6">
           <FilterBar
             actions={
-              <Button
-                onClick={() =>
-                  openModal('new-purchase', {
-                    items: inventory.data?.items || [],
-                    suppliers,
-                    onSuccess: refresh,
-                  })
-                }
-              >
+              <Button onClick={openExpense}>
                 <Icon name="add" />
                 Nova compra
               </Button>
             }
           >
             <SearchField
-              value={purchaseQuery}
-              onChange={setPurchaseQuery}
+              value={query}
+              onChange={setQuery}
               placeholder="Buscar compra"
               label="Buscar compra"
             />
@@ -186,51 +217,86 @@ export function PurchasesPage() {
             <DataTable>
               <THead>
                 <Th>Data</Th>
-                <Th>Fornecedor</Th>
+                <Th>Descrição</Th>
                 <Th>Categoria</Th>
                 <Th>Produtos</Th>
-                <Th align="right">Valor total</Th>
+                <Th>Natureza</Th>
+                <Th align="right">Valor</Th>
                 <Th>Status</Th>
                 <Th align="right">Ações</Th>
               </THead>
               <TBody>
-                {(inventory.data?.purchases || []).length === 0 ? (
-                  <EmptyRow colSpan={7}>Nenhuma compra registrada.</EmptyRow>
-                ) : purchasePage.rows.length === 0 ? (
-                  <EmptyRow colSpan={7}>Nenhuma compra encontrada.</EmptyRow>
+                {rows.length === 0 ? (
+                  <EmptyRow colSpan={8}>
+                    {query ? 'Nenhuma compra encontrada.' : 'Nenhuma saída registrada.'}
+                  </EmptyRow>
                 ) : (
-                  purchasePage.rows.map((row) => {
+                  page.rows.map((row) => {
                     const cancelled = row.status === 'cancelada';
                     return (
                       <Tr key={row.id}>
-                        <Td tone="muted">{formatPurchaseDate(row.date)}</Td>
-                        <Td tone="strong">{row.supplierName}</Td>
-                        <Td>{row.categoryName}</Td>
-                        <Td tone="muted">
-                          {(row.itens || []).map((item) => `${item.nome} × ${item.quantidade}`).join(', ') || '—'}
+                        <Td tone="muted" className="whitespace-nowrap">
+                          {row.date}
                         </Td>
-                        <Td align="right" tone="strong">
-                          {money(row.total)}
-                        </Td>
+                        <Td tone="strong">{row.description}</Td>
                         <Td>
-                          <StatusPill tone={cancelled ? 'neutral' : 'accent'}>
-                            {cancelled ? 'Cancelada' : 'Ativa'}
+                          <StatusPill tone="neutral">
+                            <Icon name={row.categoryIcon || 'payments'} className="text-sm" />
+                            {row.category}
                           </StatusPill>
                         </Td>
+                        <Td tone="muted">{row.products || '—'}</Td>
+                        <Td>{row.nature ? natureLabel(row.nature) : '—'}</Td>
+                        <Td align="right" tone="danger">
+                          {row.value}
+                        </Td>
+                        <Td>
+                          {row.status ? (
+                            <StatusPill tone={cancelled ? 'neutral' : 'accent'}>
+                              {cancelled ? 'Cancelada' : 'Ativa'}
+                            </StatusPill>
+                          ) : (
+                            '—'
+                          )}
+                        </Td>
                         <Td align="right" tone="muted">
-                          {cancelled ? (
+                          {cancelled || (!row.expense && !row.purchase) ? (
                             '—'
                           ) : (
                             <TableActions>
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="danger"
-                                onClick={() => confirmCancel(row)}
-                                aria-label="Cancelar compra"
-                              >
-                                <Icon name="cancel" />
-                              </Button>
+                              {row.expense && !cancelled ? (
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="secondary"
+                                  onClick={() => openEdit(row)}
+                                  aria-label="Editar compra"
+                                >
+                                  <Icon name="edit" />
+                                </Button>
+                              ) : null}
+                              {row.purchase && !cancelled ? (
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="danger"
+                                  onClick={() => confirmCancel(row.purchase)}
+                                  aria-label="Cancelar compra"
+                                >
+                                  <Icon name="cancel" />
+                                </Button>
+                              ) : null}
+                              {row.expense && !row.purchase ? (
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="danger"
+                                  onClick={() => confirmDeleteExpense(row.expense)}
+                                  aria-label="Excluir compra"
+                                >
+                                  <Icon name="delete" />
+                                </Button>
+                              ) : null}
                             </TableActions>
                           )}
                         </Td>
@@ -240,93 +306,12 @@ export function PurchasesPage() {
                 )}
               </TBody>
             </DataTable>
-            <Pagination state={purchasePage} />
+            <Pagination state={page} />
           </div>
         </section>
       ) : null}
 
       {tab === 'vendas' ? <SalesPage embedded /> : null}
-
-      {tab === 'despesas' ? (
-        <section className="space-y-6">
-          <FilterBar
-            actions={
-              <Button onClick={openExpense}>
-                <Icon name="add" />
-                Nova despesa
-              </Button>
-            }
-          >
-            <SearchField
-              value={expenseQuery}
-              onChange={setExpenseQuery}
-              placeholder="Buscar despesa"
-              label="Buscar despesa"
-            />
-          </FilterBar>
-          <div className="space-y-4">
-            <DataTable>
-              <THead>
-                <Th>Data</Th>
-                <Th>Descrição</Th>
-                <Th>Categoria</Th>
-                <Th>Natureza</Th>
-                <Th align="right">Valor</Th>
-                <Th align="right">Ações</Th>
-              </THead>
-              <TBody>
-                {expenses.length === 0 ? (
-                  <EmptyRow colSpan={6}>
-                    {expenseQuery ? 'Nenhuma despesa encontrada.' : 'Nenhuma saída registrada.'}
-                  </EmptyRow>
-                ) : (
-                  expensePage.rows.map((row) => (
-                    <Tr key={row.id}>
-                      <Td tone="muted" className="whitespace-nowrap">
-                        {row.date}
-                      </Td>
-                      <Td tone="strong">{row.supplier || '—'}</Td>
-                      <Td>
-                        <StatusPill tone="neutral">
-                          <Icon name={row.categoryIcon || 'payments'} className="text-sm" />
-                          {row.category}
-                        </StatusPill>
-                      </Td>
-                      <Td>{natureLabel(row.nature)}</Td>
-                      <Td align="right" tone="danger">
-                        {row.value}
-                      </Td>
-                      <Td align="right">
-                        <TableActions>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="secondary"
-                            onClick={() => openEdit(row)}
-                            aria-label="Editar despesa"
-                          >
-                            <Icon name="edit" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="danger"
-                            onClick={() => confirmDeleteExpense(row)}
-                            aria-label="Excluir despesa"
-                          >
-                            <Icon name="delete" />
-                          </Button>
-                        </TableActions>
-                      </Td>
-                    </Tr>
-                  ))
-                )}
-              </TBody>
-            </DataTable>
-            <Pagination state={expensePage} />
-          </div>
-        </section>
-      ) : null}
 
       {tab === 'fornecedores' ? (
         <SuppliersList

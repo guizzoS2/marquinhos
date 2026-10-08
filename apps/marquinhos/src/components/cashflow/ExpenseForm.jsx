@@ -83,7 +83,7 @@ function CategoryNameForm({ onSuccess, onCancel }) {
   );
 }
 
-export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, expense = null }) {
+export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, expense = null, purchase = null }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const editing = Boolean(expense?.id);
@@ -127,15 +127,19 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
     categoryId: initialCategory?.id || 'bebidas',
     nature: expense?.nature || initialCategory?.defaultNature || 'variable',
     value: editing ? reaisInput(expense.amount) : '',
-    recurrence: expense?.recurrence || '',
   });
   const [natureTouched, setNatureTouched] = useState(editing);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const linkedPurchase =
+    purchase ||
+    (editing
+      ? (inventory.data?.purchases || []).find((row) => String(row.expenseId) === String(expense?.id)) || null
+      : null);
   const selectedCategory = categories.find((item) => item.id === form.categoryId) || categories[0];
   const party = expensePartyKind(form.categoryId);
-  const stockPurchase = !editing && party === 'supplier';
+  const buying = !editing && party !== 'freelancer' && lines.some((line) => line.produto_id);
   const calculated = useMemo(() => {
     const sum = lines.reduce((acc, line) => {
       const product = products.find((item) => String(item.id) === String(line.produto_id));
@@ -147,9 +151,9 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
   }, [lines, products]);
 
   useEffect(() => {
-    if (!stockPurchase || totalTouched) return;
+    if (!buying || totalTouched) return;
     setTotal(calculated > 0 ? calculated.toFixed(2) : '');
-  }, [calculated, stockPurchase, totalTouched]);
+  }, [calculated, buying, totalTouched]);
 
   function handleCategoryChange(categoryId) {
     const nextCategory = categories.find((item) => item.id === categoryId);
@@ -157,7 +161,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
     setForm((prev) => ({
       ...prev,
       categoryId,
-      supplierId: nextParty === 'supplier' ? prev.supplierId : '',
+      supplierId: nextParty === 'freelancer' ? '' : prev.supplierId,
       freelancerId: nextParty === 'freelancer' ? prev.freelancerId : '',
       nature: natureTouched ? prev.nature : nextCategory?.defaultNature || 'variable',
     }));
@@ -169,7 +173,6 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
     setForm((prev) => ({
       ...prev,
       categoryId: created.id,
-      supplierId: '',
       freelancerId: '',
       nature: created.defaultNature || 'variable',
     }));
@@ -178,18 +181,14 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
 
   async function handleSubmit(event) {
     event.preventDefault();
-    if (party === 'supplier' && !form.supplierId) {
+    if (buying && !form.supplierId) {
       setError('Selecione o fornecedor.');
       return;
     }
-    if (stockPurchase) {
+    if (buying) {
       const itens = lines
         .filter((line) => line.produto_id)
         .map((line) => ({ produto_id: line.produto_id, quantidade: Number(line.quantidade) }));
-      if (!itens.length) {
-        setError('Adicione ao menos um produto.');
-        return;
-      }
       const manual = totalTouched ? parseReaisInput(total) : null;
       if (totalTouched && (!Number.isFinite(manual) || manual <= 0)) {
         setError('Valor total inválido.');
@@ -205,13 +204,12 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
           itens,
           valor_total: manual,
           nature: form.nature,
-          recurrence: form.recurrence || null,
         });
-        toast.success('Despesa registrada.');
+        toast.success('Compra registrada.');
         onSuccess?.();
         onCancel();
       } catch (err) {
-        const message = err?.message || 'Não foi possível registrar a despesa.';
+        const message = err?.message || 'Não foi possível registrar a compra.';
         setError(message);
         toast.error(message);
       } finally {
@@ -223,24 +221,18 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
       setError('Selecione o freelancer.');
       return;
     }
-    if (party === 'none' && !String(form.supplier || '').trim()) {
+    if (party !== 'freelancer' && !form.supplierId && !String(form.supplier || '').trim()) {
       setError('Informe a descrição.');
       return;
     }
-    const sameCategory = editing && form.categoryId === expense?.categoryId;
-    const sameLabel = String(form.supplier || '').trim() === String(expense?.supplier || '').trim();
     const supplierName =
-      party === 'supplier'
-        ? suppliers.find((item) => String(item.id) === String(form.supplierId))?.name || form.supplier
-        : party === 'freelancer'
-          ? people.find((item) => String(item.id) === String(form.freelancerId))?.name || form.supplier
+      party === 'freelancer'
+        ? people.find((item) => String(item.id) === String(form.freelancerId))?.name || form.supplier
+        : form.supplierId
+          ? suppliers.find((item) => String(item.id) === String(form.supplierId))?.name || form.supplier
           : form.supplier;
-    let supplierId = null;
-    let freelancerId = null;
-    if (party === 'supplier') supplierId = form.supplierId;
-    else if (party === 'freelancer') freelancerId = form.freelancerId;
-    else if (sameCategory && sameLabel && expense?.supplierId) supplierId = expense.supplierId;
-    else if (sameCategory && sameLabel && expense?.freelancerId) freelancerId = expense.freelancerId;
+    const supplierId = party === 'freelancer' ? null : form.supplierId || null;
+    const freelancerId = party === 'freelancer' ? form.freelancerId : null;
     setSaving(true);
     setError('');
     try {
@@ -252,16 +244,16 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
         categoryId: form.categoryId,
         nature: form.nature,
         amount: Math.round(Number(form.value) * 100),
-        recurrence: form.recurrence || null,
+        recurrence: editing ? expense?.recurrence || null : null,
         source: expense?.source || 'manual',
       };
       if (editing) await editCashExpense(expense.id, payload);
       else await createCashExpense(payload);
-      toast.success(editing ? 'Despesa atualizada.' : 'Despesa registrada.');
+      toast.success(editing ? 'Compra atualizada.' : 'Compra registrada.');
       onSuccess?.();
       onCancel();
     } catch (err) {
-      const message = err?.message || (editing ? 'Não foi possível atualizar a despesa.' : 'Não foi possível registrar a despesa.');
+      const message = err?.message || (editing ? 'Não foi possível atualizar a compra.' : 'Não foi possível registrar a compra.');
       setError(message);
       toast.error(message);
     } finally {
@@ -299,7 +291,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
             </Button>
           </div>
         </div>
-        {party === 'supplier' ? (
+        {party !== 'freelancer' ? (
           <div className="space-y-2">
             <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">
               Fornecedor
@@ -310,33 +302,38 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
                 label="Fornecedor"
                 muted
                 search
-                placeholder="Selecione o fornecedor"
+                placeholder="Nenhum"
                 value={form.supplierId}
                 onChange={(supplierId) => setForm((prev) => ({ ...prev, supplierId }))}
-                options={suppliers.map((item) => ({ value: item.id, label: item.name }))}
+                options={[
+                  { value: '', label: 'Nenhum' },
+                  ...suppliers.map((item) => ({ value: item.id, label: item.name })),
+                ]}
               />
-              {stockPurchase ? (
-                <Button
-                  type="button"
-                  size="icon"
-                  className="shrink-0"
-                  aria-label="Novo fornecedor"
-                  onClick={() => setChild({ kind: 'supplier' })}
-                >
-                  <Icon name="add" />
-                </Button>
-              ) : null}
+              <Button
+                type="button"
+                size="icon"
+                className="shrink-0"
+                aria-label="Novo fornecedor"
+                onClick={() => setChild({ kind: 'supplier' })}
+              >
+                <Icon name="add" />
+              </Button>
             </div>
-            {!suppliers.length ? (
-              <p className="pl-1 text-[11px] text-on-surface-variant">Nenhum fornecedor cadastrado.</p>
-            ) : (
-              <p className="pl-1 text-[11px] text-on-surface-variant">
-                A despesa grava o fornecedor selecionado.
-              </p>
-            )}
+            <p className="pl-1 text-[11px] text-on-surface-variant">
+              {suppliers.length ? 'Opcional. Obrigatório se houver produto.' : 'Nenhum fornecedor cadastrado.'}
+            </p>
           </div>
         ) : null}
-        {stockPurchase ? (
+        {editing && linkedPurchase?.itens?.length ? (
+          <div className="space-y-2">
+            <p className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">Produtos</p>
+            <p className="text-sm text-on-surface">
+              {linkedPurchase.itens.map((item) => `${item.nome} × ${item.quantidade}`).join(', ')}
+            </p>
+          </div>
+        ) : null}
+        {!editing && party !== 'freelancer' ? (
           <div className="space-y-3">
             <p className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">Produtos</p>
             {lines.map((line, index) => (
@@ -379,7 +376,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
                       )
                     )
                   }
-                  required
+                  required={Boolean(line.produto_id)}
                 />
                 {lines.length > 1 ? (
                   <Button
@@ -423,7 +420,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
             )}
           </div>
         ) : null}
-        {party === 'none' ? (
+        {party !== 'freelancer' && !form.supplierId ? (
           <Input
             label="Descrição"
             name="supplier"
@@ -455,7 +452,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
             {selectedCategory?.defaultNature === 'fixed' ? 'Fixa' : 'Variável'}
           </p>
         </div>
-        {stockPurchase ? (
+        {buying ? (
           <Input
             label="Valor total (R$)"
             name="total"
@@ -479,21 +476,6 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
             required
           />
         )}
-        <div className="space-y-2">
-          <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">
-            Recorrência
-          </label>
-          <Dropdown
-            label="Recorrência"
-            muted
-            value={form.recurrence}
-            onChange={(recurrence) => setForm((prev) => ({ ...prev, recurrence }))}
-            options={[
-              { value: '', label: 'Única' },
-              { value: 'monthly', label: 'Mensal' },
-            ]}
-          />
-        </div>
         {error ? <p className="text-sm font-medium text-error">{error}</p> : null}
         <div className="flex flex-wrap justify-end gap-3">
           <Button variant="secondary" type="button" onClick={onCancel}>
@@ -502,7 +484,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
           </Button>
           <Button type="submit" disabled={saving}>
             <Icon name={editing ? 'save' : 'add'} />
-            {saving ? 'Salvando...' : editing ? 'Salvar' : 'Registrar despesa'}
+            {saving ? 'Salvando...' : editing ? 'Salvar' : 'Registrar'}
           </Button>
         </div>
       </form>

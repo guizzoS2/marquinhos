@@ -52,7 +52,7 @@ const titles = {
   'new-purchase': 'Nova compra',
   'suppliers-list': 'Fornecedores',
   'supplier-detail': 'Histórico do fornecedor',
-  'new-expense': 'Nova Despesa',
+  'new-expense': 'Nova compra',
   'close-day': 'Fechar caixa',
   'import-statement': 'Importar Extrato',
   confirm: 'Confirmar ação',
@@ -286,7 +286,7 @@ export function AppModal() {
       : modal.type === 'new-freelancer' && modal.payload?.person
         ? 'Editar Freelancer'
         : modal.type === 'new-expense' && modal.payload?.expense
-          ? 'Editar despesa'
+          ? 'Editar compra'
           : modal.type === 'close-day' && modal.payload?.readOnly
             ? 'Fechamento'
           : modal.type === 'new-order' && modal.payload?.income
@@ -412,6 +412,7 @@ export function AppModal() {
           <ExpenseForm
             categories={modal.payload?.categories}
             expense={modal.payload?.expense}
+            purchase={modal.payload?.purchase}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />

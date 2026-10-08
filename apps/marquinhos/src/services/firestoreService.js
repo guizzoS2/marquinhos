@@ -483,10 +483,6 @@ async function partyFromFreelancer(freelancerId, missingMessage) {
 
 async function resolveExpenseParties(payload, category) {
   const kind = expensePartyKind(category.id);
-  if (kind === 'supplier') {
-    if (!payload.supplierId) throw new Error('Selecione o fornecedor.');
-    return partyFromSupplier(payload.supplierId, 'Fornecedor não encontrado.');
-  }
   if (kind === 'freelancer') {
     if (!payload.freelancerId) throw new Error('Selecione o freelancer.');
     return partyFromFreelancer(payload.freelancerId, 'Freelancer não encontrado.');
