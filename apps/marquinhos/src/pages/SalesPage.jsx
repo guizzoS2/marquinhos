@@ -16,7 +16,7 @@ function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-export function SalesPage() {
+export function SalesPage({ embedded = false }) {
   const { openModal } = useModal();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -64,15 +64,21 @@ export function SalesPage() {
   }
 
   if (isLoading || !data) {
-    return <div className="p-4 text-on-surface-variant font-body md:p-8">Carregando vendas...</div>;
+    return (
+      <div className={embedded ? 'text-on-surface-variant' : 'p-4 font-body text-on-surface-variant md:p-8'}>
+        Carregando vendas...
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6 p-4 font-body md:p-8">
-      <PageHeader
-        title="Vendas"
-        description="Fechamento do caixa do dia, com os produtos vendidos e o montante."
-      />
+    <div className={embedded ? 'space-y-6' : 'space-y-6 p-4 font-body md:p-8'}>
+      {embedded ? null : (
+        <PageHeader
+          title="Vendas"
+          description="Fechamento do caixa do dia, com os produtos vendidos e o montante."
+        />
+      )}
       <FilterBar
         actions={
           <>

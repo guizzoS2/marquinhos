@@ -12,7 +12,6 @@ import { InventoryPage } from './pages/InventoryPage';
 import { PdvPage } from './pages/PdvPage';
 import { FreelancersPage } from './pages/FreelancersPage';
 import { PurchasesPage } from './pages/PurchasesPage';
-import { SalesPage } from './pages/SalesPage';
 import { StaffPage } from './pages/StaffPage';
 import { ProfilePage } from './pages/ProfilePage';
 
@@ -38,7 +37,7 @@ function App() {
                   <Route element={<DashboardLayout />}>
                     <Route index element={<OverviewPage />} />
                     <Route path="fluxo-caixa" element={<CashFlowPage />} />
-                    <Route path="vendas" element={<SalesPage />} />
+                    <Route path="vendas" element={<Navigate to="/compras?aba=vendas" replace />} />
                     <Route path="compras" element={<PurchasesPage />} />
                     <Route path="estoque" element={<InventoryPage />} />
                     <Route path="catalogo" element={<Navigate to="/estoque?aba=promocoes" replace />} />

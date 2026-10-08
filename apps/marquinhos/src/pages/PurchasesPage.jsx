@@ -6,6 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import { fetchCashFlow, fetchInventory, fetchSuppliers, removeCashExpense, removeSupplier, reversePurchase } from '../services/dashboardService';
 import { natureLabel } from '../services/cashFlowUtils';
 import { SuppliersList } from '../components/suppliers/SuppliersList';
+import { SalesPage } from './SalesPage';
 import { Button } from '../components/ui/Button';
 import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
 import { FilterBar } from '../components/ui/FilterBar';
@@ -27,7 +28,7 @@ function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-const TABS = ['compras', 'despesas', 'fornecedores'];
+const TABS = ['compras', 'vendas', 'despesas', 'fornecedores'];
 
 export function PurchasesPage() {
   const [purchaseQuery, setPurchaseQuery] = useState('');
@@ -135,19 +136,20 @@ export function PurchasesPage() {
   }
 
   if (cash.isLoading || inventory.isLoading || !cash.data || !inventory.data) {
-    return <div className="p-4 font-body text-on-surface-variant md:p-8">Carregando compras...</div>;
+    return <div className="p-4 font-body text-on-surface-variant md:p-8">Carregando compras e vendas...</div>;
   }
 
   return (
     <div className="space-y-6 p-4 font-body md:p-8">
       <PageHeader
-        title="Compras"
-        description="Compras de estoque, despesas do caixa e fornecedores."
+        title="Compras e vendas"
+        description="Vendas do dia, compras de estoque, despesas e fornecedores."
       />
       <Tabs
-        label="Compras"
+        label="Compras e vendas"
         items={[
           { id: 'compras', label: 'Compras' },
+          { id: 'vendas', label: 'Vendas' },
           { id: 'despesas', label: 'Despesas' },
           { id: 'fornecedores', label: 'Fornecedores' },
         ]}
@@ -242,6 +244,8 @@ export function PurchasesPage() {
           </div>
         </section>
       ) : null}
+
+      {tab === 'vendas' ? <SalesPage embedded /> : null}
 
       {tab === 'despesas' ? (
         <section className="space-y-6">
