@@ -425,6 +425,7 @@ export function AppModal() {
           <NewSaleForm
             items={modal.payload?.items || []}
             promotions={modal.payload?.promotions || []}
+            sales={modal.payload?.sales || []}
             serverNow={modal.payload?.serverNow}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}

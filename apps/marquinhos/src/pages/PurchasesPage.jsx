@@ -3,8 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, isValid, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { fetchCashFlow, fetchInventory, removeCashExpense, removeSupplier, reversePurchase } from '../services/dashboardService';
+import { fetchCashFlow, fetchCustomers, fetchInventory, removeCashExpense, removeSupplier, reversePurchase } from '../services/dashboardService';
 import { natureLabel, parseCashFlowDate, toIsoDate } from '../services/cashFlowUtils';
+import { OpenComandas } from '../components/pdv/OpenComandas';
 import { SuppliersList } from '../components/suppliers/SuppliersList';
 import { SalesPage } from './SalesPage';
 import { Button } from '../components/ui/Button';
@@ -36,11 +37,12 @@ export function PurchasesPage() {
   const [query, setQuery] = useState('');
   const [params, setParams] = useSearchParams();
   const requested = params.get('aba');
-  const tab = requested === 'vendas' || requested === 'fornecedores' ? requested : 'compras';
+  const tab = requested === 'vendas' || requested === 'fornecedores' || requested === 'comandas' ? requested : 'compras';
   const { openModal } = useModal();
   const queryClient = useQueryClient();
   const cash = useQuery({ queryKey: ['cash-flow'], queryFn: fetchCashFlow });
   const inventory = useQuery({ queryKey: ['inventory'], queryFn: fetchInventory });
+  const customers = useQuery({ queryKey: ['customers'], queryFn: fetchCustomers });
 
   useEffect(() => {
     if (requested === 'despesas') setParams({}, { replace: true });
@@ -183,13 +185,14 @@ export function PurchasesPage() {
     <div className="space-y-6 p-4 font-body md:p-8">
       <PageHeader
         title="Compras e vendas"
-        description="Vendas do dia, compras e fornecedores."
+        description="Compras, vendas, comandas e fornecedores."
       />
       <Tabs
         label="Compras e vendas"
         items={[
           { id: 'compras', label: 'Compras' },
           { id: 'vendas', label: 'Vendas' },
+          { id: 'comandas', label: 'Comandas' },
           { id: 'fornecedores', label: 'Fornecedores' },
         ]}
         value={tab}
@@ -312,6 +315,10 @@ export function PurchasesPage() {
       ) : null}
 
       {tab === 'vendas' ? <SalesPage embedded /> : null}
+
+      {tab === 'comandas' ? (
+        <OpenComandas sales={inventory.data.sales || []} customers={customers.data?.customers || []} />
+      ) : null}
 
       {tab === 'fornecedores' ? (
         <SuppliersList

@@ -89,6 +89,7 @@ export function SalesPage({ embedded = false }) {
                 openModal('new-sale', {
                   items: data?.items || [],
                   promotions: data?.promotions || [],
+                  sales: data?.sales || [],
                   serverNow: data?.serverNow,
                   onSuccess: refresh,
                 })
