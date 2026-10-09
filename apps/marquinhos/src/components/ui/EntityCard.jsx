@@ -32,6 +32,20 @@ export function EntityMedia({ src, icon = 'image' }) {
   );
 }
 
+export function TablePhoto({ src, icon = 'inventory_2' }) {
+  const [broken, setBroken] = useState(false);
+  const show = Boolean(src) && !broken;
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-container-low">
+      {show ? (
+        <img className="h-full w-full object-cover" alt="" src={src} onError={() => setBroken(true)} />
+      ) : (
+        <Icon name={icon} className="text-on-surface-variant" />
+      )}
+    </div>
+  );
+}
+
 export function EntityThumb({ src, icon = 'inventory_2' }) {
   const [broken, setBroken] = useState(false);
   if (!src || broken) return <MediaFallback icon={icon} size="sm" />;

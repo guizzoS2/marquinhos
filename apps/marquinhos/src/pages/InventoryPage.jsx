@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { isSameDay, isValid, parseISO } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchInventory, removeInventoryItem, removeProduction } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
@@ -8,26 +9,36 @@ import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Tabs } from '../components/ui/Tabs';
 import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
-import { EntityCard, EntityCardGrid } from '../components/ui/EntityCard';
+import { EntityCard, EntityCardGrid, TablePhoto } from '../components/ui/EntityCard';
 import { FilterSelect } from '../components/ui/FilterSelect';
 import { FilterBar } from '../components/ui/FilterBar';
 import { SearchField } from '../components/ui/SearchField';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
+import { useViewMode } from '../components/ui/useViewMode';
 import { useModal } from '../contexts/ModalContext';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdminRole } from '../services/roles';
 import { toIsoDate } from '../services/cashFlowUtils';
-import { DateField } from '../components/ui/DateField';
+import { instantClosedByCash } from '../services/cashClose';
+import { DateRangeField } from '../components/ui/DateRangeField';
 import { CatalogPage } from './CatalogPage';
+
+function productionStamp(value) {
+  const date = parseISO(String(value || ''));
+  if (!isValid(date)) return '—';
+  return format(date, 'dd/MM/yyyy HH:mm', { locale: ptBR });
+}
 
 export function InventoryPage() {
   const [filter, setFilter] = useState('Todos');
   const [query, setQuery] = useState('');
   const [productionQuery, setProductionQuery] = useState('');
-  const [productionDate, setProductionDate] = useState(toIsoDate);
-  const [view, setView] = useState('list');
+  const today = toIsoDate();
+  const [fromDate, setFromDate] = useState(today);
+  const [toDate, setToDate] = useState(today);
+  const [view, setView] = useViewMode('estoque');
   const [params, setParams] = useSearchParams();
   const requested = params.get('aba');
   const section = ['stock', 'production', 'promocoes', 'combos'].includes(requested) ? requested : 'stock';
@@ -68,32 +79,39 @@ export function InventoryPage() {
     queryClient.invalidateQueries({ queryKey: ['suppliers'] });
   }
 
-  const dayProductions = useMemo(() => {
-    const day = parseISO(productionDate);
-    if (!isValid(day)) return [];
-    return (data?.productions || []).filter((row) => {
-      const date = parseISO(String(row.data_producao || ''));
-      return isValid(date) && isSameDay(date, day);
-    });
-  }, [data, productionDate]);
+  const rangedProductions = useMemo(() => {
+    const start = fromDate && toDate && fromDate > toDate ? toDate : fromDate;
+    const end = fromDate && toDate && fromDate > toDate ? fromDate : toDate;
+    return (data?.productions || [])
+      .filter((row) => {
+        const date = parseISO(String(row.data_producao || ''));
+        if (!isValid(date)) return false;
+        const key = format(date, 'yyyy-MM-dd');
+        if (start && key < start) return false;
+        if (end && key > end) return false;
+        return true;
+      })
+      .sort((left, right) => String(right.data_producao).localeCompare(String(left.data_producao)));
+  }, [data, fromDate, toDate]);
   const filteredProductions = useMemo(() => {
     const term = productionQuery.trim().toLowerCase();
-    if (!term) return dayProductions;
-    return dayProductions.filter((row) => {
+    if (!term) return rangedProductions;
+    return rangedProductions.filter((row) => {
       const item = (data?.items || []).find((product) => String(product.id) === String(row.produto_id));
       const name = String(item?.nome || item?.name || '').toLowerCase();
-      const time = new Date(row.data_producao).toLocaleTimeString('pt-BR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      return name.includes(term) || String(row.quantidade).includes(term) || time.includes(term);
+      const stamp = productionStamp(row.data_producao).toLowerCase();
+      return name.includes(term) || String(row.quantidade).includes(term) || stamp.includes(term);
     });
-  }, [dayProductions, productionQuery, data]);
+  }, [rangedProductions, productionQuery, data]);
   const stockPage = usePagedList(items, `${filter}|${query}`);
-  const productionPage = usePagedList(filteredProductions, `${section}|${productionQuery}|${productionDate}`);
+  const productionPage = usePagedList(filteredProductions, `${section}|${productionQuery}|${fromDate}|${toDate}`);
+
+  function productOf(produtoId) {
+    return (data?.items || []).find((row) => String(row.id) === String(produtoId));
+  }
 
   function productName(produtoId) {
-    const item = (data?.items || []).find((row) => String(row.id) === String(produtoId));
+    const item = productOf(produtoId);
     return item?.nome || item?.name || 'Produto';
   }
 
@@ -264,9 +282,7 @@ export function InventoryPage() {
                   >
                     <Td>
                       <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-container-low">
-                          <img className="h-full w-full object-cover" alt="" src={item.image} />
-                        </div>
+                        <TablePhoto src={item.image || item.foto} />
                         <div className="flex min-w-0 flex-col">
                           <span className="font-semibold text-on-surface">{item.nome || item.name}</span>
                           <span className="text-xs text-on-surface-variant">{item.marca}</span>
@@ -353,8 +369,23 @@ export function InventoryPage() {
                 placeholder="Buscar produção"
                 label="Buscar produção"
               />
-              <DateField inline label="Data da produção" value={productionDate} onChange={setProductionDate} />
-              <Button type="button" variant="secondary" onClick={() => setProductionDate(toIsoDate())}>
+              <DateRangeField
+                from={fromDate}
+                to={toDate}
+                onChange={({ from, to }) => {
+                  setFromDate(from);
+                  setToDate(to);
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  const day = toIsoDate();
+                  setFromDate(day);
+                  setToDate(day);
+                }}
+              >
                 <Icon name="today" />
                 Hoje
               </Button>
@@ -365,40 +396,54 @@ export function InventoryPage() {
                 <Th>Produto</Th>
                 <Th>Quantidade produzida</Th>
                 <Th>Estoque atual</Th>
-                <Th>Horário</Th>
+                <Th>Data/Hora</Th>
                 <Th align="right">Ações</Th>
               </THead>
               <TBody>
-                {dayProductions.length === 0 ? (
+                {rangedProductions.length === 0 ? (
                   <EmptyRow colSpan={5}>
-                    {productionDate === toIsoDate() ? 'Nenhuma produção hoje.' : 'Nenhuma produção neste dia.'}
+                    {fromDate === toDate && fromDate === today
+                      ? 'Nenhuma produção hoje.'
+                      : fromDate === toDate
+                        ? 'Nenhuma produção neste dia.'
+                        : 'Nenhuma produção neste período.'}
                   </EmptyRow>
                 ) : productionPage.rows.length === 0 ? (
                   <EmptyRow colSpan={5}>Nenhuma produção encontrada.</EmptyRow>
                 ) : (
-                  productionPage.rows.map((row) => (
+                  productionPage.rows.map((row) => {
+                    const product = productOf(row.produto_id);
+                    const locked = instantClosedByCash(row.data_producao, data?.closings);
+                    return (
                     <Tr key={row.id}>
-                      <Td tone="strong">{productName(row.produto_id)}</Td>
+                      <Td>
+                        <div className="flex items-center gap-3">
+                          <TablePhoto src={product?.foto || product?.image} />
+                          <span className="font-semibold text-on-surface">{productName(row.produto_id)}</span>
+                        </div>
+                      </Td>
                       <Td>{row.quantidade}</Td>
                       <Td>{productStock(row.produto_id)}</Td>
-                      <Td tone="muted">
-                        {new Date(row.data_producao).toLocaleTimeString('pt-BR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                      <Td tone="muted" className="whitespace-nowrap">
+                        {productionStamp(row.data_producao)}
                       </Td>
                       <Td align="right">
-                        <TableActions>
-                          <Button type="button" size="icon" variant="secondary" onClick={() => openEditProduction(row)} aria-label="Editar produção">
-                            <Icon name="edit" />
-                          </Button>
-                          <Button type="button" size="icon" variant="danger" onClick={() => confirmDeleteProduction(row)} aria-label="Excluir produção">
-                            <Icon name="delete" />
-                          </Button>
-                        </TableActions>
+                        {locked ? (
+                          '—'
+                        ) : (
+                          <TableActions>
+                            <Button type="button" size="icon" variant="secondary" onClick={() => openEditProduction(row)} aria-label="Editar produção">
+                              <Icon name="edit" />
+                            </Button>
+                            <Button type="button" size="icon" variant="danger" onClick={() => confirmDeleteProduction(row)} aria-label="Excluir produção">
+                              <Icon name="delete" />
+                            </Button>
+                          </TableActions>
+                        )}
                       </Td>
                     </Tr>
-                  ))
+                    );
+                  })
                 )}
               </TBody>
             </DataTable>

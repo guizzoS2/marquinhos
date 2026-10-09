@@ -20,6 +20,7 @@ import { FreelancerCalendar } from '../components/freelancers/FreelancerCalendar
 import { FreelancerProfile } from '../components/freelancers/FreelancerProfile';
 import { FreelancerRoster } from '../components/freelancers/FreelancerRoster';
 import { ShiftTable } from '../components/freelancers/ShiftTable';
+import { useViewMode } from '../components/ui/useViewMode';
 import { useModal } from '../contexts/ModalContext';
 import { useToast } from '../contexts/ToastContext';
 
@@ -34,7 +35,7 @@ export function FreelancersPage() {
   const [panel, setPanel] = useState('calendar');
   const [calendarView, setCalendarView] = useState('month');
   const [profileId, setProfileId] = useState(null);
-  const [rosterView, setRosterView] = useState('cards');
+  const [rosterView, setRosterView] = useViewMode('freelancers');
 
   const { data, isLoading } = useQuery({
     queryKey: ['freelancers'],

@@ -31,6 +31,7 @@ O responsivo geral continua em `ui-responsivo.mdc`.
 ## Lista/Cards e Calendário/Lista
 
 - É controle segmentado, não aba.
+- Lista é o padrão de quem ainda não escolheu. Cards fica gravado para aquele usuário depois que ele troca.
 - A casca é `rounded-xl`, com borda da mesma cor dos outros filtros (`border-outline`). O miolo selecionado é `rounded-lg` e fica dentro do padding. A altura de fora é `h-11`.
 - Trocar a cor da borda não muda o raio. A pílula amarela não desalinha.
 - Só o item selecionado é negrito. O outro fica peso normal, na mesma cor de texto dos controles normais.

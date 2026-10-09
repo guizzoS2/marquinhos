@@ -9,17 +9,18 @@ import { FilterBar } from '../components/ui/FilterBar';
 import { SearchField } from '../components/ui/SearchField';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
-import { EntityCard, EntityCardGrid, EntityThumb } from '../components/ui/EntityCard';
+import { EntityCard, EntityCardGrid, EntityThumb, TablePhoto } from '../components/ui/EntityCard';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
+import { useViewMode } from '../components/ui/useViewMode';
 import { useModal } from '../contexts/ModalContext';
 import { formatPromotionEnd, formatPromotionStart } from '../services/catalogRules';
 
 export function CatalogPage({ embedded = false, tab: tabProp }) {
   const [ownTab, setOwnTab] = useState('promocoes');
   const tab = tabProp || ownTab;
-  const [promotionView, setPromotionView] = useState('list');
-  const [comboView, setComboView] = useState('cards');
+  const [promotionView, setPromotionView] = useViewMode('promocoes');
+  const [comboView, setComboView] = useViewMode('combos');
   const [promotionQuery, setPromotionQuery] = useState('');
   const [comboQuery, setComboQuery] = useState('');
   const { openModal } = useModal();
@@ -181,9 +182,16 @@ export function CatalogPage({ embedded = false, tab: tabProp }) {
               ) : promotionPage.rows.length === 0 ? (
                 <EmptyRow colSpan={6}>Nenhuma promoção encontrada.</EmptyRow>
               ) : (
-                promotionPage.rows.map((row) => (
+                promotionPage.rows.map((row) => {
+                  const product = (data.items || []).find((item) => String(item.id) === String(row.produto_id));
+                  return (
                   <Tr key={row.id}>
-                    <Td tone="strong">{productName(row.produto_id)}</Td>
+                    <Td>
+                      <div className="flex items-center gap-3">
+                        <TablePhoto src={product?.foto || product?.image} icon="sell" />
+                        <span className="font-semibold text-on-surface">{productName(row.produto_id)}</span>
+                      </div>
+                    </Td>
                     <Td align="right" tone="strong">
                       {Number(row.preco_promocional).toLocaleString('pt-BR', {
                         style: 'currency',
@@ -265,7 +273,8 @@ export function CatalogPage({ embedded = false, tab: tabProp }) {
                         </TableActions>
                       </Td>
                     </Tr>
-                  ))
+                  );
+                })
                 )}
               </TBody>
             </DataTable>
@@ -383,7 +392,12 @@ export function CatalogPage({ embedded = false, tab: tabProp }) {
                   const parts = partsOf(combo);
                   return (
                     <Tr key={combo.id}>
-                      <Td tone="strong">{combo.nome}</Td>
+                      <Td>
+                        <div className="flex items-center gap-3">
+                          <TablePhoto src={combo.foto || combo.image} icon="restaurant" />
+                          <span className="font-semibold text-on-surface">{combo.nome}</span>
+                        </div>
+                      </Td>
                       <Td tone="muted">{combo.codigo}</Td>
                       <Td>{parts.map((part) => part.nome).join(', ') || '—'}</Td>
                       <Td align="right" tone="strong">

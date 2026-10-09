@@ -29,6 +29,17 @@ export function closingCutoff(closing) {
   return isValid(date) ? date : null;
 }
 
+export function instantClosedByCash(value, closings) {
+  const date = parseISO(String(value || ''));
+  if (!isValid(date)) return false;
+  return (closings || []).some((closing) => {
+    const until = closingCutoff(closing);
+    if (!until || date > until) return false;
+    if (closing.modo === 'varios') return true;
+    return dayKey(date) === dayKey(until);
+  });
+}
+
 export function latestCutoff(closings) {
   let max = null;
   (closings || []).forEach((closing) => {

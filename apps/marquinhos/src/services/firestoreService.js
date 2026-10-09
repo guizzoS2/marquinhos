@@ -43,6 +43,7 @@ import {
   salePaidAmount,
 } from './saleRules';
 import {
+  instantClosedByCash,
   latestCutoff,
   openMovements,
   settledInWindow,
@@ -1382,6 +1383,9 @@ export async function updateProduction(productionId, payload) {
   const current = await getInventory();
   const existing = (current.productions || []).find((row) => String(row.id) === String(productionId));
   if (!existing) throw new Error('Produção não encontrada.');
+  if (instantClosedByCash(existing.data_producao, current.closings)) {
+    throw new Error('Essa produção já entrou no fechamento do caixa.');
+  }
   const produtoId = String(payload.produto_id || '').trim();
   const quantidade = Number(payload.quantidade);
   if (!produtoId) throw new Error('Selecione o produto.');
@@ -1418,6 +1422,9 @@ export async function deleteProduction(productionId) {
   const current = await getInventory();
   const existing = (current.productions || []).find((row) => String(row.id) === String(productionId));
   if (!existing) throw new Error('Produção não encontrada.');
+  if (instantClosedByCash(existing.data_producao, current.closings)) {
+    throw new Error('Essa produção já entrou no fechamento do caixa.');
+  }
   const item = (current.items || []).find((row) => String(row.id) === String(existing.produto_id));
   if (!item) throw new Error('Item não encontrado.');
   const items = replaceItem(
