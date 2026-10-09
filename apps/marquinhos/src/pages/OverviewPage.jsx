@@ -27,7 +27,7 @@ export function OverviewPage() {
   return (
     <>
       <div className="p-4 md:p-8 space-y-6">
-        <PageHeader title="Visão Geral" description="Leitura do período. Nada é editado aqui.">
+        <PageHeader title="Visão Geral" description="Acompanhe o resultado, os alertas e o que mais vende.">
           <SegmentedControl
             variant="primary"
             label="Período"

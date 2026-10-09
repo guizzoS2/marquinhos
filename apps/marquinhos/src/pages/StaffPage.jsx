@@ -125,7 +125,7 @@ export function StaffPage() {
     <div className="p-4 md:p-8 space-y-6">
       <PageHeader
         title="Equipe da casa"
-        description="Funcionários do bar. A conta é opcional e chega por e-mail."
+        description="Gerencie a equipe e crie contas de funcionário ou administrador."
       >
         <Button onClick={openCreate}>
           <Icon name="add" />
