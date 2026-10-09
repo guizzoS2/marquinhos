@@ -329,7 +329,6 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
         ) : null}
         {!editing && party !== 'freelancer' ? (
           <div className="space-y-3">
-            <p className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">Produtos</p>
             {lines.map((line, index) => (
               <div key={`${index}-${line.produto_id}`} className="space-y-3">
                 <LineFields>
