@@ -26,9 +26,9 @@ import {
 } from '../services/cashFlowUtils';
 
 const movementFilters = [
-  { id: 'todas', label: 'Todas as Movimentações' },
-  { id: 'entrada', label: 'Apenas Entradas' },
-  { id: 'saida', label: 'Apenas Saídas' },
+  { id: 'todas', label: 'Todas as movimentações' },
+  { id: 'entrada', label: 'Apenas entradas' },
+  { id: 'saida', label: 'Apenas saídas' },
 ];
 
 export function CashFlowPage() {
@@ -146,7 +146,7 @@ export function CashFlowPage() {
   return (
     <div className="p-4 md:p-8 space-y-6 font-body">
       <PageHeader
-        title="Fluxo de Caixa"
+        title="Fluxo de caixa"
         description="Acompanhe entradas, saídas e o resultado do período."
       />
 

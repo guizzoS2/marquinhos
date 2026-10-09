@@ -27,7 +27,7 @@ export function OverviewPage() {
   return (
     <>
       <div className="p-4 md:p-8 space-y-6">
-        <PageHeader title="Visão Geral" description="Acompanhe o resultado, os alertas e o que mais vende.">
+        <PageHeader title="Visão geral" description="Acompanhe o resultado, os alertas e o que mais vende.">
           <SegmentedControl
             variant="primary"
             label="Período"
@@ -54,7 +54,7 @@ export function OverviewPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
               <section className="h-full bg-surface border border-outline rounded-xl p-4 md:p-5">
-                <h2 className="text-xl font-extrabold mb-4">Alertas do Sistema</h2>
+                <h2 className="text-xl font-extrabold mb-4">Alertas do sistema</h2>
                 {alerts.length ? (
                   <ul className="divide-y divide-outline-variant">
                     {alerts.map((alert) => (

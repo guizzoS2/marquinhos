@@ -489,7 +489,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
         </FieldModal>
       ) : null}
       {child?.kind === 'supplier' ? (
-        <FieldModal title="Novo Fornecedor" icon="local_shipping" onClose={() => setChild(null)}>
+        <FieldModal title="Novo fornecedor" icon="local_shipping" onClose={() => setChild(null)}>
           <NewSupplierForm
             onCancel={() => setChild(null)}
             onSuccess={(supplier) => {

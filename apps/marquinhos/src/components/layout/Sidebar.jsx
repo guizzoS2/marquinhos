@@ -6,8 +6,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { isStockRole } from '../../services/roles';
 
 const allNavItems = [
-  { to: '/', label: 'Visão Geral', icon: 'dashboard', end: true, admin: true },
-  { to: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: 'payments', admin: true },
+  { to: '/', label: 'Visão geral', icon: 'dashboard', end: true, admin: true },
+  { to: '/fluxo-caixa', label: 'Fluxo de caixa', icon: 'payments', admin: true },
   { to: '/compras', label: 'Compras e vendas', icon: 'receipt_long', admin: true },
   { to: '/estoque', label: 'Estoque', icon: 'inventory_2' },
   { to: '/pdv', label: 'PDV', icon: 'point_of_sale' },

@@ -190,7 +190,7 @@ export function FreelancersPage() {
   return (
     <div className="p-4 md:p-8 relative space-y-6">
       <PageHeader
-        title="Gestão de Freelancers"
+        title="Gestão de freelancers"
         description="Coordene turnos, pagamentos e disponibilidade em tempo real."
       />
 

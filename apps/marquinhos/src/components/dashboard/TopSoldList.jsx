@@ -10,7 +10,7 @@ export function TopSoldList({ items = [] }) {
   return (
     <section className="h-full bg-surface border border-outline rounded-xl p-4 md:p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-extrabold">Top 5 Vendidos</h2>
+        <h2 className="text-xl font-extrabold">Top 5 vendidos</h2>
       </div>
       {!items.length ? (
         <p className="text-sm text-on-surface-variant">Nenhuma venda no período.</p>

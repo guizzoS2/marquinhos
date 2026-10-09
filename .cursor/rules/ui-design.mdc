@@ -14,6 +14,9 @@ O responsivo geral continua em `ui-responsivo.mdc`.
 - Padding igual em toda tela: `p-4` no celular, `p-8` no desktop. A borda esquerda não muda de tela para tela.
 - O espaço entre seções, e entre a barra de filtros e o conteúdo de baixo, é o mesmo em todas as telas (`space-y-6`).
 - Título e descrição no mesmo tamanho e na mesma posição em todas as telas.
+- Título com mais de uma palavra: só a primeira letra da primeira palavra é maiúscula. O resto fica minúsculo. Ex.: "Fluxo de caixa", "Visão geral", "Entradas vs saídas", "Todas as movimentações".
+- Vale para título de tela, item do menu, card, seção e modal.
+- Exceção: nome próprio e sigla. Ex.: "Marquinho's", "Firebase", "PDV", "PIX".
 - Sem `letter-spacing` / `tracking-*`.
 
 ## Altura, fonte e fundo

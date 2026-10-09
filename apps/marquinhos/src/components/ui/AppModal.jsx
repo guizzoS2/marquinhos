@@ -38,28 +38,28 @@ const titles = {
   'new-sale': 'Nova venda',
   'new-product': 'Novo produto',
   'edit-product': 'Editar produto',
-  'product-detail': 'Detalhes do Produto',
+  'product-detail': 'Detalhes do produto',
   'new-category': 'Nova categoria',
-  'new-production': 'Registrar Produção',
+  'new-production': 'Registrar produção',
   'edit-production': 'Editar produção',
   'new-promotion': 'Nova promoção',
   'edit-promotion': 'Editar promoção',
   'new-combo': 'Novo combo',
   'edit-combo': 'Editar combo',
   'combo-detail': 'Detalhes do combo',
-  'new-customer': 'Novo Cliente',
+  'new-customer': 'Novo cliente',
   'new-comanda': 'Nova comanda',
-  'new-daily': 'Registrar Diária',
+  'new-daily': 'Registrar diária',
   'shift-detail': 'Agendamento',
-  'new-freelancer': 'Novo Freelancer',
-  'new-supplier': 'Novo Fornecedor',
+  'new-freelancer': 'Novo freelancer',
+  'new-supplier': 'Novo fornecedor',
   'edit-supplier': 'Editar fornecedor',
   'new-purchase': 'Nova compra',
   'suppliers-list': 'Fornecedores',
   'supplier-detail': 'Histórico do fornecedor',
   'new-expense': 'Nova compra',
   'close-day': 'Fechar caixa',
-  'import-statement': 'Importar Extrato',
+  'import-statement': 'Importar extrato',
   confirm: 'Confirmar ação',
 };
 
@@ -299,7 +299,7 @@ export function AppModal() {
       : modal.type === 'new-promotion' && modal.payload?.reactivate
       ? 'Reativar promoção'
       : modal.type === 'new-freelancer' && modal.payload?.person
-        ? 'Editar Freelancer'
+        ? 'Editar freelancer'
         : modal.type === 'new-expense' && modal.payload?.expense
           ? 'Editar compra'
           : modal.type === 'close-day' && modal.payload?.readOnly

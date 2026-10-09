@@ -303,7 +303,7 @@ export function aggregateOverview(period, sources, now = new Date()) {
       { id: 'ticket', label: 'Ticket médio', value: formatCents(ticketCents), icon: 'receipt_long' },
       {
         id: 'orders',
-        label: 'Qtd. de Pedidos',
+        label: 'Qtd. de pedidos',
         value: new Intl.NumberFormat('pt-BR').format(sales.length),
         icon: 'point_of_sale',
       },

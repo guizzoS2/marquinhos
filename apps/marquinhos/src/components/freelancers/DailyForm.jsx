@@ -230,7 +230,7 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
       </div>
     </form>
       {adding ? (
-        <FieldModal title="Novo Freelancer" icon="person_add" onClose={() => setAdding(false)}>
+        <FieldModal title="Novo freelancer" icon="person_add" onClose={() => setAdding(false)}>
           <NewFreelancerForm
             person={{ role: state.role }}
             roles={roles}

@@ -81,7 +81,7 @@ export function NewComandaForm({ onCancel, onSuccess }) {
         </div>
       </form>
       {addingCustomer ? (
-        <FieldModal title="Novo Cliente" icon="person_add" onClose={() => setAddingCustomer(false)}>
+        <FieldModal title="Novo cliente" icon="person_add" onClose={() => setAddingCustomer(false)}>
           <CustomerForm
             onCancel={() => setAddingCustomer(false)}
             onSuccess={(customer) => {

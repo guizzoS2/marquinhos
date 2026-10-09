@@ -360,7 +360,7 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
         </FieldModal>
       ) : null}
       {child?.kind === 'supplier' ? (
-        <FieldModal title="Novo Fornecedor" icon="local_shipping" onClose={closeChild}>
+        <FieldModal title="Novo fornecedor" icon="local_shipping" onClose={closeChild}>
           <NewSupplierForm onSuccess={rememberSupplier} onCancel={closeChild} />
         </FieldModal>
       ) : null}

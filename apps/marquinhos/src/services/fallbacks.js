@@ -4,7 +4,7 @@ export const overviewFallback = {
   metrics: [
     {
       id: 'revenue',
-      label: 'Faturamento Diário',
+      label: 'Faturamento diário',
       value: 'R$ 0',
       badge: '',
       badgeTone: 'neutral',
@@ -12,7 +12,7 @@ export const overviewFallback = {
     },
     {
       id: 'freela-cost',
-      label: 'Custo de Freelas Hoje',
+      label: 'Custo de freelas hoje',
       value: 'R$ 0',
       badge: '',
       badgeTone: 'neutral',
@@ -20,7 +20,7 @@ export const overviewFallback = {
     },
     {
       id: 'stock-alert',
-      label: 'Alerta de Estoque',
+      label: 'Alerta de estoque',
       value: '0 Itens',
       badge: '',
       badgeTone: 'neutral',
