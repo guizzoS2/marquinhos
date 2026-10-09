@@ -3,8 +3,10 @@ import { isValid, parseISO } from 'date-fns';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Dropdown } from '../ui/Dropdown';
+import { FieldLabel } from '../ui/FieldLabel';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
+import { LineFields } from '../ui/LineFields';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { useToast } from '../../contexts/ToastContext';
 import { checkoutSale, saveOpenTab } from '../../services/dashboardService';
@@ -14,10 +16,6 @@ import { saleBalance, salePaidAmount } from '../../services/saleRules';
 
 function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-function FieldLabel({ children }) {
-  return <p className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">{children}</p>;
 }
 
 const PAYMENT_ICONS = {
@@ -277,7 +275,7 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
           const product = catalog.find((item) => item.id === String(line.produto_id));
           return (
             <div key={`${index}-${line.produto_id}`} className="space-y-3 rounded-2xl border border-outline p-4">
-              <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[minmax(0,1fr)_8rem]">
+              <LineFields>
                 <div className="min-w-0 space-y-2">
                   <FieldLabel>Produto</FieldLabel>
                   <Dropdown
@@ -299,7 +297,7 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
                   onChange={(event) => updateLine(index, { quantidade: event.target.value })}
                   required={Boolean(line.produto_id)}
                 />
-              </div>
+              </LineFields>
               <div className="flex items-center justify-between gap-3">
                 <p className="min-w-0 text-sm text-on-surface-variant">
                   {product ? `${money(product.preco)} · ${money(lineTotal(line))}` : 'Selecione um produto'}

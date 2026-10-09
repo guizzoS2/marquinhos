@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { FileField } from '../ui/FileField';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
+import { LineFields } from '../ui/LineFields';
 import { useToast } from '../../contexts/ToastContext';
 import { addCombo, editCombo } from '../../services/dashboardService';
 import { moneyInputValue, parseReaisInput } from '../../services/inventoryProduct';
@@ -174,28 +175,30 @@ export function ComboForm({ items = [], combo = null, parts = [], onSuccess, onC
         </div>
       ) : null}
       {lines.map((line) => (
-        <div key={line.produto_associado_id} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="flex items-center gap-3 min-h-11">
-            <img alt="" src={line.foto} className="w-10 h-10 rounded-lg object-cover" />
-            <span className="font-semibold text-on-surface">{line.nome}</span>
-          </div>
-          <Input
-            label="Quantidade"
-            type="number"
-            min="1"
-            step="1"
-            value={line.quantidade}
-            onChange={(event) =>
-              setLines((prev) =>
-                prev.map((row) =>
-                  row.produto_associado_id === line.produto_associado_id
-                    ? { ...row, quantidade: event.target.value }
-                    : row
+        <div key={line.produto_associado_id} className="space-y-3">
+          <LineFields>
+            <div className="flex min-h-11 min-w-0 items-center gap-3">
+              <img alt="" src={line.foto} className="h-10 w-10 rounded-lg object-cover" />
+              <span className="min-w-0 font-semibold text-on-surface">{line.nome}</span>
+            </div>
+            <Input
+              label="Quantidade"
+              type="number"
+              min="1"
+              step="1"
+              value={line.quantidade}
+              onChange={(event) =>
+                setLines((prev) =>
+                  prev.map((row) =>
+                    row.produto_associado_id === line.produto_associado_id
+                      ? { ...row, quantidade: event.target.value }
+                      : row
+                  )
                 )
-              )
-            }
-            required
-          />
+              }
+              required
+            />
+          </LineFields>
           <Button
             type="button"
             variant={line.deduz_estoque_integral ? 'primary' : 'secondary'}

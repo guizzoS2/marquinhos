@@ -4,7 +4,6 @@ export function SegmentedControl({
   onChange,
   label = 'Opções',
   className = '',
-  variant = 'surface',
 }) {
   return (
     <div
@@ -22,11 +21,7 @@ export function SegmentedControl({
             aria-selected={active}
             onClick={() => onChange(item.id)}
             className={`h-full min-h-0 flex-1 rounded-lg px-4 text-sm whitespace-nowrap ${
-              active
-                ? variant === 'primary'
-                  ? 'bg-primary font-bold text-on-primary'
-                  : 'bg-surface font-bold text-on-surface shadow-sm'
-                : 'font-normal text-on-surface'
+              active ? 'bg-primary font-bold text-on-primary' : 'font-normal text-on-surface'
             }`}
           >
             {item.label}

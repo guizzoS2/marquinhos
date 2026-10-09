@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Dropdown } from '../ui/Dropdown';
+import { FieldLabel } from '../ui/FieldLabel';
 import { FieldModal } from '../ui/FieldModal';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
+import { LineFields } from '../ui/LineFields';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { ProductForm } from '../inventory/ProductForm';
 import { NewSupplierForm } from '../suppliers/NewSupplierForm';
@@ -333,47 +335,52 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
           <div className="space-y-3">
             <p className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">Produtos</p>
             {lines.map((line, index) => (
-              <div key={`${index}-${line.produto_id}`} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="flex items-center gap-2">
-                  <Dropdown
-                    className="min-w-0 flex-1"
-                    label="Produto"
-                    muted
-                    search
-                    placeholder="Selecione o produto"
-                    value={line.produto_id}
-                    onChange={(produtoId) =>
+              <div key={`${index}-${line.produto_id}`} className="space-y-3">
+                <LineFields>
+                  <div className="flex min-w-0 items-end gap-2">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <FieldLabel>Produto</FieldLabel>
+                      <Dropdown
+                        className="w-full"
+                        label="Produto"
+                        muted
+                        search
+                        placeholder="Selecione o produto"
+                        value={line.produto_id}
+                        onChange={(produtoId) =>
+                          setLines((prev) =>
+                            prev.map((row, rowIndex) => (rowIndex === index ? { ...row, produto_id: produtoId } : row))
+                          )
+                        }
+                        options={products.map((item) => ({ value: item.id, label: item.nome || item.name }))}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      className="shrink-0"
+                      aria-label="Novo produto"
+                      onClick={() => setChild({ kind: 'product', lineIndex: index })}
+                    >
+                      <Icon name="add" />
+                    </Button>
+                  </div>
+                  <Input
+                    label="Quantidade"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={line.quantidade}
+                    onChange={(event) =>
                       setLines((prev) =>
-                        prev.map((row, rowIndex) => (rowIndex === index ? { ...row, produto_id: produtoId } : row))
+                        prev.map((row, rowIndex) =>
+                          rowIndex === index ? { ...row, quantidade: event.target.value } : row
+                        )
                       )
                     }
-                    options={products.map((item) => ({ value: item.id, label: item.nome || item.name }))}
+                    required={Boolean(line.produto_id)}
                   />
-                  <Button
-                    type="button"
-                    size="icon"
-                    className="shrink-0"
-                    aria-label="Novo produto"
-                    onClick={() => setChild({ kind: 'product', lineIndex: index })}
-                  >
-                    <Icon name="add" />
-                  </Button>
-                </div>
-                <Input
-                  label="Quantidade"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={line.quantidade}
-                  onChange={(event) =>
-                    setLines((prev) =>
-                      prev.map((row, rowIndex) =>
-                        rowIndex === index ? { ...row, quantidade: event.target.value } : row
-                      )
-                    )
-                  }
-                  required={Boolean(line.produto_id)}
-                />
+                </LineFields>
                 {lines.length > 1 ? (
                   <Button
                     type="button"
@@ -429,9 +436,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
           </div>
         ) : null}
         <div className="space-y-2">
-          <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">
-            Natureza
-          </label>
+          <FieldLabel>Natureza</FieldLabel>
           <SegmentedControl
             className="w-full"
             label="Natureza"

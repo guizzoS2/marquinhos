@@ -3,8 +3,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { Dropdown } from '../ui/Dropdown';
+import { FieldLabel } from '../ui/FieldLabel';
 import { FieldModal } from '../ui/FieldModal';
 import { Input } from '../ui/Input';
+import { LineFields } from '../ui/LineFields';
 import { useToast } from '../../contexts/ToastContext';
 import {
   addPurchase,
@@ -235,52 +237,57 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
             Produtos
           </p>
           {lines.map((line, index) => (
-            <div key={`${index}-${line.produto_id}`} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="flex items-center gap-2">
-                <Dropdown
-                  className="min-w-0 flex-1"
-                  label="Produto"
-                  muted
-                  value={line.produto_id}
-                  placeholder="Selecione"
-                  search
-                  onChange={(produtoId) =>
+            <div key={`${index}-${line.produto_id}`} className="space-y-3">
+              <LineFields>
+                <div className="flex min-w-0 items-end gap-2">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <FieldLabel>Produto</FieldLabel>
+                    <Dropdown
+                      className="w-full"
+                      label="Produto"
+                      muted
+                      value={line.produto_id}
+                      placeholder="Selecione"
+                      search
+                      onChange={(produtoId) =>
+                        setLines((prev) =>
+                          prev.map((row, rowIndex) =>
+                            rowIndex === index ? { ...row, produto_id: produtoId } : row
+                          )
+                        )
+                      }
+                      options={[
+                        { value: '', label: 'Selecione' },
+                        ...products.map((item) => ({ value: item.id, label: item.nome || item.name })),
+                      ]}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="shrink-0"
+                    aria-label="Novo produto"
+                    onClick={() => setChild({ kind: 'product', lineIndex: index })}
+                  >
+                    <Icon name="add" />
+                  </Button>
+                </div>
+                <Input
+                  label="Quantidade"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={line.quantidade}
+                  onChange={(event) =>
                     setLines((prev) =>
                       prev.map((row, rowIndex) =>
-                        rowIndex === index ? { ...row, produto_id: produtoId } : row
+                        rowIndex === index ? { ...row, quantidade: event.target.value } : row
                       )
                     )
                   }
-                  options={[
-                    { value: '', label: 'Selecione' },
-                    ...products.map((item) => ({ value: item.id, label: item.nome || item.name })),
-                  ]}
+                  required
                 />
-                <Button
-                  type="button"
-                  size="icon"
-                  className="shrink-0"
-                  aria-label="Novo produto"
-                  onClick={() => setChild({ kind: 'product', lineIndex: index })}
-                >
-                  <Icon name="add" />
-                </Button>
-              </div>
-              <Input
-                label="Quantidade"
-                type="number"
-                min="1"
-                step="1"
-                value={line.quantidade}
-                onChange={(event) =>
-                  setLines((prev) =>
-                    prev.map((row, rowIndex) =>
-                      rowIndex === index ? { ...row, quantidade: event.target.value } : row
-                    )
-                  )
-                }
-                required
-              />
+              </LineFields>
               {lines.length > 1 ? (
                 <Button
                   type="button"
