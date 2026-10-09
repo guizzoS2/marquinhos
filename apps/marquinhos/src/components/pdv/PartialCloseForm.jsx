@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
+import { SegmentedControl } from '../ui/SegmentedControl';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { useToast } from '../../contexts/ToastContext';
 import { partialCloseComanda } from '../../services/dashboardService';
@@ -24,15 +25,15 @@ export function PartialCloseForm({ sale, onSuccess, onCancel }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const saldo = saleBalance(sale);
+  const [modo, setModo] = useState('parcial');
   const [valor, setValor] = useState('');
   const [forma, setForma] = useState('dinheiro');
   const [recebido, setRecebido] = useState('');
   const [parcelas, setParcelas] = useState('1');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const amount = parseReaisInput(valor);
+  const amount = modo === 'completo' ? saldo : parseReaisInput(valor);
   const received = parseReaisInput(recebido);
-  const covers = Number.isFinite(amount) && amount > 0 && saldo - amount <= 0.001;
   const troco =
     forma === 'dinheiro' && valor !== '' && Number.isFinite(received)
       ? Math.round((received - amount) * 100) / 100
@@ -43,12 +44,12 @@ export function PartialCloseForm({ sale, onSuccess, onCancel }) {
       setError('Informe o valor do pagamento.');
       return;
     }
-    if (amount - saldo > 0.001) {
-      setError('O valor passa do saldo.');
+    if (destino === 'parcial' && saldo - amount <= 0.001) {
+      setError('Para quitar, escolha completo.');
       return;
     }
-    if (covers && destino === 'parcial') {
-      setError('Escolha fechar a comanda ou deixá-la ativa.');
+    if (amount - saldo > 0.001) {
+      setError('O valor passa do saldo.');
       return;
     }
     if (forma === 'dinheiro' && (troco == null || troco < 0)) {
@@ -69,9 +70,7 @@ export function PartialCloseForm({ sale, onSuccess, onCancel }) {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
       queryClient.invalidateQueries({ queryKey: ['caixa-shift'] });
-      toast.success(
-        destino === 'ativa' ? 'Comanda quitada e ainda aberta.' : destino === 'fechar' ? 'Comanda fechada.' : 'Pagamento parcial registrado.',
-      );
+      toast.success(destino === 'fechar' ? 'Comanda fechada.' : 'Pagamento parcial registrado.');
       onSuccess?.(next);
     } catch (err) {
       const message = err?.message || 'Não foi possível registrar o pagamento.';
@@ -87,25 +86,38 @@ export function PartialCloseForm({ sale, onSuccess, onCancel }) {
       className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault();
-        if (covers) {
-          setError('Escolha fechar a comanda ou deixá-la ativa.');
-          return;
-        }
-        send('parcial');
+        send(modo === 'completo' ? 'fechar' : 'parcial');
       }}
     >
+      <SegmentedControl
+        className="w-full"
+        label="Tipo de fechamento"
+        items={[
+          { id: 'parcial', label: 'Parcial' },
+          { id: 'completo', label: 'Completo' },
+        ]}
+        value={modo}
+        onChange={setModo}
+      />
       <p className="text-sm text-on-surface-variant">
-        {covers
-          ? `Saldo ${money(saldo)}. Este valor quita a comanda. Feche ela ou deixe ativa, sem saldo, com o histórico.`
+        {modo === 'completo'
+          ? `Saldo ${money(saldo)}. O pagamento quita e fecha a comanda.`
           : `Saldo ${money(saldo)}. A comanda continua aberta com o restante.`}
       </p>
-      <Input
-        label="Valor deste pagamento (R$)"
-        inputMode="decimal"
-        value={valor}
-        onChange={(event) => setValor(event.target.value)}
-        required
-      />
+      {modo === 'completo' ? (
+        <div className="space-y-1">
+          <p className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">Valor deste pagamento</p>
+          <p className="font-headline text-xl font-extrabold text-on-surface">{money(saldo)}</p>
+        </div>
+      ) : (
+        <Input
+          label="Valor deste pagamento (R$)"
+          inputMode="decimal"
+          value={valor}
+          onChange={(event) => setValor(event.target.value)}
+          required
+        />
+      )}
       <div className="space-y-2">
         <p id="parcial-pagamento" className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">
           Forma de pagamento
@@ -166,23 +178,10 @@ export function PartialCloseForm({ sale, onSuccess, onCancel }) {
           <Icon name="cancel" />
           Cancelar
         </Button>
-        {covers ? (
-          <>
-            <Button type="button" variant="secondary" onClick={() => send('ativa')} disabled={saving}>
-              <Icon name="receipt_long" />
-              {saving ? 'Salvando...' : 'Deixar ativa'}
-            </Button>
-            <Button type="button" onClick={() => send('fechar')} disabled={saving}>
-              <Icon name="lock" />
-              {saving ? 'Salvando...' : 'Fechar comanda'}
-            </Button>
-          </>
-        ) : (
-          <Button type="button" onClick={() => send('parcial')} disabled={saving || saldo <= 0}>
-            <Icon name="payments" />
-            {saving ? 'Salvando...' : 'Registrar pagamento'}
-          </Button>
-        )}
+        <Button type="submit" disabled={saving || saldo <= 0}>
+          <Icon name={modo === 'completo' ? 'lock' : 'payments'} />
+          {saving ? 'Salvando...' : modo === 'completo' ? 'Fechar comanda' : 'Registrar pagamento'}
+        </Button>
       </div>
     </form>
   );

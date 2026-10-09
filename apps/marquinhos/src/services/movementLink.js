@@ -40,16 +40,29 @@ export function movementCycle(sale, row) {
       return {
         past: true,
         itens: past.itens || [],
+        pagamentos: past.pagamentos || [],
         pagamento: (past.pagamentos || []).find((pay) => String(pay.id) === payId) || null,
         total: past.total,
       };
     }
     const current = (sale.pagamentos || []).find((pay) => String(pay.id) === payId);
     if (current) {
-      return { past: false, itens: sale.itens || [], pagamento: current, total: sale.total };
+      return {
+        past: false,
+        itens: sale.itens || [],
+        pagamentos: sale.pagamentos || [],
+        pagamento: current,
+        total: sale.total,
+      };
     }
   }
-  return { past: false, itens: sale.itens || [], pagamento: null, total: sale.total };
+  return {
+    past: false,
+    itens: sale.itens || [],
+    pagamentos: sale.pagamentos || [],
+    pagamento: null,
+    total: sale.total,
+  };
 }
 
 export function productText(sale, row) {
@@ -59,6 +72,23 @@ export function productText(sale, row) {
   return line || '—';
 }
 
+function paymentLine(payment) {
+  const label = payLabel(payment?.forma_pagamento);
+  if (!label) return '';
+  const valor = Number(payment?.valor);
+  if (!Number.isFinite(valor)) return label;
+  return `${label} ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+}
+
 export function paymentText(sale, row) {
-  return payLabel(movementCycle(sale, row)?.pagamento?.forma_pagamento) || '—';
+  const cycle = movementCycle(sale, row);
+  const payments = cycle?.pagamentos?.length ? cycle.pagamentos : cycle?.pagamento ? [cycle.pagamento] : [];
+  const text = payments.map(paymentLine).filter(Boolean).join(' · ');
+  return text || '—';
+}
+
+export function saleOnPromo(sale, row) {
+  const cycle = movementCycle(sale, row);
+  const itens = cycle?.itens?.length ? cycle.itens : sale?.itens || [];
+  return itens.some((item) => item?.promocao);
 }

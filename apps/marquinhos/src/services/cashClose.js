@@ -1,5 +1,6 @@
 import { format, isValid, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { describeExpense, partyForCategoryId } from './catalogTaxonomy';
 import { parseCashFlowDate, parseMoneyToCents } from './cashFlowUtils';
 import { PAYMENT_METHODS } from './inventoryProduct';
 import { productTotals, salePayments } from './saleRules';
@@ -197,7 +198,17 @@ export function snapshotLine(row) {
     id: row.id,
     createdAt: row.createdAt || null,
     date: row.date || '',
-    description: row.description || row.supplier || '',
+    description:
+      row.description ||
+      describeExpense({
+        party: partyForCategoryId(row.categoryId),
+        categoryName: row.category,
+        subtypeName: row.subtype || '',
+        supplier: row.supplier || '',
+        date: row.date || '',
+      }) ||
+      row.supplier ||
+      '',
     value: row.value || '',
     amount: rowCents(row),
   };

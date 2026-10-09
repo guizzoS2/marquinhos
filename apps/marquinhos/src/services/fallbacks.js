@@ -1,3 +1,4 @@
+import { EXPENSE_TYPES } from './catalogTaxonomy';
 import { buildCashFlowSummary } from './cashFlowUtils';
 
 export const overviewFallback = {
@@ -37,17 +38,7 @@ export const overviewFallback = {
   suggestion: null,
 };
 
-export const expenseCategories = [
-  { id: 'bebidas', name: 'Bebidas', type: 'expense', defaultNature: 'variable', icon: 'local_shipping' },
-  { id: 'fornecedor', name: 'Fornecedor', type: 'expense', defaultNature: 'variable', icon: 'local_shipping' },
-  { id: 'freelancer', name: 'Freelancer', type: 'expense', defaultNature: 'variable', icon: 'person' },
-  { id: 'suprimentos', name: 'Suprimentos', type: 'expense', defaultNature: 'variable', icon: 'ac_unit' },
-  { id: 'utilidades', name: 'Utilidades', type: 'expense', defaultNature: 'fixed', icon: 'bolt' },
-  { id: 'aluguel', name: 'Aluguel', type: 'expense', defaultNature: 'fixed', icon: 'home' },
-  { id: 'software', name: 'Software', type: 'expense', defaultNature: 'fixed', icon: 'devices' },
-  { id: 'salarios', name: 'Salários', type: 'expense', defaultNature: 'fixed', icon: 'badge' },
-  { id: 'manutencao', name: 'Manutenção', type: 'expense', defaultNature: 'variable', icon: 'build' },
-];
+export const expenseCategories = EXPENSE_TYPES;
 
 export const cashFlowFallback = {
   period: new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
@@ -58,7 +49,7 @@ export const cashFlowFallback = {
 };
 
 export const inventoryFallback = {
-  filters: ['Todos', 'Cervejas', 'Destilados', 'Insumos', 'Soft Drinks'],
+  filters: ['Todos', 'Bebidas alcoólicas', 'Bebidas não alcoólicas', 'Comidas, porções e petiscos', 'Mercearia'],
   items: [],
   entries: [],
   productions: [],

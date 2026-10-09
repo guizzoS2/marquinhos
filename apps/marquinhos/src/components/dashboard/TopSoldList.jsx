@@ -6,9 +6,9 @@ const rankToneClass = {
   muted: 'bg-surface-container text-on-surface',
 };
 
-export function TopSoldList({ items = [] }) {
+export function TopSoldList({ items = [], onOpen }) {
   return (
-    <section className="h-full bg-surface border border-outline rounded-xl p-4 md:p-5">
+    <section className="flex h-full min-w-0 flex-col rounded-xl border border-outline bg-surface p-4 md:p-5">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-extrabold">Top 5 vendidos</h2>
       </div>
@@ -19,9 +19,11 @@ export function TopSoldList({ items = [] }) {
         {items.map((item, index) => {
           const rank = index;
           return (
-          <div
+          <button
             key={item.id}
-            className={`flex items-center gap-4 py-3 first:pt-0 last:pb-0 ${rank > 2 ? 'opacity-80' : ''}`}
+            type="button"
+            onClick={() => onOpen?.(item)}
+            className={`flex min-h-11 w-full items-center gap-4 py-3 text-left first:pt-0 last:pb-0 ${rank > 2 ? 'opacity-80' : ''}`}
           >
             {item.image ? (
               <div className="relative">
@@ -51,7 +53,7 @@ export function TopSoldList({ items = [] }) {
                 Unidades
               </p>
             </div>
-          </div>
+          </button>
           );
         })}
       </div>

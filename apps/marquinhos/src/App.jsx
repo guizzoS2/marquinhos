@@ -37,8 +37,8 @@ function App() {
                   <Route element={<DashboardLayout />}>
                     <Route index element={<OverviewPage />} />
                     <Route path="fluxo-caixa" element={<CashFlowPage />} />
-                    <Route path="vendas" element={<Navigate to="/compras?aba=vendas" replace />} />
-                    <Route path="compras" element={<PurchasesPage />} />
+                    <Route path="vendas" element={<PurchasesPage hub="vendas" />} />
+                    <Route path="compras" element={<PurchasesPage hub="compras" />} />
                     <Route path="estoque" element={<InventoryPage />} />
                     <Route path="catalogo" element={<Navigate to="/estoque?aba=promocoes" replace />} />
                     <Route path="pdv" element={<PdvPage />} />

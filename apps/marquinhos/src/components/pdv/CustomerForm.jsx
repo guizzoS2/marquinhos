@@ -3,13 +3,14 @@ import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
-import { addCustomer } from '../../services/dashboardService';
+import { addCustomer, editCustomer } from '../../services/dashboardService';
 import { maskPhone } from '../../services/freelancerSchedule';
 
-export function CustomerForm({ onSuccess, onCancel }) {
+export function CustomerForm({ customer = null, onSuccess, onCancel }) {
   const toast = useToast();
-  const [nome, setNome] = useState('');
-  const [contato, setContato] = useState('');
+  const editing = Boolean(customer?.id);
+  const [nome, setNome] = useState(customer?.nome || '');
+  const [contato, setContato] = useState(customer?.contato || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -18,12 +19,14 @@ export function CustomerForm({ onSuccess, onCancel }) {
     setSaving(true);
     setError('');
     try {
-      const customer = await addCustomer({ nome, contato });
-      toast.success('Cliente cadastrado.');
-      onSuccess?.(customer);
+      const saved = editing
+        ? await editCustomer(customer.id, { nome, contato })
+        : await addCustomer({ nome, contato });
+      toast.success(editing ? 'Cliente atualizado.' : 'Cliente cadastrado.');
+      onSuccess?.(saved);
       onCancel();
     } catch (err) {
-      const message = err?.message || 'Não foi possível cadastrar o cliente.';
+      const message = err?.message || 'Não foi possível salvar o cliente.';
       setError(message);
       toast.error(message);
     } finally {
@@ -48,8 +51,8 @@ export function CustomerForm({ onSuccess, onCancel }) {
           Cancelar
         </Button>
         <Button type="submit" disabled={saving}>
-          <Icon name="add" />
-          {saving ? 'Salvando...' : 'Cadastrar cliente'}
+          <Icon name={editing ? 'save' : 'add'} />
+          {saving ? 'Salvando...' : editing ? 'Salvar' : 'Cadastrar cliente'}
         </Button>
       </div>
     </form>

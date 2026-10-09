@@ -12,17 +12,22 @@ import { ProductForm } from '../inventory/ProductForm';
 import { NewSupplierForm } from '../suppliers/NewSupplierForm';
 import { useToast } from '../../contexts/ToastContext';
 import {
+  addExpenseSubtype,
   addPurchase,
   createCashExpense,
   createExpenseCategory,
+  deleteExpenseSubtype,
   editCashExpense,
+  editExpenseSubtype,
   fetchCashFlow,
   fetchFreelancers,
   fetchInventory,
+  fetchStaff,
   fetchSuppliers,
 } from '../../services/dashboardService';
 import { parseReaisInput } from '../../services/inventoryProduct';
 import { expensePartyKind, parseCashFlowDate, parseMoneyToCents, toIsoDate } from '../../services/cashFlowUtils';
+import { activeExpenseTypes, categoryAllowsSubtypes, expensePartyOf } from '../../services/catalogTaxonomy';
 import { expenseCategories } from '../../services/fallbacks';
 
 function cashFormDate(row) {
@@ -41,6 +46,8 @@ function mergeById(base, extra) {
 function CategoryNameForm({ onSuccess, onCancel }) {
   const toast = useToast();
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [mode, setMode] = useState('sem');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -49,7 +56,7 @@ function CategoryNameForm({ onSuccess, onCancel }) {
     setSaving(true);
     setError('');
     try {
-      const created = await createExpenseCategory(name);
+      const created = await createExpenseCategory(name, { allowsSubtypes: mode === 'com', description });
       toast.success('Categoria criada.');
       onSuccess?.(created);
       onCancel();
@@ -70,6 +77,29 @@ function CategoryNameForm({ onSuccess, onCancel }) {
         onChange={(event) => setName(event.target.value)}
         required
       />
+      <div className="space-y-2">
+        <label htmlFor="nova-categoria-descricao" className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">
+          Descrição
+        </label>
+        <textarea
+          id="nova-categoria-descricao"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="Opcional"
+          rows={3}
+          className="min-h-11 w-full rounded-2xl border border-outline bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface outline-none placeholder:font-normal placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-0"
+        />
+      </div>
+      <SegmentedControl
+        className="w-full"
+        label="Subcategoria"
+        items={[
+          { id: 'sem', label: 'Sem subcategoria' },
+          { id: 'com', label: 'Com subcategoria' },
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
       {error ? <p className="text-sm font-medium text-error">{error}</p> : null}
       <div className="flex flex-wrap justify-end gap-3">
         <Button variant="secondary" type="button" onClick={onCancel}>
@@ -85,7 +115,56 @@ function CategoryNameForm({ onSuccess, onCancel }) {
   );
 }
 
-export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, expense = null, purchase = null }) {
+function QuickName({ label, initial = '', submitLabel, onSubmit, onCancel }) {
+  const toast = useToast();
+  const [name, setName] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await onSubmit(name);
+      onCancel();
+    } catch (err) {
+      const message = err?.message || 'Não foi possível salvar.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="space-y-4" onSubmit={handleSubmit}>
+      <Input label={label} value={name} onChange={(event) => setName(event.target.value)} required />
+      {error ? <p className="text-sm font-medium text-error">{error}</p> : null}
+      <div className="flex flex-wrap justify-end gap-3">
+        <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
+          Cancelar
+        </Button>
+        <Button type="submit" disabled={saving}>
+          <Icon name="save" />
+          {saving ? 'Salvando...' : submitLabel}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export function ExpenseForm({
+  onSuccess,
+  onCancel,
+  categories: categoriesProp,
+  expense = null,
+  purchase = null,
+  categoryId: categoryIdProp = '',
+  staffId: staffIdProp = '',
+  staffPayment = false,
+}) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const editing = Boolean(expense?.id);
@@ -93,11 +172,15 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
   const suppliersQuery = useQuery({ queryKey: ['suppliers'], queryFn: fetchSuppliers });
   const freelancersQuery = useQuery({ queryKey: ['freelancers'], queryFn: fetchFreelancers });
   const inventory = useQuery({ queryKey: ['inventory'], queryFn: fetchInventory });
+  const staffQuery = useQuery({ queryKey: ['staff'], queryFn: fetchStaff });
   const [createdCategories, setCreatedCategories] = useState([]);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [child, setChild] = useState(null);
   const [extraProducts, setExtraProducts] = useState([]);
   const [extraSuppliers, setExtraSuppliers] = useState([]);
+  const [extraSubtypes, setExtraSubtypes] = useState([]);
+  const [hiddenSubtypeIds, setHiddenSubtypeIds] = useState([]);
+  const [draft, setDraft] = useState(null);
   const [lines, setLines] = useState([{ produto_id: '', quantidade: '1' }]);
   const [total, setTotal] = useState('');
   const [totalTouched, setTotalTouched] = useState(false);
@@ -106,27 +189,39 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
     : categoriesProp?.length
       ? categoriesProp
       : expenseCategories;
-  const categories = useMemo(
-    () => mergeById(baseCategories, createdCategories),
-    [baseCategories, createdCategories]
-  );
+  const categories = useMemo(() => {
+    const merged = mergeById(baseCategories, createdCategories);
+    const visible = activeExpenseTypes(merged);
+    const current = merged.find((item) => item.id === expense?.categoryId);
+    if (current && !visible.some((item) => item.id === current.id)) return [current, ...visible];
+    return visible.length ? visible : merged;
+  }, [baseCategories, createdCategories, expense?.categoryId]);
   const suppliers = useMemo(
     () => mergeById(suppliersQuery.data?.suppliers || [], extraSuppliers),
     [suppliersQuery.data, extraSuppliers]
   );
   const people = freelancersQuery.data?.people || [];
+  const staffMembers = useMemo(
+    () => (staffQuery.data || []).filter((item) => item?.id && item?.name),
+    [staffQuery.data]
+  );
   const products = useMemo(
     () =>
       mergeById(inventory.data?.items || [], extraProducts).filter((item) => item.tipo !== 'combo'),
     [inventory.data, extraProducts]
   );
-  const initialCategory = categories.find((item) => item.id === expense?.categoryId) || categories[0];
+  const initialCategory =
+    categories.find((item) => item.id === (expense?.categoryId || categoryIdProp)) || categories[0];
   const [form, setForm] = useState({
     date: editing ? cashFormDate(expense) : new Date().toISOString().slice(0, 10),
     supplier: expense?.supplier || '',
     supplierId: expense?.supplierId || '',
     freelancerId: expense?.freelancerId || '',
-    categoryId: initialCategory?.id || 'bebidas',
+    staffId: expense?.staffId || staffIdProp || '',
+    payeeId: expense?.payeeId || '',
+    categoryId: initialCategory?.id || 'compra_estoque',
+    subtypeId: expense?.subtypeId || '',
+    description: expense?.description || '',
     nature: expense?.nature || initialCategory?.defaultNature || 'variable',
     value: editing ? reaisInput(expense.amount) : '',
   });
@@ -139,15 +234,34 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
     (editing
       ? (inventory.data?.purchases || []).find((row) => String(row.expenseId) === String(expense?.id)) || null
       : null);
-  const selectedCategory = categories.find((item) => item.id === form.categoryId) || categories[0];
-  const party = expensePartyKind(form.categoryId);
-  const buying = !editing && party !== 'freelancer' && lines.some((line) => line.produto_id);
+  const categoryChoices = staffPayment
+    ? categories.filter((item) => item.id === 'funcionarios')
+    : categories;
+  const selectedCategory =
+    categoryChoices.find((item) => item.id === form.categoryId) ||
+    (staffPayment ? categories.find((item) => item.id === 'funcionarios') : null) ||
+    categoryChoices[0] ||
+    categories[0];
+  const party = expensePartyOf(selectedCategory) || expensePartyKind(form.categoryId);
+  const stockParty = party === 'supplier';
+  const subtypeBase = selectedCategory?.subtypes || [];
+  const subtypeOverlay = extraSubtypes.filter((item) => item.categoryId === form.categoryId);
+  const subtypeById = new Map(subtypeOverlay.map((item) => [item.id, item]));
+  const subtypes = [
+    ...subtypeBase.map((item) => subtypeById.get(item.id) || item),
+    ...subtypeOverlay.filter((item) => !subtypeBase.some((row) => row.id === item.id)),
+  ].filter((item) => !hiddenSubtypeIds.includes(item.id));
+  const buying = !editing && stockParty && lines.some((line) => line.produto_id);
   const calculated = useMemo(() => {
     const sum = lines.reduce((acc, line) => {
       const product = products.find((item) => String(item.id) === String(line.produto_id));
       const quantidade = Number(line.quantidade);
       if (!product || !Number.isInteger(quantidade) || quantidade <= 0) return acc;
-      return acc + (parseMoneyToCents(product.valor_unitario || product.cost || 0) / 100) * quantidade;
+      const unit =
+        product.custo_compra != null && String(product.custo_compra).trim() !== ''
+          ? product.custo_compra
+          : product.valor_unitario || product.cost || 0;
+      return acc + (parseMoneyToCents(unit) / 100) * quantidade;
     }, 0);
     return Math.round(sum * 100) / 100;
   }, [lines, products]);
@@ -157,16 +271,65 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
     setTotal(calculated > 0 ? calculated.toFixed(2) : '');
   }, [calculated, buying, totalTouched]);
 
+  useEffect(() => {
+    if (!staffPayment || form.categoryId === 'funcionarios') return;
+    setForm((prev) => ({ ...prev, categoryId: 'funcionarios', subtypeId: '' }));
+  }, [staffPayment, form.categoryId]);
+
+  useEffect(() => {
+    if (party !== 'staff' || !staffMembers.length) return;
+    setForm((prev) => {
+      if (prev.staffId) {
+        const chosen = staffMembers.find((item) => String(item.id) === String(prev.staffId));
+        if (!chosen || prev.supplier === chosen.name) return prev;
+        return { ...prev, supplier: chosen.name };
+      }
+      const named = String(prev.supplier || '').trim().toLowerCase();
+      if (!named) return prev;
+      const match = staffMembers.find((item) => item.name.trim().toLowerCase() === named);
+      if (!match) return prev;
+      return { ...prev, staffId: match.id, supplier: match.name };
+    });
+  }, [party, staffMembers]);
+
   function handleCategoryChange(categoryId) {
+    if (staffPayment) return;
     const nextCategory = categories.find((item) => item.id === categoryId);
-    const nextParty = expensePartyKind(categoryId);
+    const nextParty = expensePartyOf(nextCategory);
+    setForm((prev) => {
+      const prevParty = expensePartyKind(prev.categoryId);
+      const crossedStaff = nextParty === 'staff' || prevParty === 'staff';
+      return {
+        ...prev,
+        categoryId,
+        subtypeId: '',
+        description: nextParty === 'staff' || nextParty === 'freelancer' ? '' : prev.description,
+        supplier: nextParty === 'staff' && prevParty === 'staff' ? prev.supplier : crossedStaff ? '' : prev.supplier,
+        staffId: nextParty === 'staff' && prevParty === 'staff' ? prev.staffId : '',
+        payeeId: nextParty === 'staff' && prevParty === 'staff' ? prev.payeeId : '',
+        supplierId: nextParty === 'freelancer' || nextParty === 'staff' ? '' : prev.supplierId,
+        freelancerId: nextParty === 'freelancer' ? prev.freelancerId : '',
+        nature: natureTouched ? prev.nature : nextCategory?.defaultNature || 'variable',
+      };
+    });
+    if (nextParty === 'staff') setLines([{ produto_id: '', quantidade: '1' }]);
+  }
+
+  async function saveSubtype(name, currentId) {
+    const saved = currentId
+      ? await editExpenseSubtype(form.categoryId, currentId, name)
+      : await addExpenseSubtype(form.categoryId, name);
+    setExtraSubtypes((prev) => [
+      ...prev.filter((item) => item.id !== saved.id),
+      { ...saved, categoryId: form.categoryId },
+    ]);
     setForm((prev) => ({
       ...prev,
-      categoryId,
-      supplierId: nextParty === 'freelancer' ? '' : prev.supplierId,
-      freelancerId: nextParty === 'freelancer' ? prev.freelancerId : '',
-      nature: natureTouched ? prev.nature : nextCategory?.defaultNature || 'variable',
+      subtypeId: saved.id,
+      nature: natureTouched || currentId ? prev.nature : saved.defaultNature || prev.nature,
     }));
+    queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+    toast.success(currentId ? 'Subcategoria atualizada.' : 'Subcategoria criada.');
   }
 
   function handleCreatedCategory(created) {
@@ -206,6 +369,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
           itens,
           valor_total: manual,
           nature: form.nature,
+          description: form.description,
         });
         toast.success('Compra registrada.');
         onSuccess?.();
@@ -223,13 +387,20 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
       setError('Selecione o freelancer.');
       return;
     }
+    if (party === 'staff' && !form.staffId) {
+      setError('Selecione o funcionário da equipe.');
+      return;
+    }
+    const staffPerson = staffMembers.find((item) => String(item.id) === String(form.staffId));
     const supplierName =
       party === 'freelancer'
         ? people.find((item) => String(item.id) === String(form.freelancerId))?.name || form.supplier
-        : form.supplierId
-          ? suppliers.find((item) => String(item.id) === String(form.supplierId))?.name || form.supplier
-          : form.supplier;
-    const supplierId = party === 'freelancer' ? null : form.supplierId || null;
+        : party === 'staff'
+          ? staffPerson?.name || String(form.supplier || '').trim()
+          : form.supplierId
+            ? suppliers.find((item) => String(item.id) === String(form.supplierId))?.name || form.supplier
+            : form.supplier;
+    const supplierId = party === 'freelancer' || party === 'staff' ? null : form.supplierId || null;
     const freelancerId = party === 'freelancer' ? form.freelancerId : null;
     setSaving(true);
     setError('');
@@ -239,7 +410,11 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
         supplier: supplierName,
         supplierId,
         freelancerId,
+        staffId: party === 'staff' ? form.staffId || null : null,
+        payeeId: party === 'staff' ? null : form.payeeId || null,
         categoryId: form.categoryId,
+        subtypeId: form.subtypeId || null,
+        description: form.description,
         nature: form.nature,
         amount: Math.round(Number(form.value) * 100),
         recurrence: editing ? expense?.recurrence || null : null,
@@ -277,17 +452,21 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
               className="min-w-0 flex-1"
               label="Categoria"
               muted
-              value={form.categoryId}
+              value={staffPayment ? 'funcionarios' : form.categoryId}
               onChange={handleCategoryChange}
-              options={categories.map((item) => ({ value: item.id, label: item.name }))}
+              options={(categoryChoices.length ? categoryChoices : [{ id: 'funcionarios', name: 'Funcionários' }]).map(
+                (item) => ({ value: item.id, label: item.name })
+              )}
             />
-            <Button type="button" variant="secondary" onClick={() => setCreatingCategory(true)}>
-              <Icon name="add" />
-              Nova categoria
-            </Button>
+            {staffPayment ? null : (
+              <Button type="button" variant="secondary" onClick={() => setCreatingCategory(true)}>
+                <Icon name="add" />
+                Nova categoria
+              </Button>
+            )}
           </div>
         </div>
-        {party !== 'freelancer' ? (
+        {stockParty ? (
           <div className="space-y-2">
             <FieldLabel required={buying}>Fornecedor</FieldLabel>
             <div className="flex items-center gap-2">
@@ -327,7 +506,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
             </p>
           </div>
         ) : null}
-        {!editing && party !== 'freelancer' ? (
+        {!editing && stockParty ? (
           <div className="space-y-3">
             {lines.map((line, index) => (
               <div key={`${index}-${line.produto_id}`} className="space-y-3">
@@ -416,16 +595,103 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
             )}
           </div>
         ) : null}
-        {party !== 'freelancer' && !form.supplierId ? (
+        {categoryAllowsSubtypes(selectedCategory) ? (
+        <div className="space-y-2">
+          <FieldLabel>Subcategoria</FieldLabel>
+          <div className="flex items-center gap-2">
+            <Dropdown
+              className="min-w-0 flex-1"
+              label="Subcategoria"
+              muted
+              search
+              value={form.subtypeId}
+              onChange={(subtypeId) => {
+                const subtype = subtypes.find((item) => item.id === subtypeId);
+                setForm((prev) => ({
+                  ...prev,
+                  subtypeId,
+                  nature: natureTouched ? prev.nature : subtype?.defaultNature || prev.nature,
+                }));
+              }}
+              options={[{ value: '', label: 'Nenhum' }, ...subtypes.map((item) => ({ value: item.id, label: item.name }))]}
+            />
+            <Button
+              type="button"
+              size="icon"
+              className="shrink-0"
+              aria-label="Nova subcategoria"
+              onClick={() => setDraft({ kind: 'subtype' })}
+            >
+              <Icon name="add" />
+            </Button>
+            {form.subtypeId ? (
+              <>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className="shrink-0"
+                  aria-label="Editar subcategoria"
+                  onClick={() => setDraft({ kind: 'subtype', subtype: subtypes.find((item) => item.id === form.subtypeId) })}
+                >
+                  <Icon name="edit" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="danger"
+                  className="shrink-0"
+                  aria-label="Excluir subcategoria"
+                  onClick={() => {
+                    const subtype = subtypes.find((item) => item.id === form.subtypeId);
+                    if (!subtype) return;
+                    setDraft({
+                      kind: 'confirm',
+                      message: `Excluir a subcategoria "${subtype.name}"?`,
+                      run: async () => {
+                        await deleteExpenseSubtype(form.categoryId, subtype.id);
+                        setHiddenSubtypeIds((prev) => [...prev, subtype.id]);
+                        setForm((prev) => (prev.subtypeId === subtype.id ? { ...prev, subtypeId: '' } : prev));
+                        queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+                        toast.success('Subcategoria excluída.');
+                      },
+                    });
+                  }}
+                >
+                  <Icon name="delete" />
+                </Button>
+              </>
+            ) : null}
+          </div>
+        </div>
+        ) : null}
+        {party === 'staff' ? (
           <div className="space-y-2">
-            <Input
-              label="Descrição"
-              name="supplier"
-              value={form.supplier}
-              onChange={(event) => setForm((prev) => ({ ...prev, supplier: event.target.value }))}
-              placeholder="Ex.: Conta de luz"
+            <FieldLabel required>Funcionário</FieldLabel>
+            <Dropdown
+              label="Funcionário"
+              muted
+              search
+              placeholder="Selecione o funcionário"
+              value={form.staffId}
+              onChange={(staffId) => {
+                const person = staffMembers.find((item) => String(item.id) === String(staffId));
+                setForm((prev) => ({ ...prev, staffId, supplier: person?.name || '' }));
+              }}
+              options={staffMembers
+                .filter((item) => !item.disabled || String(item.id) === String(form.staffId))
+                .map((item) => ({ value: item.id, label: item.name }))}
             />
           </div>
+        ) : null}
+        {party === 'none' || stockParty ? (
+          <Input
+            label="Descrição"
+            name="description"
+            value={form.description}
+            onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+            placeholder="Ex.: Conta de luz"
+          />
         ) : null}
         <div className="space-y-2">
           <FieldLabel>Natureza</FieldLabel>
@@ -443,7 +709,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
             }}
           />
           <p className="pl-1 text-[11px] text-on-surface-variant">
-            Default da categoria {selectedCategory?.name}:{' '}
+            Padrão da categoria {selectedCategory?.name}:{' '}
             {selectedCategory?.defaultNature === 'fixed' ? 'Fixa' : 'Variável'}
           </p>
         </div>
@@ -522,6 +788,63 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
           />
         </FieldModal>
       ) : null}
+      {draft?.kind === 'subtype' ? (
+        <FieldModal
+          title={draft.subtype ? 'Editar subcategoria' : 'Nova subcategoria'}
+          icon="category"
+          onClose={() => setDraft(null)}
+        >
+          <QuickName
+            label="Nome da subcategoria"
+            initial={draft.subtype?.name || ''}
+            submitLabel={draft.subtype ? 'Salvar' : 'Criar subcategoria'}
+            onCancel={() => setDraft(null)}
+            onSubmit={(name) => saveSubtype(name, draft.subtype?.id)}
+          />
+        </FieldModal>
+      ) : null}
+      {draft?.kind === 'confirm' ? (
+        <FieldModal title="Excluir" icon="delete" onClose={() => setDraft(null)}>
+          <ConfirmDraft
+            message={draft.message}
+            onCancel={() => setDraft(null)}
+            onConfirm={draft.run}
+          />
+        </FieldModal>
+      ) : null}
     </>
+  );
+}
+
+function ConfirmDraft({ message, onCancel, onConfirm }) {
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
+
+  async function handleConfirm() {
+    setSaving(true);
+    try {
+      await onConfirm();
+      onCancel();
+    } catch (err) {
+      toast.error(err?.message || 'Não foi possível excluir.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <p className="font-body leading-relaxed text-on-surface-variant">{message}</p>
+      <div className="flex flex-wrap justify-end gap-3">
+        <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
+          Cancelar
+        </Button>
+        <Button variant="danger" type="button" onClick={handleConfirm} disabled={saving}>
+          <Icon name="delete" />
+          {saving ? 'Processando...' : 'Excluir'}
+        </Button>
+      </div>
+    </div>
   );
 }

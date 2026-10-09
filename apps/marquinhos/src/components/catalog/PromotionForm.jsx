@@ -8,7 +8,7 @@ import { RoleSelect } from '../freelancers/RoleSelect';
 import { useToast } from '../../contexts/ToastContext';
 import { addPromotion, editPromotion } from '../../services/dashboardService';
 import { moneyInputValue, parseReaisInput } from '../../services/inventoryProduct';
-import { WEEKDAYS, toDateTimeLocal } from '../../services/catalogRules';
+import { WEEKDAYS, promotionDays, toDateTimeLocal } from '../../services/catalogRules';
 
 export function PromotionForm({ items = [], promotion = null, reactivate = false, onSuccess, onCancel }) {
   const toast = useToast();
@@ -20,11 +20,10 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
     promotion?.preco_promocional != null ? moneyInputValue(promotion.preco_promocional) : ''
   );
   const [vigencia, setVigencia] = useState(promotion?.vigencia === 'semana' ? 'semana' : 'periodo');
-  const [diaSemana, setDiaSemana] = useState(
-    promotion?.vigencia === 'semana' && WEEKDAYS.some((day) => day.value === Number(promotion.dia_semana))
-      ? Number(promotion.dia_semana)
-      : 1
-  );
+  const [diasSemana, setDiasSemana] = useState(() => {
+    const saved = promotion?.vigencia === 'semana' ? promotionDays(promotion) : [];
+    return saved.length ? saved : [1];
+  });
   const [inicio, setInicio] = useState(promotion ? toDateTimeLocal(promotion.data_inicio) : '');
   const [termino, setTermino] = useState(promotion ? toDateTimeLocal(promotion.data_termino) : '');
   const [saving, setSaving] = useState(false);
@@ -40,12 +39,17 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
       setError('Preço promocional inválido.');
       return;
     }
+    if (vigencia === 'semana' && !diasSemana.length) {
+      setSaving(false);
+      setError('Escolha ao menos um dia da semana.');
+      return;
+    }
     try {
       const payload = {
         produto_id: produtoId,
         preco_promocional: precoPromocional,
         vigencia,
-        dia_semana: diaSemana,
+        dias_semana: diasSemana,
         data_inicio: inicio,
         data_termino: termino,
       };
@@ -90,7 +94,7 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
           label="Vigência da promoção"
           items={[
             { id: 'periodo', label: 'Período' },
-            { id: 'semana', label: 'Dia da semana' },
+            { id: 'semana', label: 'Dias da semana' },
           ]}
           value={vigencia}
           onChange={setVigencia}
@@ -99,17 +103,22 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
       {vigencia === 'semana' ? (
         <div className="space-y-4">
           <div className="space-y-2">
-            <FieldLabel required>Dia da semana</FieldLabel>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Dia da semana">
+            <FieldLabel required>Dias da semana</FieldLabel>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Dias da semana">
               {WEEKDAYS.map((day) => {
-                const selected = diaSemana === day.value;
+                const selected = diasSemana.includes(day.value);
                 return (
                   <button
                     key={day.value}
                     type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => setDiaSemana(day.value)}
+                    aria-pressed={selected}
+                    onClick={() =>
+                      setDiasSemana((current) =>
+                        current.includes(day.value)
+                          ? current.filter((value) => value !== day.value)
+                          : [...current, day.value]
+                      )
+                    }
                     className={`min-h-11 rounded-xl border px-3 text-sm ${
                       selected
                         ? 'border-primary bg-primary font-bold text-on-primary'

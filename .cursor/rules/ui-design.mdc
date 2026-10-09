@@ -24,6 +24,7 @@ O responsivo geral continua em `ui-responsivo.mdc`.
 - Botão, filtro, busca, dropdown, data e página da paginação têm a mesma altura (`h-11`, 44px) e a mesma fonte (`text-sm`).
 - O texto de dentro segue essa fonte.
 - Busca não é negrito (`font-normal`). O placeholder tem a mesma cor do texto normal.
+- Com texto, o X à direita limpa a busca.
 - Controle normal (nem ativo nem desabilitado) usa o mesmo fundo do dropdown "Todos": branco (`bg-surface`).
 - Ativo e desabilitado podem ser diferentes. O selecionado da pílula amarela continua amarelo.
 - Foco só troca a borda para a primária. Sem ring extra.
@@ -49,7 +50,7 @@ Da esquerda para a direita:
 
 ## Cards de métrica
 
-Visão geral (Faturamento, Custos, Lucro líquido, Ticket médio, Qtd. de pedidos) e Fluxo de caixa (Receita total, Despesas totais, Despesas fixas, Despesas variáveis, Margem contribuição, Lucro estimado, Lucro líquido).
+Visão geral (Faturamento, Custos, Lucro líquido, Ticket médio, Qtd. de pedidos, Freelas, Funcionários, Despesas fixas, Despesas variáveis) e Fluxo de caixa (Receita total, Despesas totais, Despesas fixas, Despesas variáveis, Margem contribuição, Lucro estimado, Lucro líquido).
 
 - No máximo 5 cards na mesma linha.
 - Se sobrar linha, ela estica na mesma largura da linha de cima.
@@ -85,6 +86,8 @@ A mesma ação usa sempre o mesmo ícone:
 Filtro de nome (Todos, Bebidas, Lista, Cards) não ganha ícone de ação.
 
 ## Tabela
+
+O título da coluna fica no mesmo lado do valor. Texto à esquerda. Número, valor e ações à direita.
 
 Editar, excluir, reativar e cancelar compra dentro de tabela são só o ícone, com o nome da ação no `aria-label`. Fora da tabela, o mesmo botão volta a ter ícone e texto.
 

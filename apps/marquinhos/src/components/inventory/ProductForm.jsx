@@ -5,14 +5,17 @@ import { FileField } from '../ui/FileField';
 import { FieldModal } from '../ui/FieldModal';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
-import { CategoryForm } from './CategoryForm';
 import { useToast } from '../../contexts/ToastContext';
 import {
+  addFormat,
   addInventoryProduct,
+  addMenuGroup,
+  addMenuSubgroup,
   editInventoryProduct,
+  fetchInventory,
   peekInventoryCode,
 } from '../../services/dashboardService';
-import { inventoryFallback } from '../../services/fallbacks';
+import { PRODUCT_FORMATS, resolveProductTaxonomy } from '../../services/catalogTaxonomy';
 import { moneyInputValue, parseReaisInput, PRODUCT_MEASURES } from '../../services/inventoryProduct';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { readLocalImage } from '../../services/readLocalImage';
@@ -20,37 +23,85 @@ import { Dropdown } from '../ui/Dropdown';
 import { FieldLabel } from '../ui/FieldLabel';
 import { SegmentedControl } from '../ui/SegmentedControl';
 
-export function ProductForm({ item, categories, onSuccess, onCancel }) {
+function QuickName({ label, withDescription = false, onSubmit, onCancel }) {
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await onSubmit(name, description);
+      onCancel();
+    } catch (err) {
+      toast.error(err?.message || 'Não foi possível salvar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="space-y-4" onSubmit={handleSubmit}>
+      <Input label={label} value={name} onChange={(event) => setName(event.target.value)} required />
+      {withDescription ? (
+        <div className="space-y-2">
+          <label htmlFor="novo-grupo-descricao" className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">
+            Descrição
+          </label>
+          <textarea
+            id="novo-grupo-descricao"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Opcional"
+            rows={3}
+            className="min-h-11 w-full rounded-2xl border border-outline bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface outline-none placeholder:font-normal placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-0"
+          />
+        </div>
+      ) : null}
+      <div className="flex flex-wrap justify-end gap-3">
+        <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
+          Cancelar
+        </Button>
+        <Button type="submit" disabled={saving}>
+          <Icon name="add" />
+          {saving ? 'Salvando...' : 'Criar'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export function ProductForm({ item, onSuccess, onCancel }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const isEdit = Boolean(item);
-  const [extraCategories, setExtraCategories] = useState([]);
-  const [addingCategory, setAddingCategory] = useState(false);
-  const categorySource = (categories?.length ? categories : inventoryFallback.filters).filter(
-    (entry) => entry !== 'Todos'
-  );
+  const inventory = useQuery({ queryKey: ['inventory'], queryFn: fetchInventory });
+  const [adding, setAdding] = useState(null);
+  const groups = inventory.data?.groups || [];
+  const formats = inventory.data?.formats?.length ? inventory.data.formats : PRODUCT_FORMATS;
+  const placed = resolveProductTaxonomy(item || {});
   const { data: nextCode } = useQuery({
     queryKey: ['inventory', 'next-code'],
     queryFn: peekInventoryCode,
     enabled: !isEdit,
   });
-  const categoryOptions = categorySource.includes(item?.categoria || item?.category)
-    ? [...categorySource]
-    : [...categorySource, item?.categoria || item?.category].filter(Boolean);
-  for (const name of extraCategories) {
-    if (name && !categoryOptions.includes(name)) categoryOptions.push(name);
-  }
-
   const [form, setForm] = useState({
     nome: item?.nome || item?.name || '',
     marca: item?.marca || '',
     descricao: item?.descricao || item?.subtitle || '',
-    categoria: item?.categoria || item?.category || categoryOptions[0],
+    grupoId: placed.grupoId,
+    subgrupoId: placed.subgrupoId,
+    formato: placed.formato || 'Unidade',
+    familia: placed.familia,
     volume_peso: item && item.volume_peso != null ? String(item.volume_peso) : '',
     medida: PRODUCT_MEASURES.includes(item?.medida) ? item.medida : 'UN',
     estoque_atual: item ? String(item.estoque_atual ?? 0) : '0',
     estoque_sugerido: item ? String(item.estoque_sugerido ?? 0) : '0',
     valor_unitario: item ? moneyInputValue(item.valor_unitario || item.cost) : '',
+    custo_compra: item ? moneyInputValue(item.custo_compra) : '',
     foto: item?.foto || item?.image || '',
     produzido: Boolean(item?.produzido),
   });
@@ -72,22 +123,44 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
     event.preventDefault();
     setSaving(true);
     setError('');
+    if (!form.grupoId) {
+      setSaving(false);
+      setError('Selecione o grupo.');
+      return;
+    }
+    const group = groups.find((item) => item.id === form.grupoId);
+    if ((group?.subgroups || []).length && !form.subgrupoId) {
+      setSaving(false);
+      setError('Selecione o subgrupo.');
+      return;
+    }
     const valor = parseReaisInput(form.valor_unitario);
     if (!Number.isFinite(valor) || valor < 0) {
       setSaving(false);
       setError('Valor unitário inválido.');
       return;
     }
+    const custo =
+      String(form.custo_compra || '').trim() === '' ? '' : parseReaisInput(form.custo_compra);
+    if (custo !== '' && (!Number.isFinite(custo) || custo < 0)) {
+      setSaving(false);
+      setError('Custo de compra inválido.');
+      return;
+    }
     const payload = {
       nome: form.nome,
       marca: form.marca,
       descricao: form.descricao,
-      categoria: form.categoria,
+      grupoId: form.grupoId,
+      subgrupoId: form.subgrupoId,
+      formato: form.formato,
+      familia: form.familia,
       volume_peso: form.volume_peso,
       medida: form.medida,
       estoque_atual: form.estoque_atual,
       estoque_sugerido: form.estoque_sugerido,
       valor_unitario: valor,
+      custo_compra: custo,
       produzido: form.produzido,
       foto: form.foto,
     };
@@ -113,13 +186,8 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
 
   const codigo = isEdit ? item?.codigo || '' : nextCode || '';
 
-  function addCategory(name) {
-    const label = String(name || '').trim();
-    if (!label) return;
-    setExtraCategories((prev) => (prev.includes(label) ? prev : [...prev, label]));
-    setForm((prev) => ({ ...prev, categoria: label }));
-    queryClient.invalidateQueries({ queryKey: ['inventory'] });
-  }
+  const selectedGroup = groups.find((group) => group.id === form.grupoId) || null;
+  const subgroups = selectedGroup?.subgroups || [];
 
   return (
     <>
@@ -155,28 +223,71 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-2 md:col-span-2">
-          <FieldLabel required>Categoria</FieldLabel>
+          <FieldLabel required>Grupo</FieldLabel>
           <div className="flex items-center gap-2">
             <Dropdown
-              id="produto-categoria"
+              id="produto-grupo"
               className="min-w-0 flex-1"
-              label="Categoria"
+              label="Grupo"
               muted
-              value={form.categoria}
-              onChange={(categoria) => setForm((prev) => ({ ...prev, categoria }))}
-              options={categoryOptions.map((category) => ({ value: category, label: category }))}
+              search
+              value={form.grupoId}
+              onChange={(grupoId) => setForm((prev) => ({ ...prev, grupoId, subgrupoId: '' }))}
+              options={groups.map((group) => ({ value: group.id, label: group.name }))}
             />
-            <Button
-              type="button"
-              size="icon"
-              className="shrink-0"
-              aria-label="Nova categoria"
-              onClick={() => setAddingCategory(true)}
-            >
+            <Button type="button" size="icon" className="shrink-0" aria-label="Novo grupo" onClick={() => setAdding('group')}>
               <Icon name="add" />
             </Button>
           </div>
         </div>
+        {subgroups.length ? (
+          <div className="space-y-2 md:col-span-2">
+            <FieldLabel required>Subgrupo</FieldLabel>
+            <div className="flex items-center gap-2">
+              <Dropdown
+                id="produto-subgrupo"
+                className="min-w-0 flex-1"
+                label="Subgrupo"
+                muted
+                search
+                value={form.subgrupoId}
+                onChange={(subgrupoId) => setForm((prev) => ({ ...prev, subgrupoId }))}
+                options={subgroups.map((sub) => ({ value: sub.id, label: sub.name }))}
+              />
+              <Button
+                type="button"
+                size="icon"
+                className="shrink-0"
+                aria-label="Novo subgrupo"
+                onClick={() => setAdding('subgroup')}
+              >
+                <Icon name="add" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        <div className="space-y-2">
+          <FieldLabel required>Formato</FieldLabel>
+          <div className="flex items-center gap-2">
+            <Dropdown
+              className="min-w-0 flex-1"
+              label="Formato"
+              muted
+              value={form.formato}
+              onChange={(formato) => setForm((prev) => ({ ...prev, formato }))}
+              options={formats.map((format) => ({ value: format, label: format }))}
+            />
+            <Button type="button" size="icon" className="shrink-0" aria-label="Novo formato" onClick={() => setAdding('format')}>
+              <Icon name="add" />
+            </Button>
+          </div>
+        </div>
+        <Input
+          label="Família"
+          value={form.familia}
+          onChange={(event) => setForm((prev) => ({ ...prev, familia: event.target.value }))}
+          placeholder="Ex.: Heineken"
+        />
         <div className="space-y-2 md:col-span-2">
           <p className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">Origem</p>
           <SegmentedControl
@@ -238,6 +349,13 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
         onChange={(event) => setForm((prev) => ({ ...prev, valor_unitario: event.target.value }))}
         required
       />
+      <Input
+        label="Custo de compra (R$)"
+        inputMode="decimal"
+        value={form.custo_compra}
+        onChange={(event) => setForm((prev) => ({ ...prev, custo_compra: event.target.value }))}
+        placeholder="Ex.: 5,00"
+      />
       <div className="space-y-2">
         <FileField label="Foto" accept="image/*" onChange={handlePhoto} />
         {form.foto ? (
@@ -256,9 +374,44 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
         </Button>
       </div>
     </form>
-    {addingCategory ? (
-      <FieldModal title="Nova categoria" icon="category" onClose={() => setAddingCategory(false)}>
-        <CategoryForm onCancel={() => setAddingCategory(false)} onSuccess={addCategory} />
+    {adding === 'group' ? (
+      <FieldModal title="Novo grupo" icon="category" onClose={() => setAdding(null)}>
+        <QuickName
+          label="Nome do grupo"
+          withDescription
+          onCancel={() => setAdding(null)}
+          onSubmit={async (name, description) => {
+            const group = await addMenuGroup(name, description);
+            setForm((prev) => ({ ...prev, grupoId: group.id, subgrupoId: '' }));
+            queryClient.invalidateQueries({ queryKey: ['inventory'] });
+          }}
+        />
+      </FieldModal>
+    ) : null}
+    {adding === 'subgroup' && selectedGroup ? (
+      <FieldModal title="Novo subgrupo" icon="category" onClose={() => setAdding(null)}>
+        <QuickName
+          label="Nome do subgrupo"
+          onCancel={() => setAdding(null)}
+          onSubmit={async (name) => {
+            const subgroup = await addMenuSubgroup(selectedGroup.id, name);
+            setForm((prev) => ({ ...prev, subgrupoId: subgroup.id }));
+            queryClient.invalidateQueries({ queryKey: ['inventory'] });
+          }}
+        />
+      </FieldModal>
+    ) : null}
+    {adding === 'format' ? (
+      <FieldModal title="Novo formato" icon="straighten" onClose={() => setAdding(null)}>
+        <QuickName
+          label="Formato"
+          onCancel={() => setAdding(null)}
+          onSubmit={async (name) => {
+            const format = await addFormat(name);
+            setForm((prev) => ({ ...prev, formato: format }));
+            queryClient.invalidateQueries({ queryKey: ['inventory'] });
+          }}
+        />
       </FieldModal>
     ) : null}
     </>

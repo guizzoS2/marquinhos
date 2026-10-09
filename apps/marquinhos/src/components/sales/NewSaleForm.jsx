@@ -7,33 +7,47 @@ import { FieldLabel } from '../ui/FieldLabel';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
 import { LineFields } from '../ui/LineFields';
-import { RoleSelect } from '../freelancers/RoleSelect';
 import { useToast } from '../../contexts/ToastContext';
-import { checkoutSale, saveOpenTab } from '../../services/dashboardService';
+import { checkoutSale, saveOpenTab, updateRecordedSale } from '../../services/dashboardService';
 import { saleUnitPrice } from '../../services/catalogRules';
-import { CARD_INSTALLMENTS, PAYMENT_OPTIONS, parseReaisInput } from '../../services/inventoryProduct';
 import { saleBalance, salePaidAmount } from '../../services/saleRules';
+import { blankPayment, PaymentSplits, paymentsError, paymentsFromForm } from './PaymentSplits';
 
 function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-const PAYMENT_ICONS = {
-  dinheiro: 'payments',
-  cartao_credito: 'credit_card',
-  cartao_debito: 'contactless',
-  pix: 'qr_code_2',
-};
+function saleLines(sale) {
+  const rows = (sale?.itens || [])
+    .filter((item) => item?.produto_id)
+    .map((item) => ({
+      produto_id: String(item.produto_id),
+      quantidade: String(item.quantidade || 1),
+      valor_unitario: item.valor_unitario,
+    }));
+  return rows.length ? rows : [{ produto_id: '', quantidade: '1' }];
+}
 
-export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow, onSuccess, onCancel }) {
+function salePayments(sale) {
+  const rows = (sale?.pagamentos || []).filter((pay) => Number(pay?.valor) > 0);
+  if (!rows.length) return [blankPayment()];
+  return rows.map((pay) => ({
+    key: String(pay.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    forma: pay.forma_pagamento || 'dinheiro',
+    valor: pay.valor != null ? String(pay.valor) : '',
+    recebido: pay.valor_recebido != null ? String(pay.valor_recebido) : '',
+    parcelas: pay.parcelas != null ? String(pay.parcelas) : '1',
+  }));
+}
+
+export function NewSaleForm({ sale = null, items = [], promotions = [], sales = [], serverNow, onSuccess, onCancel }) {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const editing = Boolean(sale?.id);
   const [saleId, setSaleId] = useState('');
-  const [lines, setLines] = useState([{ produto_id: '', quantidade: '1' }]);
-  const [forma, setForma] = useState('dinheiro');
-  const [recebido, setRecebido] = useState('');
-  const [parcelas, setParcelas] = useState('1');
-  const [observacao, setObservacao] = useState('');
+  const [lines, setLines] = useState(() => (editing ? saleLines(sale) : [{ produto_id: '', quantidade: '1' }]));
+  const [payments, setPayments] = useState(() => (editing ? salePayments(sale) : [blankPayment()]));
+  const [observacao, setObservacao] = useState(sale?.observacao || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -47,11 +61,13 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
         nome: item.nome || item.name || 'Produto',
         codigo: item.codigo || '',
         preco: saleUnitPrice(item, promotions, now),
+        estoque: Number(item.estoque_atual ?? 0),
       }));
   }, [items, promotions, serverNow]);
 
-  const open = useMemo(() => (sales || []).filter((sale) => sale.status === 'aberta'), [sales]);
-  const selected = open.find((sale) => String(sale.id) === String(saleId)) || null;
+  const open = useMemo(() => (sales || []).filter((item) => item.status === 'aberta'), [sales]);
+  const selected = editing ? null : open.find((item) => String(item.id) === String(saleId)) || null;
+  const allowPartial = editing && sale?.status === 'aberta';
 
   const options = catalog.map((item) => ({
     value: item.id,
@@ -75,27 +91,48 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
       const id = String(item.produto_id || '');
       const quantidade = Number(item.quantidade);
       if (!id || !Number.isInteger(quantidade) || quantidade <= 0) return;
+      const product = catalog.find((row) => row.id === id);
       const prev = map.get(id);
       map.set(id, {
         quantidade: (prev?.quantidade || 0) + quantidade,
         nome: item.nome || prev?.nome || 'Produto',
+        preco: product?.preco || item.valor_unitario || 0,
       });
     });
-    lines.forEach((line) => {
-      if (!line.produto_id) return;
-      const quantidade = Number(line.quantidade);
-      if (!Number.isInteger(quantidade) || quantidade <= 0) return;
-      const product = catalog.find((item) => item.id === String(line.produto_id));
-      if (!product) return;
-      const prev = map.get(product.id);
-      map.set(product.id, {
-        quantidade: (prev?.quantidade || 0) + quantidade,
-        nome: product.nome,
+    if (!editing) {
+      lines.forEach((line) => {
+        if (!line.produto_id) return;
+        const quantidade = Number(line.quantidade);
+        if (!Number.isInteger(quantidade) || quantidade <= 0) return;
+        const product = catalog.find((item) => item.id === String(line.produto_id));
+        if (!product) return;
+        const prev = map.get(product.id);
+        map.set(product.id, {
+          quantidade: (prev?.quantidade || 0) + quantidade,
+          nome: product.nome,
+          preco: product.preco,
+        });
       });
-    });
+    } else {
+      map.clear();
+      lines.forEach((line) => {
+        if (!line.produto_id) return;
+        const quantidade = Number(line.quantidade);
+        if (!Number.isInteger(quantidade) || quantidade <= 0) return;
+        const product = catalog.find((item) => item.id === String(line.produto_id));
+        if (!product) return;
+        const stored = line.valor_unitario;
+        const preco = stored != null && stored !== '' ? Number(stored) : product.preco;
+        const prev = map.get(product.id);
+        map.set(product.id, {
+          quantidade: (prev?.quantidade || 0) + quantidade,
+          nome: product.nome,
+          preco: prev ? prev.preco : preco,
+        });
+      });
+    }
     return [...map.entries()].map(([id, row]) => {
-      const product = catalog.find((item) => item.id === id);
-      const preco = product?.preco || 0;
+      const preco = Number(row.preco) || 0;
       return {
         produto_id: id,
         nome: row.nome,
@@ -104,16 +141,12 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
         valor_total: Math.round(preco * row.quantidade * 100) / 100,
       };
     });
-  }, [catalog, lines, selected]);
+  }, [catalog, editing, lines, selected]);
 
   const total = Math.round(itens.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
   const alreadyPaid = selected ? salePaidAmount(selected) : 0;
   const due = Math.round((total - alreadyPaid) * 100) / 100;
-  const received = parseReaisInput(recebido);
-  const troco =
-    forma === 'dinheiro' && due > 0 && recebido !== '' && Number.isFinite(received)
-      ? Math.round((received - due) * 100) / 100
-      : null;
+  const payError = paymentsError(payments, Math.max(due, 0), { partial: allowPartial });
 
   function pickSale(id) {
     setSaleId(id);
@@ -122,14 +155,23 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
   }
 
   function updateLine(index, patch) {
-    setLines((prev) => prev.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+    setLines((prev) =>
+      prev.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
+        const next = { ...row, ...patch };
+        if (patch.produto_id && patch.produto_id !== row.produto_id) delete next.valor_unitario;
+        return next;
+      })
+    );
   }
 
   function lineTotal(line) {
     const product = catalog.find((item) => item.id === String(line.produto_id));
     const quantidade = Number(line.quantidade);
     if (!product || !Number.isInteger(quantidade) || quantidade <= 0) return 0;
-    return Math.round(product.preco * quantidade * 100) / 100;
+    const stored = line.valor_unitario;
+    const preco = stored != null && stored !== '' ? Number(stored) : product.preco;
+    return Math.round(preco * quantidade * 100) / 100;
   }
 
   function invalidate() {
@@ -184,29 +226,34 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
     event.preventDefault();
     const payload = guard();
     if (!payload) return;
-    if (forma === 'dinheiro' && due > 0 && (troco == null || troco < 0)) {
-      setError('Informe um valor recebido que cubra o saldo.');
+    if (payError) {
+      setError(payError);
       return;
     }
     setSaving(true);
     setError('');
     try {
-      await checkoutSale({
-        sale_id: selected?.id || null,
-        numero_comanda: selected ? Number(selected.numero_comanda) : null,
-        cliente_id: selected?.cliente_id || null,
-        observacao,
-        itens: payload,
-        forma_pagamento: forma,
-        valor_recebido: forma === 'dinheiro' && due > 0 ? received : null,
-        parcelas: forma === 'cartao_credito' && due > 0 ? Number(parcelas) : null,
-      });
+      const pagamentos = paymentsFromForm(payments, Math.max(due, 0), { fillSingle: !allowPartial }).filter(
+        (row) => Number(row.valor) > 0
+      );
+      if (editing) {
+        await updateRecordedSale(sale.id, { observacao, itens: payload, pagamentos });
+      } else {
+        await checkoutSale({
+          sale_id: selected?.id || null,
+          numero_comanda: selected ? Number(selected.numero_comanda) : null,
+          cliente_id: selected?.cliente_id || null,
+          observacao,
+          itens: payload,
+          pagamentos,
+        });
+      }
       invalidate();
-      toast.success('Venda registrada.');
+      toast.success(editing ? 'Venda atualizada.' : 'Venda registrada.');
       onSuccess?.();
       onCancel();
     } catch (err) {
-      const message = err?.message || 'Não foi possível registrar a venda.';
+      const message = err?.message || (editing ? 'Não foi possível atualizar a venda.' : 'Não foi possível registrar a venda.');
       setError(message);
       toast.error(message);
     } finally {
@@ -216,22 +263,31 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
 
   const cliente =
     selected?.cliente_nome && selected.cliente_nome !== 'Consumidor' ? selected.cliente_nome : 'Consumidor';
+  const editCliente =
+    sale?.cliente_nome && sale.cliente_nome !== 'Consumidor' ? sale.cliente_nome : 'Consumidor';
 
   return (
     <form className="space-y-5" onSubmit={submit}>
       <div className="space-y-3">
-        <div className="space-y-2">
-          <FieldLabel>Comanda</FieldLabel>
-          <Dropdown
-            label="Comanda"
-            muted
-            value={selected ? selected.id : ''}
-            onChange={pickSale}
-            placeholder="Sem comanda"
-            options={comandaOptions}
-          />
-        </div>
-        <p className="text-sm text-on-surface-variant">{selected ? cliente : 'Venda sem comanda'}</p>
+        {editing ? (
+          <p className="text-sm text-on-surface">
+            {sale.numero_comanda ? `Comanda ${sale.numero_comanda}` : 'Venda sem comanda'}
+            {sale.numero_comanda ? ` · ${editCliente}` : ''}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <FieldLabel>Comanda</FieldLabel>
+            <Dropdown
+              label="Comanda"
+              muted
+              value={selected ? selected.id : ''}
+              onChange={pickSale}
+              placeholder="Sem comanda"
+              options={comandaOptions}
+            />
+          </div>
+        )}
+        {editing ? null : <p className="text-sm text-on-surface-variant">{selected ? cliente : 'Venda sem comanda'}</p>}
         {selected ? (
           <div className="space-y-3 rounded-2xl border border-outline p-4">
             {(selected.itens || []).length ? (
@@ -300,7 +356,9 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
               </LineFields>
               <div className="flex items-center justify-between gap-3">
                 <p className="min-w-0 text-sm text-on-surface-variant">
-                  {product ? `${money(product.preco)} · ${money(lineTotal(line))}` : 'Selecione um produto'}
+                  {product
+                    ? `${money(line.valor_unitario != null && line.valor_unitario !== '' ? Number(line.valor_unitario) : product.preco)} · ${money(lineTotal(line))} · Disponível ${product.estoque}`
+                    : 'Selecione um produto'}
                 </p>
                 {lines.length > 1 ? (
                   <Button
@@ -335,63 +393,8 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
         <p className="font-headline text-2xl font-extrabold text-on-surface">{money(Math.max(due, 0))}</p>
       </div>
 
-      <div className="space-y-3">
-        <p id="venda-pagamento" className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">
-          Forma de pagamento
-        </p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="group" aria-labelledby="venda-pagamento">
-          {PAYMENT_OPTIONS.map((option) => {
-            const active = forma === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setForma(option.value)}
-                className={`inline-flex min-h-11 w-full min-w-0 items-center gap-2 rounded-full px-4 text-left text-sm font-semibold leading-5 [&_.material-symbols-outlined]:text-xl ${
-                  active
-                    ? 'bg-primary text-on-primary'
-                    : 'border border-outline bg-surface text-on-surface hover:bg-surface-container-low'
-                }`}
-              >
-                <Icon name={PAYMENT_ICONS[option.value] || 'payments'} className="shrink-0" />
-                <span className="min-w-0">{option.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {forma === 'dinheiro' && due > 0 ? (
-        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
-          <Input
-            label="Valor recebido (R$)"
-            inputMode="decimal"
-            value={recebido}
-            onChange={(event) => setRecebido(event.target.value)}
-            required
-          />
-          <div className="space-y-2">
-            <FieldLabel>Troco</FieldLabel>
-            <p
-              className={`flex h-11 items-center rounded-2xl border border-outline bg-surface-container-low px-4 font-headline text-base font-extrabold ${
-                troco != null && troco < 0 ? 'text-error' : 'text-on-surface'
-              }`}
-            >
-              {troco == null ? '—' : money(troco)}
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      {forma === 'cartao_credito' && due > 0 ? (
-        <RoleSelect
-          id="venda-parcelas"
-          label="Parcelas"
-          options={CARD_INSTALLMENTS.map((item) => ({ value: String(item), label: `${item}x` }))}
-          value={parcelas}
-          onChange={setParcelas}
-        />
+      {due > 0 ? (
+        <PaymentSplits due={due} payments={payments} onChange={setPayments} fillSingle={!allowPartial} />
       ) : null}
 
       {error ? <p className="text-sm font-medium text-error">{error}</p> : null}
@@ -400,7 +403,7 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
           <Icon name="cancel" />
           Cancelar
         </Button>
-        {selected ? (
+        {!editing && selected ? (
           <Button type="button" variant="secondary" onClick={saveComanda} disabled={saving || !catalog.length}>
             <Icon name="save" />
             {saving ? 'Salvando...' : 'Salvar na comanda'}
@@ -408,7 +411,7 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
         ) : null}
         <Button type="submit" disabled={saving || !catalog.length}>
           <Icon name="check" />
-          {saving ? 'Salvando...' : 'Registrar venda'}
+          {saving ? 'Salvando...' : editing ? 'Salvar' : 'Registrar venda'}
         </Button>
       </div>
     </form>

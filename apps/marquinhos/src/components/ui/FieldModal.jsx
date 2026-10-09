@@ -29,7 +29,7 @@ export function FieldModal({ title, icon, wide = false, onClose, children }) {
       <div
         className={`relative w-full ${
           wide ? 'max-w-2xl' : 'max-w-lg'
-        } max-h-[90vh] space-y-6 overflow-y-auto rounded-2xl bg-surface-container-lowest p-5 shadow-2xl shadow-on-surface/10 md:p-8`}
+        } max-h-[90vh] min-w-0 space-y-6 overflow-x-hidden overflow-y-auto rounded-2xl bg-surface-container-lowest p-5 shadow-2xl shadow-on-surface/10 md:p-8`}
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">

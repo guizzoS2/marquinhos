@@ -104,7 +104,7 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
   );
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [supplierId, setSupplierId] = useState('');
-  const [categoryId, setCategoryId] = useState(categories[0]?.id || 'bebidas');
+  const [categoryId, setCategoryId] = useState(categories.find((item) => item.id === 'compra_estoque')?.id || categories[0]?.id || 'compra_estoque');
   const [lines, setLines] = useState([{ produto_id: '', quantidade: '1' }]);
   const [total, setTotal] = useState('');
   const [totalTouched, setTotalTouched] = useState(false);

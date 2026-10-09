@@ -8,7 +8,7 @@ import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Tabs } from '../components/ui/Tabs';
-import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
+import { DataTable, EmptyRow, StatusPill, TableActions, Tag, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
 import { EntityCard, EntityCardGrid, TablePhoto } from '../components/ui/EntityCard';
 import { FilterSelect } from '../components/ui/FilterSelect';
 import { FilterBar } from '../components/ui/FilterBar';
@@ -24,6 +24,17 @@ import { toIsoDate } from '../services/cashFlowUtils';
 import { instantClosedByCash } from '../services/cashClose';
 import { DateRangeField } from '../components/ui/DateRangeField';
 import { CatalogPage } from './CatalogPage';
+import { GroupsPanel } from '../components/inventory/GroupsPanel';
+import { productGroupTag } from '../services/catalogTaxonomy';
+
+function GroupTag({ item }) {
+  const tag = productGroupTag(item);
+  return (
+    <Tag tone={tag.tone} icon={tag.icon}>
+      {tag.label}
+    </Tag>
+  );
+}
 
 function productionStamp(value) {
   const date = parseISO(String(value || ''));
@@ -41,7 +52,7 @@ export function InventoryPage() {
   const [view, setView] = useViewMode('estoque');
   const [params, setParams] = useSearchParams();
   const requested = params.get('aba');
-  const section = ['stock', 'production', 'promocoes', 'combos'].includes(requested) ? requested : 'stock';
+  const section = ['stock', 'production', 'promocoes', 'combos', 'grupos'].includes(requested) ? requested : 'stock';
   function setSection(next) {
     setParams(next === 'stock' ? {} : { aba: next }, { replace: true });
   }
@@ -55,16 +66,24 @@ export function InventoryPage() {
   });
 
   const categoryOptions = useMemo(() => {
-    const names = data?.filters?.length ? data.filters : ['Todos'];
-    const list = names.includes('Todos') ? names : ['Todos', ...names];
-    return list.map((item) => ({ value: item, label: item }));
+    const options = [{ value: 'Todos', label: 'Todos' }];
+    (data?.groups || []).forEach((group) => {
+      options.push({ value: `g:${group.id}`, label: group.name });
+      (group.subgroups || []).forEach((sub) => {
+        options.push({ value: `s:${sub.id}`, label: `${group.name} · ${sub.name}` });
+      });
+    });
+    return options;
   }, [data]);
 
   const items = useMemo(() => {
     if (!data?.items) return [];
     const term = query.trim().toLowerCase();
     return data.items.filter((item) => {
-      const categoryOk = filter === 'Todos' || item.category === filter || item.categoria === filter;
+      const categoryOk =
+        filter === 'Todos' ||
+        (filter.startsWith('g:') && item.grupoId === filter.slice(2)) ||
+        (filter.startsWith('s:') && item.subgrupoId === filter.slice(2));
       if (!categoryOk) return false;
       if (!term) return true;
       const nome = String(item.nome || item.name || '').toLowerCase();
@@ -117,15 +136,6 @@ export function InventoryPage() {
 
   function openNewProduct() {
     openModal('new-product', { categories: data?.filters, onSuccess: refreshInventory });
-  }
-
-  function openNewCategory() {
-    openModal('new-category', {
-      onSuccess: (name) => {
-        refreshInventory();
-        if (name) setFilter(name);
-      },
-    });
   }
 
   function openProduction() {
@@ -204,6 +214,7 @@ export function InventoryPage() {
         <Tabs
           items={[
             { id: 'stock', label: 'Estoque' },
+            { id: 'grupos', label: 'Grupos' },
             { id: 'production', label: 'Produção' },
             { id: 'promocoes', label: 'Promoções' },
             { id: 'combos', label: 'Combos' },
@@ -217,10 +228,6 @@ export function InventoryPage() {
         <FilterBar
           actions={
             <>
-              <Button type="button" variant="secondary" onClick={openNewCategory}>
-                <Icon name="add" />
-                Nova categoria
-              </Button>
               <Button onClick={openNewProduct}>
                 <Icon name="add" />
                 Novo produto
@@ -240,7 +247,7 @@ export function InventoryPage() {
           />
           <FilterSelect
             id="inventory-category-filter"
-            label="Categoria"
+            label="Grupo"
             value={filter}
             onChange={setFilter}
             options={categoryOptions}
@@ -261,7 +268,7 @@ export function InventoryPage() {
               <THead>
                 <Th>Item</Th>
                 <Th>Código</Th>
-                <Th>Categoria</Th>
+                <Th>Grupo</Th>
                 <Th>Estoque atual</Th>
                 <Th>Estoque sugerido</Th>
                 <Th align="right">Valor unitário</Th>
@@ -291,7 +298,14 @@ export function InventoryPage() {
                     </Td>
                     <Td tone="muted">{item.codigo}</Td>
                     <Td>
-                      <StatusPill tone="neutral">{item.category}</StatusPill>
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <GroupTag item={item} />
+                        {[item.subgrupo, item.formato].filter(Boolean).length ? (
+                          <span className="text-xs text-on-surface-variant">
+                            {[item.subgrupo, item.formato].filter(Boolean).join(' · ')}
+                          </span>
+                        ) : null}
+                      </div>
                     </Td>
                     <Td tone={item.lowStock ? 'danger' : 'strong'}>{item.stock}</Td>
                     <Td tone="muted">{item.minStock}</Td>
@@ -301,10 +315,14 @@ export function InventoryPage() {
                     <Td>
                       {item.lowStock ? (
                         <StatusPill tone="danger" dot>
+                          <Icon name="warning" className="text-sm" />
                           Estoque baixo
                         </StatusPill>
                       ) : (
-                        <StatusPill tone="accent">Estável</StatusPill>
+                        <StatusPill tone="success">
+                          <Icon name="check" className="text-sm" />
+                          Estável
+                        </StatusPill>
                       )}
                     </Td>
                   </Tr>
@@ -326,16 +344,22 @@ export function InventoryPage() {
                 badge={
                   item.lowStock ? (
                     <StatusPill tone="danger" dot>
+                      <Icon name="warning" className="text-sm" />
                       Estoque baixo
                     </StatusPill>
                   ) : (
-                    <StatusPill tone="accent">Estável</StatusPill>
+                    <StatusPill tone="success">
+                      <Icon name="check" className="text-sm" />
+                      Estável
+                    </StatusPill>
                   )
                 }
               >
                 <p className="text-sm text-on-surface-variant">
-                  {item.codigo} · {item.category}
+                  {item.codigo}
+                  {item.formato ? ` · ${item.formato}` : ''}
                 </p>
+                <GroupTag item={item} />
                 {item.marca ? <p className="text-sm text-on-surface-variant">{item.marca}</p> : null}
                 <div className="mt-auto flex items-end justify-between gap-3">
                   <div>
@@ -427,7 +451,7 @@ export function InventoryPage() {
                       <Td tone="muted" className="whitespace-nowrap">
                         {productionStamp(row.data_producao)}
                       </Td>
-                      <Td align="right">
+                      <Td align="right" nowrap>
                         {locked ? (
                           '—'
                         ) : (
@@ -450,11 +474,14 @@ export function InventoryPage() {
             <Pagination state={productionPage} />
             </div>
           </section>
+        ) : section === 'grupos' ? (
+          <GroupsPanel groups={data.groups || []} formats={data.formats || []} />
         ) : (
           <CatalogPage embedded tab={section} />
         )}
       </div>
 
+      {section === 'grupos' ? null : (
       <Button
         type="button"
         size="icon"
@@ -480,6 +507,7 @@ export function InventoryPage() {
       >
         <Icon name="add" />
       </Button>
+      )}
     </>
   );
 }

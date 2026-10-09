@@ -44,8 +44,8 @@ export function TrendChart({ points = [], unit = 'dia' }) {
   }));
 
   return (
-    <section className="h-full bg-surface border border-outline rounded-xl p-4 md:p-5 lg:col-span-2 min-w-0">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+    <section className="flex h-full min-w-0 flex-col rounded-xl border border-outline bg-surface p-4 md:p-5 lg:col-span-2">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-extrabold">Entradas vs saídas</h2>
           <p className="text-xs text-on-surface-variant">Agrupado por {unit}</p>
@@ -62,9 +62,9 @@ export function TrendChart({ points = [], unit = 'dia' }) {
         </div>
       </div>
       {!hasMovement ? (
-        <p className="text-sm text-on-surface-variant">Sem movimentação neste período.</p>
+        <p className="flex flex-1 items-center text-sm text-on-surface-variant">Sem movimentação neste período.</p>
       ) : (
-        <div className="h-64 w-full min-w-0">
+        <div className="min-h-56 w-full min-w-0 flex-1">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>

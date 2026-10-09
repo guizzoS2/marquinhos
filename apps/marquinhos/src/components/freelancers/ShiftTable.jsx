@@ -47,7 +47,7 @@ function ShiftTableComponent({ shifts, people, onEdit, onDelete }) {
                     {shiftStatusLabel(shift.status)}
                   </StatusPill>
                 </Td>
-                <Td align="right">
+                <Td align="right" nowrap>
                   <TableActions>
                     <Button type="button" size="icon" variant="secondary" onClick={() => onEdit(shift)} aria-label="Editar agendamento">
                       <Icon name="edit" />

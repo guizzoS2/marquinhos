@@ -25,7 +25,7 @@ export function PdvPage() {
       <div className="p-4 md:p-8 space-y-6">
         <PageHeader title="PDV" description="Monte a venda e confirme tudo de uma vez.">
           {canClose ? (
-            <Button type="button" className="w-full md:w-auto" onClick={() => navigate('/compras?aba=fechamento')}>
+            <Button type="button" className="w-full md:w-auto" onClick={() => navigate('/vendas?aba=fechamento')}>
               <Icon name="lock" />
               Fechar caixa
             </Button>
@@ -36,7 +36,7 @@ export function PdvPage() {
             items={inventory.data.items || []}
             promotions={inventory.data.promotions || []}
             serverNow={inventory.data.serverNow}
-            filters={inventory.data.filters || []}
+            filters={(inventory.data.groups || []).map((group) => group.name)}
           />
           <div className="min-w-0">
             <PdvSummary

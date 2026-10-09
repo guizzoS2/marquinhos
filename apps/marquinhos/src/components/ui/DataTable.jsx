@@ -1,3 +1,5 @@
+import { Icon } from './Icon';
+
 const alignClass = {
   left: 'text-left',
   right: 'text-right',
@@ -54,12 +56,13 @@ export function Tr({ children, tone, className = '', ...props }) {
   );
 }
 
-export function Td({ children, align = 'left', tone = 'default', colSpan, className = '' }) {
+export function Td({ children, align = 'left', tone = 'default', colSpan, nowrap = false, className = '' }) {
   const numeric = align === 'right' ? 'tabular-nums' : '';
+  const singleLine = nowrap ? 'w-px whitespace-nowrap' : '';
   return (
     <td
       colSpan={colSpan}
-      className={`px-4 py-3 align-middle ${alignClass[align] || alignClass.left} ${cellTone[tone] || cellTone.default} ${numeric} ${className}`.trim()}
+      className={`px-4 py-3 align-middle ${alignClass[align] || alignClass.left} ${cellTone[tone] || cellTone.default} ${numeric} ${singleLine} ${className}`.trim()}
     >
       {children}
     </td>
@@ -77,24 +80,23 @@ export function EmptyRow({ colSpan, children }) {
 }
 
 export function TableActions({ children }) {
-  return <div className="flex flex-wrap items-center justify-end gap-2">{children}</div>;
+  return <div className="inline-flex w-max flex-nowrap items-center justify-end gap-2">{children}</div>;
 }
 
-const pillTone = {
-  neutral: 'bg-surface-container text-on-surface-variant',
-  accent: 'bg-primary/30 text-on-surface',
-  danger: 'bg-error/10 text-error',
-};
-
-export function StatusPill({ tone = 'neutral', dot = false, children }) {
+export function StatusPill({ dot = false, children }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${pillTone[tone] || pillTone.neutral}`}
-    >
-      {dot ? (
-        <span className={`h-1.5 w-1.5 rounded-full ${tone === 'danger' ? 'bg-error' : 'bg-on-surface'}`} />
-      ) : null}
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-outline bg-surface px-2.5 py-1 text-xs font-semibold text-on-surface">
+      {dot ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-on-surface" /> : null}
       {children}
     </span>
+  );
+}
+
+export function Tag({ tone = 'neutral', icon, children }) {
+  return (
+    <StatusPill tone={tone}>
+      {icon ? <Icon name={icon} className="text-sm" /> : null}
+      {children}
+    </StatusPill>
   );
 }

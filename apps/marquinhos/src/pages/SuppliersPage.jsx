@@ -10,10 +10,20 @@ import { FilterBar } from '../components/ui/FilterBar';
 import { SearchField } from '../components/ui/SearchField';
 import { Tabs } from '../components/ui/Tabs';
 import { SuppliersList } from '../components/suppliers/SuppliersList';
-import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
+import { DataTable, EmptyRow, StatusPill, TableActions, Tag, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
+import { expenseTag } from '../services/catalogTaxonomy';
 import { Pagination } from '../components/ui/Pagination';
 import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
+
+function PurchaseCategory({ row }) {
+  const tag = expenseTag(row.categoryId || 'compra_estoque', { name: row.categoryName });
+  return (
+    <Tag tone={tag.tone} icon={tag.icon}>
+      {row.categoryName || 'Compra de estoque'}
+    </Tag>
+  );
+}
 
 function formatPurchaseDate(value) {
   const parsed = parse(String(value || ''), 'yyyy-MM-dd', new Date(0));
@@ -163,7 +173,9 @@ export function SuppliersPage() {
                   <Tr key={row.id}>
                     <Td tone="muted">{formatPurchaseDate(row.date)}</Td>
                     <Td tone="strong">{row.supplierName}</Td>
-                    <Td>{row.categoryName}</Td>
+                    <Td>
+                      <PurchaseCategory row={row} />
+                    </Td>
                     <Td tone="muted">
                       {(row.itens || []).map((item) => `${item.nome} × ${item.quantidade}`).join(', ') || '—'}
                     </Td>
@@ -171,11 +183,12 @@ export function SuppliersPage() {
                       {money(row.total)}
                     </Td>
                     <Td>
-                      <StatusPill tone={cancelled ? 'neutral' : 'accent'}>
+                      <StatusPill tone={cancelled ? 'danger' : 'success'}>
+                        <Icon name={cancelled ? 'cancel' : 'check'} className="text-sm" />
                         {cancelled ? 'Cancelada' : 'Ativa'}
                       </StatusPill>
                     </Td>
-                    <Td align="right" tone="muted">
+                    <Td align="right" tone="muted" nowrap>
                       {cancelled ? (
                         '—'
                       ) : (

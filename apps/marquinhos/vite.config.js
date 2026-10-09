@@ -33,7 +33,9 @@ export default defineConfig(({ mode }) => ({
   envPrefix: ['VITE_', 'FIREBASE_'],
   define: firebaseDefines(mode),
   server: {
+    host: '::',
     port: 5173,
+    strictPort: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3333',

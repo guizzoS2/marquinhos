@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchCashFlow, fetchInventory, removeCashIncome } from '../services/dashboardService';
+import { incomeGroupTags, movementCopy } from '../services/catalogTaxonomy';
 import { unifyCashMovements } from '../services/cashFlowUtils';
-import { linkedSale, paymentText, productText } from '../services/movementLink';
+import { linkedSale, movementCycle, paymentText, productText, saleOnPromo } from '../services/movementLink';
 import { Button } from '../components/ui/Button';
-import { DataTable, EmptyRow, StatusPill, TableActions, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
+import { DataTable, EmptyRow, StatusPill, TableActions, Tag, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
 import { FilterBar } from '../components/ui/FilterBar';
 import { Icon } from '../components/ui/Icon';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -33,7 +34,21 @@ export function SalesPage({ embedded = false }) {
 
   const entries = useMemo(() => {
     const sales = inventory.data?.sales || [];
-    const rows = unifyCashMovements(cash.data?.incomes || [], []).filter(isPdvEntry);
+    const products = inventory.data?.items || [];
+    const rows = unifyCashMovements(cash.data?.incomes || [], [])
+      .filter(isPdvEntry)
+      .map((row) => {
+        const sale = linkedSale(sales, row);
+        const copy = movementCopy(row, { sale, products });
+        return {
+          ...row,
+          descricao: copy.descricao,
+          description: copy.descricao,
+          categoria: copy.categoria,
+          entidade: copy.origem || row.entidade,
+          groupTags: incomeGroupTags(row, sale, products),
+        };
+      });
     const term = query.trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((row) => {
@@ -71,6 +86,19 @@ export function SalesPage({ embedded = false }) {
   }
 
   function openEdit(row) {
+    const sale = linkedSale(data?.sales || [], row);
+    const cycle = movementCycle(sale, row);
+    if (sale && cycle && !cycle.past) {
+      openModal('new-sale', {
+        sale,
+        items: data?.items || [],
+        promotions: data?.promotions || [],
+        sales: data?.sales || [],
+        serverNow: data?.serverNow,
+        onSuccess: refresh,
+      });
+      return;
+    }
     openModal('new-order', { income: row, onSuccess: refresh });
   }
 
@@ -131,7 +159,7 @@ export function SalesPage({ embedded = false }) {
             <Th>Origem</Th>
             <Th>Produtos</Th>
             <Th>Pagamento</Th>
-            <Th>Categoria</Th>
+            <Th>Grupo</Th>
             <Th align="right">Valor</Th>
             <Th align="right">Ações</Th>
           </THead>
@@ -151,15 +179,30 @@ export function SalesPage({ embedded = false }) {
                     <Td tone="muted">{sale ? productText(sale, row) : '—'}</Td>
                     <Td>{sale ? paymentText(sale, row) : '—'}</Td>
                     <Td>
-                      <StatusPill tone="accent">
-                        <Icon name={row.categoryIcon || 'payments'} className="text-sm" />
-                        {row.categoria || 'Varejo'}
-                      </StatusPill>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {(row.groupTags || []).map((tag) => (
+                          <Tag key={tag.label} tone={tag.tone} icon={tag.icon}>
+                            {tag.label}
+                          </Tag>
+                        ))}
+                        {sale?.numero_comanda ? (
+                          <StatusPill tone="ink">
+                            <Icon name="receipt_long" className="text-sm" />
+                            Comanda
+                          </StatusPill>
+                        ) : null}
+                        {sale && saleOnPromo(sale, row) ? (
+                          <StatusPill tone="success">
+                            <Icon name="sell" className="text-sm" />
+                            Promoção
+                          </StatusPill>
+                        ) : null}
+                      </div>
                     </Td>
                     <Td align="right" tone="strong">
                       {row.valor}
                     </Td>
-                    <Td align="right">
+                    <Td align="right" nowrap>
                       <TableActions>
                         <Button
                           type="button"

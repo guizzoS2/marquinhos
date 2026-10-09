@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Dropdown } from './Dropdown';
 import { Icon } from './Icon';
-import { PAGE_AFTER, PAGE_SIZES } from './usePagedList';
+import { PAGE_SIZES } from './usePagedList';
 
 function pageWindow(currentIndex, pageCount) {
   const current = currentIndex + 1;
@@ -52,7 +52,7 @@ function NavButton({ label, icon, disabled, onClick }) {
   );
 }
 
-export function Pagination({ state }) {
+export function Pagination({ state, compact = false }) {
   const page = state.current;
   const { pageCount, setPage, pageSize, setPageSize } = state;
   const [draft, setDraft] = useState(String(page + 1));
@@ -62,12 +62,14 @@ export function Pagination({ state }) {
   }, [page]);
 
   const items = pageWindow(page, pageCount);
-  if ((state.total ?? 0) <= PAGE_AFTER) return null;
+  if (!state.paged) return null;
 
   return (
     <nav
       aria-label="Paginação"
-      className="flex max-w-full min-w-0 flex-col gap-3 rounded-2xl border border-outline bg-surface px-3 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between"
+      className={`flex max-w-full min-w-0 flex-col gap-3 rounded-2xl border border-outline bg-surface px-3 py-3 ${
+        compact ? '' : 'lg:flex-row lg:flex-wrap lg:items-center lg:justify-between'
+      }`}
     >
       <div className="flex flex-wrap items-center gap-2 text-sm text-on-surface">
         <span>Página</span>
@@ -88,7 +90,7 @@ export function Pagination({ state }) {
         <span>de {pageCount}</span>
       </div>
 
-      <div className="flex w-full min-w-0 items-center gap-1 overflow-x-auto lg:w-auto">
+      <div className={`flex min-w-0 max-w-full items-center gap-1 overflow-x-auto ${compact ? 'w-full' : 'w-full lg:w-auto'}`}>
         <NavButton
           label="Primeira página"
           icon="first_page"

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { format, isValid, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { describeExpense, partyForCategoryId } from '../services/catalogTaxonomy';
 import { fetchCashFlow, fetchInventory, closeCashShift } from '../services/dashboardService';
 import {
   formatDayLabel,
@@ -138,11 +139,6 @@ export function CloseShiftPage() {
   return (
     <div className="space-y-6">
       <section className="space-y-5">
-        <p className="text-sm text-on-surface-variant">
-          {cutoff
-            ? `Aberto desde ${stamp(cutoff)}. O horário escolhido entra no fechamento. O que vier depois continua aberto.`
-            : 'Ainda não há fechamento. O horário escolhido entra neste caixa. O que vier depois continua aberto.'}
-        </p>
         {days.length === 0 ? (
           <p className="rounded-2xl border border-outline p-4 text-sm text-on-surface-variant">Nada pendente de fechamento.</p>
         ) : (
@@ -180,7 +176,12 @@ export function CloseShiftPage() {
                   </p>
                 </div>
               )}
-              <Input label="Horário" type="time" value={time} onChange={(event) => setTime(event.target.value)} />
+              <Input
+                label={`Horário - aberto desde às: ${stamp(cutoff)}`}
+                type="time"
+                value={time}
+                onChange={(event) => setTime(event.target.value)}
+              />
             </div>
             {span.error ? <p className="text-sm font-medium text-error">{span.error}</p> : null}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -199,7 +200,8 @@ export function CloseShiftPage() {
                 </p>
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="min-w-0 space-y-3">
               <h3 className="font-headline text-xl font-bold text-on-surface">Entradas</h3>
               <DataTable>
                 <THead>
@@ -227,7 +229,7 @@ export function CloseShiftPage() {
               </DataTable>
               <Pagination state={incomePage} />
             </div>
-            <div className="space-y-3">
+            <div className="min-w-0 space-y-3">
               <h3 className="font-headline text-xl font-bold text-on-surface">Saídas</h3>
               <DataTable>
                 <THead>
@@ -244,7 +246,16 @@ export function CloseShiftPage() {
                         <Td tone="muted" className="whitespace-nowrap">
                           {row.date || stamp(row.createdAt)}
                         </Td>
-                        <Td tone="strong">{row.description || row.supplier || '—'}</Td>
+                        <Td tone="strong">
+                          {row.description ||
+                            describeExpense({
+                              party: partyForCategoryId(row.categoryId),
+                              categoryName: row.category,
+                              subtypeName: row.subtype || '',
+                              supplier: row.supplier || '',
+                              date: row.date || '',
+                            })}
+                        </Td>
                         <Td align="right" tone="danger">
                           {row.value}
                         </Td>
@@ -254,6 +265,7 @@ export function CloseShiftPage() {
                 </TBody>
               </DataTable>
               <Pagination state={expensePage} />
+            </div>
             </div>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="space-y-3">
@@ -334,38 +346,40 @@ export function CloseShiftPage() {
               Entradas {money(reading.entradas ?? reading.totais?.total)} · Saídas {reading.saidas == null ? '—' : money(reading.saidas)} · Saldo{' '}
               {money(reading.saldo ?? reading.totais?.total)}
             </p>
-            {(reading.entradas_linhas || []).length ? (
-              <DataTable>
-                <THead>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {(reading.entradas_linhas || []).length ? (
+                <DataTable>
+                  <THead>
                   <Th>Entrada</Th>
                   <Th align="right">Valor</Th>
-                </THead>
-                <TBody>
-                  {reading.entradas_linhas.map((row) => (
-                    <Tr key={row.id}>
-                      <Td>{row.description || '—'}</Td>
-                      <Td align="right">{row.value}</Td>
-                    </Tr>
-                  ))}
-                </TBody>
-              </DataTable>
-            ) : null}
-            {(reading.saidas_linhas || []).length ? (
-              <DataTable>
-                <THead>
+                  </THead>
+                  <TBody>
+                    {reading.entradas_linhas.map((row) => (
+                      <Tr key={row.id}>
+                        <Td>{row.description || '—'}</Td>
+                        <Td align="right">{row.value}</Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </DataTable>
+              ) : null}
+              {(reading.saidas_linhas || []).length ? (
+                <DataTable>
+                  <THead>
                   <Th>Saída</Th>
                   <Th align="right">Valor</Th>
-                </THead>
-                <TBody>
-                  {reading.saidas_linhas.map((row) => (
-                    <Tr key={row.id}>
-                      <Td>{row.description || '—'}</Td>
-                      <Td align="right">{row.value}</Td>
-                    </Tr>
-                  ))}
-                </TBody>
-              </DataTable>
-            ) : null}
+                  </THead>
+                  <TBody>
+                    {reading.saidas_linhas.map((row) => (
+                      <Tr key={row.id}>
+                        <Td>{row.description || '—'}</Td>
+                        <Td align="right">{row.value}</Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </DataTable>
+              ) : null}
+            </div>
           </div>
         ) : null}
         <DataTable>
@@ -390,7 +404,7 @@ export function CloseShiftPage() {
                   <Td align="right" tone="strong">
                     {money(closing.saldo ?? closing.totais?.total)}
                   </Td>
-                  <Td align="right">
+                  <Td align="right" nowrap>
                     <Button type="button" size="icon" variant="secondary" onClick={() => setReading(closing)} aria-label="Ver fechamento">
                       <Icon name="visibility" />
                     </Button>

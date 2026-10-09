@@ -13,12 +13,14 @@ import {
   fetchSuppliers,
 } from '../../services/dashboardService';
 import { ExpenseForm } from '../cashflow/ExpenseForm';
+import { ExpenseTypesPanel } from '../cashflow/ExpenseTypesPanel';
 import { MovementDetail } from '../cashflow/MovementDetail';
 import { CloseDayForm } from '../sales/CloseDayForm';
 import { NewSaleForm } from '../sales/NewSaleForm';
 import { NewFreelancerForm } from '../freelancers/NewFreelancerForm';
 import { DailyForm } from '../freelancers/DailyForm';
 import { ShiftDetailForm } from '../freelancers/ShiftDetailForm';
+import { MENU_GROUPS } from '../../services/catalogTaxonomy';
 import { parseCashFlowDate, toIsoDate } from '../../services/cashFlowUtils';
 import { ProductForm } from '../inventory/ProductForm';
 import { ProductDetail } from '../inventory/ProductDetail';
@@ -58,6 +60,7 @@ const titles = {
   'suppliers-list': 'Fornecedores',
   'supplier-detail': 'Histórico do fornecedor',
   'new-expense': 'Nova compra',
+  'expense-types': 'Categorias',
   'close-day': 'Fechar caixa',
   'import-statement': 'Importar extrato',
   confirm: 'Confirmar ação',
@@ -148,7 +151,7 @@ function NewOrderForm({ onSuccess, onCancel, income = null }) {
   const [form, setForm] = useState({
     date: editing ? cashFormDate(income) : new Date().toISOString().slice(0, 10),
     description: income?.description || '',
-    category: income?.categoria || 'Varejo',
+    category: income?.categoria && income.categoria !== 'Varejo' ? income.categoria : 'Venda',
     value: editing ? reaisInput(income.amount) : '',
   });
   const [saving, setSaving] = useState(false);
@@ -198,17 +201,19 @@ function NewOrderForm({ onSuccess, onCancel, income = null }) {
       />
       <div className="space-y-2">
         <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-          Categoria
+          Grupo
         </label>
         <Dropdown
-          label="Categoria"
+          label="Grupo"
           muted
           value={form.category}
           onChange={(category) => setForm((prev) => ({ ...prev, category }))}
-          options={[...new Set([form.category, 'Varejo', 'Eventos', 'Reservas'].filter(Boolean))].map((item) => ({
-            value: item,
-            label: item,
-          }))}
+          options={[...new Set([form.category, 'Venda', ...MENU_GROUPS.map((group) => group.name)].filter(Boolean))].map(
+            (item) => ({
+              value: item,
+              label: item,
+            })
+          )}
         />
       </div>
       <Input
@@ -304,6 +309,8 @@ export function AppModal() {
           ? 'Editar compra'
           : modal.type === 'close-day' && modal.payload?.readOnly
             ? 'Fechamento'
+          : modal.type === 'new-sale' && modal.payload?.sale
+            ? 'Editar venda'
           : modal.type === 'new-order' && modal.payload?.income
             ? 'Editar entrada'
             : titles[modal.type] || 'Confirmação';
@@ -343,6 +350,7 @@ export function AppModal() {
     modal.type === 'new-promotion' ||
     modal.type === 'edit-promotion' ||
     modal.type === 'new-expense' ||
+    modal.type === 'expense-types' ||
     modal.type === 'new-purchase' ||
     modal.type === 'close-day' ||
     modal.type === 'new-sale' ||
@@ -360,7 +368,7 @@ export function AppModal() {
       <div
         className={`relative w-full ${
           wide ? 'max-w-2xl' : 'max-w-lg'
-        } max-h-[90vh] overflow-y-auto bg-surface-container-lowest rounded-2xl shadow-2xl shadow-on-surface/10 p-5 md:p-8 space-y-6`}
+        } max-h-[90vh] min-w-0 overflow-x-hidden overflow-y-auto bg-surface-container-lowest rounded-2xl shadow-2xl shadow-on-surface/10 p-5 md:p-8 space-y-6`}
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -431,11 +439,16 @@ export function AppModal() {
             fallbackSupplier={modal.payload?.supplier}
             onCancel={closeModal}
           />
+        ) : modal.type === 'expense-types' ? (
+          <ExpenseTypesPanel onClose={closeModal} />
         ) : modal.type === 'new-expense' ? (
           <ExpenseForm
             categories={modal.payload?.categories}
             expense={modal.payload?.expense}
             purchase={modal.payload?.purchase}
+            categoryId={modal.payload?.categoryId}
+            staffId={modal.payload?.staffId}
+            staffPayment={Boolean(modal.payload?.staffPayment)}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
@@ -450,6 +463,7 @@ export function AppModal() {
           />
         ) : modal.type === 'new-sale' ? (
           <NewSaleForm
+            sale={modal.payload?.sale}
             items={modal.payload?.items || []}
             promotions={modal.payload?.promotions || []}
             sales={modal.payload?.sales || []}

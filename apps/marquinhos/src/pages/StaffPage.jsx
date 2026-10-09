@@ -4,10 +4,12 @@ import {
   addStaffMember,
   deactivateStaffMember,
   editStaffMember,
+  fetchCashFlow,
   fetchStaff,
   inviteStaffAccount,
   reactivateStaffMember,
 } from '../services/dashboardService';
+import { expensePartyKind } from '../services/cashFlowUtils';
 import { roleLabel } from '../services/roles';
 import { StaffDetail } from '../components/staff/StaffDetail';
 import { Button } from '../components/ui/Button';
@@ -17,6 +19,8 @@ import { Dropdown } from '../components/ui/Dropdown';
 import { FieldModal } from '../components/ui/FieldModal';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Pagination } from '../components/ui/Pagination';
+import { usePagedList } from '../components/ui/usePagedList';
 import { useModal } from '../contexts/ModalContext';
 import { useToast } from '../contexts/ToastContext';
 
@@ -35,6 +39,20 @@ function accountText(member) {
   return 'Sem conta';
 }
 
+function inviteWasSent(member) {
+  return !member.disabled && (member.accountStatus === 'invited' || member.accountStatus === 'pending');
+}
+
+function staffPayment(row, member) {
+  if (!row || row.source === 'comanda_saldo' || !member) return false;
+  const staff =
+    expensePartyKind(row.categoryId) === 'staff' || row.categoryId === 'funcionarios' || row.categoryId === 'salarios';
+  if (!staff) return false;
+  if (row.staffId && String(row.staffId) === String(member.id)) return true;
+  const name = String(member.name || '').trim().toLowerCase();
+  return Boolean(name) && String(row.supplier || '').trim().toLowerCase() === name;
+}
+
 export function StaffPage() {
   const toast = useToast();
   const { openModal } = useModal();
@@ -43,7 +61,9 @@ export function StaffPage() {
     queryKey: ['staff'],
     queryFn: fetchStaff,
   });
+  const cash = useQuery({ queryKey: ['cash-flow'], queryFn: fetchCashFlow });
   const [selectedId, setSelectedId] = useState(null);
+  const [paymentsForId, setPaymentsForId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -59,7 +79,20 @@ export function StaffPage() {
   }, [members, selectedId]);
 
   function refresh() {
-    return queryClient.invalidateQueries({ queryKey: ['staff'] });
+    queryClient.invalidateQueries({ queryKey: ['staff'] });
+    queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+  }
+
+  function openPayment(member) {
+    setPaymentsForId(null);
+    setSelectedId(null);
+    openModal('new-expense', {
+      categories: cash.data?.categories,
+      categoryId: 'funcionarios',
+      staffId: member.id,
+      staffPayment: true,
+      onSuccess: refresh,
+    });
   }
 
   function openCreate() {
@@ -78,6 +111,17 @@ export function StaffPage() {
     });
     setError('');
     setFormOpen(true);
+  }
+
+  async function resendInvite(member) {
+    try {
+      await inviteStaffAccount(member.id, { email: member.email });
+      toast.success('Convite reenviado.');
+      refresh();
+    } catch (err) {
+      if (err?.staff) refresh();
+      toast.error(err?.message || 'Não foi possível reenviar o convite.');
+    }
   }
 
   function confirmDeactivate(member) {
@@ -117,6 +161,10 @@ export function StaffPage() {
     }
   }
 
+  const paymentsMember = members.find((member) => String(member.id) === String(paymentsForId)) || null;
+  const payments = (cash.data?.expenses || []).filter((row) => staffPayment(row, paymentsMember));
+  const paymentPage = usePagedList(payments, paymentsForId || '', { after: 20, pageSize: 20 });
+
   if (isLoading) {
     return <div className="p-4 md:p-8 text-on-surface-variant">Carregando equipe...</div>;
   }
@@ -125,7 +173,7 @@ export function StaffPage() {
     <div className="p-4 md:p-8 space-y-6">
       <PageHeader
         title="Equipe da casa"
-        description="Gerencie a equipe e crie contas de funcionário ou administrador."
+        description="Cadastre a equipe, envie o convite da conta e registre o pagamento na categoria Funcionários."
       >
         <Button onClick={openCreate}>
           <Icon name="add" />
@@ -157,8 +205,20 @@ export function StaffPage() {
                 <Td>
                   <StatusPill tone={accountTone(member)}>{accountText(member)}</StatusPill>
                 </Td>
-                <Td align="right">
+                <Td align="right" nowrap>
                   <TableActions>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      aria-label={`Pagamentos de ${member.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setPaymentsForId(member.id);
+                      }}
+                    >
+                      <Icon name="payments" />
+                      Pagamentos
+                    </Button>
                     <Button
                       type="button"
                       size="icon"
@@ -171,6 +231,20 @@ export function StaffPage() {
                     >
                       <Icon name="edit" />
                     </Button>
+                    {inviteWasSent(member) ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        aria-label={`Reenviar convite para ${member.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          resendInvite(member);
+                        }}
+                      >
+                        <Icon name="forward_to_inbox" />
+                        Reenviar
+                      </Button>
+                    ) : null}
                     {member.disabled ? null : (
                       <Button
                         type="button"
@@ -245,6 +319,7 @@ export function StaffPage() {
           member={selected}
           onClose={() => setSelectedId(null)}
           onEdit={() => openEdit(selected)}
+          onPayments={() => setPaymentsForId(selected.id)}
           onDeactivate={() => confirmDeactivate(selected)}
           onReactivate={async () => {
             try {
@@ -256,9 +331,10 @@ export function StaffPage() {
             }
           }}
           onInvite={async (payload) => {
+            const again = Boolean(selected.uid) || inviteWasSent(selected);
             try {
               await inviteStaffAccount(selected.id, payload);
-              toast.success('E-mail enviado com o link para criar a senha.');
+              toast.success(again ? 'Convite reenviado.' : 'E-mail enviado com o link para criar a senha.');
               refresh();
             } catch (err) {
               if (err?.staff) refresh();
@@ -266,6 +342,54 @@ export function StaffPage() {
             }
           }}
         />
+      ) : null}
+
+      {paymentsMember ? (
+        <FieldModal
+          title={`Pagamentos de ${paymentsMember.name}`}
+          icon="payments"
+          wide
+          onClose={() => setPaymentsForId(null)}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-on-surface-variant">
+              Lançamentos da categoria Funcionários desta pessoa.
+            </p>
+            {paymentsMember.disabled ? null : (
+              <div className="flex justify-end">
+                <Button type="button" onClick={() => openPayment(paymentsMember)}>
+                  <Icon name="add" />
+                  Registrar pagamento
+                </Button>
+              </div>
+            )}
+            <DataTable>
+              <THead>
+                <Th>Data</Th>
+                <Th>Descrição</Th>
+                <Th align="right">Valor</Th>
+              </THead>
+              <TBody>
+                {paymentPage.rows.length === 0 ? (
+                  <EmptyRow colSpan={3}>Nenhum pagamento.</EmptyRow>
+                ) : (
+                  paymentPage.rows.map((row) => (
+                    <Tr key={row.id}>
+                      <Td tone="muted" className="whitespace-nowrap">
+                        {row.date || '—'}
+                      </Td>
+                      <Td>{row.description || 'Pagamento de funcionário'}</Td>
+                      <Td align="right" tone="danger">
+                        {row.value || '—'}
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </DataTable>
+            <Pagination state={paymentPage} />
+          </div>
+        </FieldModal>
       ) : null}
     </div>
   );

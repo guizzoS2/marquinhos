@@ -14,11 +14,13 @@ import { PAYMENT_OPTIONS } from '../../services/inventoryProduct';
 import { formatSaleStamp, saleBalance, salePaidAmount } from '../../services/saleRules';
 import { PartialCloseForm } from './PartialCloseForm';
 import { PdvModal } from './PdvModal';
+import { ClientsPanel } from './ClientsPanel';
 
-const KINDS = [
+const FILTERS = [
+  { id: 'todas', label: 'Todas' },
   { id: 'aberta', label: 'Abertas' },
-  { id: 'fechada', label: 'Fechadas' },
   { id: 'parcial', label: 'Parciais' },
+  { id: 'fechada', label: 'Fechadas' },
 ];
 
 const KIND_LABEL = {
@@ -28,10 +30,22 @@ const KIND_LABEL = {
 };
 
 const EMPTY_KIND = {
+  todas: 'Nenhuma comanda.',
   aberta: 'Nenhuma comanda aberta.',
   fechada: 'Nenhuma comanda fechada.',
   parcial: 'Nenhuma comanda parcial.',
 };
+
+function KindPill({ type }) {
+  const tone = type === 'aberta' ? 'accent' : type === 'fechada' ? 'success' : 'ink';
+  const icon = type === 'fechada' ? 'check' : type === 'parcial' ? 'pie_chart' : 'receipt_long';
+  return (
+    <StatusPill tone={tone}>
+      <Icon name={icon} className="text-sm" />
+      {KIND_LABEL[type] || 'Comanda'}
+    </StatusPill>
+  );
+}
 
 function comandaKind(sale) {
   if (!sale?.numero_comanda) return '';
@@ -60,13 +74,14 @@ function money(value) {
 export function OpenComandas({ sales = [] }) {
   const { openModal } = useModal();
   const [query, setQuery] = useState('');
-  const [kind, setKind] = useState('aberta');
+  const [section, setSection] = useState('comandas');
+  const [kind, setKind] = useState('todas');
   const [view, setView] = useViewMode('comandas');
   const [detail, setDetail] = useState(null);
   const [paying, setPaying] = useState(false);
   const grouped = useMemo(() => {
     return (sales || [])
-      .filter((sale) => comandaKind(sale) === kind)
+      .filter((sale) => comandaKind(sale) && (kind === 'todas' || comandaKind(sale) === kind))
       .sort((left, right) =>
         String(right.updated_at || right.created_at || '').localeCompare(
           String(left.updated_at || left.created_at || '')
@@ -93,6 +108,18 @@ export function OpenComandas({ sales = [] }) {
 
   return (
     <section className="min-w-0 space-y-6">
+      <Tabs
+        label="Comandas"
+        items={[
+          { id: 'comandas', label: 'Comandas' },
+          { id: 'clientes', label: 'Clientes' },
+        ]}
+        value={section}
+        onChange={setSection}
+      />
+      {section === 'clientes' ? <ClientsPanel /> : null}
+      {section === 'comandas' ? (
+      <>
       <FilterBar
         actions={
           <Button type="button" onClick={() => openModal('new-comanda')}>
@@ -113,7 +140,12 @@ export function OpenComandas({ sales = [] }) {
         <SearchField value={query} onChange={setQuery} placeholder="Buscar comanda" label="Buscar comanda" />
       </FilterBar>
 
-      <Tabs label="Tipo de comanda" items={KINDS} value={kind} onChange={setKind} />
+      <SegmentedControl
+        label="Filtrar comandas"
+        items={FILTERS}
+        value={kind}
+        onChange={setKind}
+      />
 
       {grouped.length === 0 ? (
         <p className="rounded-2xl border border-outline bg-surface p-4 text-on-surface-variant">
@@ -147,7 +179,17 @@ export function OpenComandas({ sales = [] }) {
                     <Td tone="muted" className="whitespace-nowrap">
                       {stampText(sale)}
                     </Td>
-                    <Td tone="muted">{itemText(sale)}</Td>
+                    <Td tone="muted">
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <span>{itemText(sale)}</span>
+                        {(sale.itens || []).some((item) => item.promocao) ? (
+                          <StatusPill tone="success">
+                            <Icon name="sell" className="text-sm" />
+                            Promoção
+                          </StatusPill>
+                        ) : null}
+                      </span>
+                    </Td>
                     <Td tone="muted">{sale.observacao || '—'}</Td>
                     <Td align="right" tone="strong">
                       {money(sale.total)}
@@ -157,7 +199,7 @@ export function OpenComandas({ sales = [] }) {
                       {money(Math.max(saleBalance(sale), 0))}
                     </Td>
                     <Td>
-                      <StatusPill tone={type === 'aberta' ? 'accent' : 'neutral'}>{KIND_LABEL[type]}</StatusPill>
+                      <KindPill type={type} />
                     </Td>
                   </Tr>
                 );
@@ -193,7 +235,7 @@ export function OpenComandas({ sales = [] }) {
                     <span className="block font-headline font-extrabold text-on-surface">
                       {money(type === 'parcial' ? saleBalance(sale) : sale.total)}
                     </span>
-                    <span className="block text-xs text-on-surface-variant">{KIND_LABEL[type]}</span>
+                    <KindPill type={type} />
                   </span>
                 </button>
               );
@@ -212,9 +254,10 @@ export function OpenComandas({ sales = [] }) {
             setDetail(null);
           }}
         >
-          <p className="text-sm text-on-surface-variant">
-            {KIND_LABEL[comandaKind(detail)] || 'Comanda'} · Cliente {detail.cliente_nome || 'Consumidor'}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <KindPill type={comandaKind(detail)} />
+            <p className="text-sm text-on-surface-variant">Cliente {detail.cliente_nome || 'Consumidor'}</p>
+          </div>
           {detail.observacao ? <p className="break-words text-sm text-on-surface">{detail.observacao}</p> : null}
           <p className="text-sm text-on-surface">
             Total {money(detail.total)} · Pago {money(salePaidAmount(detail))} · Saldo {money(saleBalance(detail))}
@@ -302,7 +345,7 @@ export function OpenComandas({ sales = [] }) {
               {detail.status === 'aberta' && saleBalance(detail) > 0 ? (
                 <Button type="button" onClick={() => setPaying(true)}>
                   <Icon name="payments" />
-                  Fechamento parcial
+                  Fechamento
                 </Button>
               ) : null}
               <Button
@@ -313,12 +356,14 @@ export function OpenComandas({ sales = [] }) {
                   setDetail(null);
                 }}
               >
-                <Icon name="close" />
-                Fechar
+                <Icon name="cancel" />
+                Cancelar
               </Button>
             </div>
           )}
         </PdvModal>
+      ) : null}
+      </>
       ) : null}
     </section>
   );

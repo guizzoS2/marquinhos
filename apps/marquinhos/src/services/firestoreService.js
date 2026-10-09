@@ -32,8 +32,21 @@ import {
   nextProductCode,
   normalizeMedida,
 } from './inventoryProduct';
-import { assertPrice, promotionSchedule, promotionStatus, saleUnitPrice } from './catalogRules';
+import { assertPrice, promotionDays, promotionPriceAt, promotionSchedule, promotionStatus } from './catalogRules';
 import { aggregateOverview } from './overviewAggregate';
+import {
+  describeExpense,
+  expensePartyOf,
+  mergeFormats,
+  mergeMenuGroups,
+  resolveProductTaxonomy,
+  RETIRED_EXPENSE_IDS,
+  saleDescription,
+  saleGroupLabel,
+  taxonomyId,
+  EXPENSE_TYPES,
+  FIXED_EXPENSE_IDS,
+} from './catalogTaxonomy';
 import {
   assertComanda,
   optionalComanda,
@@ -286,22 +299,88 @@ async function patchDocument(path, data) {
   return data;
 }
 
-function ensureExpenseCategories(categories) {
+function cloneExpenseType(seed) {
+  return {
+    ...seed,
+    subtypes: (seed.subtypes || []).map((item) => ({ ...item })),
+  };
+}
+
+function allowsSubtypesOf(item, seed) {
+  if (typeof item?.allowsSubtypes === 'boolean') return item.allowsSubtypes;
+  if ((item?.subtypes || []).length > 0) return true;
+  if (typeof seed?.allowsSubtypes === 'boolean') return seed.allowsSubtypes;
+  return false;
+}
+
+function ensureExpenseCategories(categories, restoreSeeds = false) {
   const list = categories?.length
-    ? categories.map((item) => ({ ...item }))
-    : expenseCategories.map((item) => ({ ...item }));
-  expenseCategories.forEach((seed) => {
-    if (seed.id !== 'fornecedor' && seed.id !== 'freelancer') return;
-    if (!list.some((item) => item.id === seed.id)) list.push({ ...seed });
+    ? categories.map((item) => cloneExpenseType(item))
+    : EXPENSE_TYPES.map(cloneExpenseType);
+  if (restoreSeeds) {
+    EXPENSE_TYPES.forEach((seed) => {
+      const found = list.find((item) => item.id === seed.id);
+      if (!found) {
+        list.push(cloneExpenseType(seed));
+        return;
+      }
+      if (!found.party) found.party = seed.party;
+      if (seed.id === 'funcionarios') found.defaultNature = 'variable';
+      found.allowsSubtypes = allowsSubtypesOf(found, seed);
+      seed.subtypes.forEach((sub) => {
+        if (!(found.subtypes || []).some((item) => item.id === sub.id)) {
+          found.subtypes = [...(found.subtypes || []), { ...sub }];
+        }
+      });
+    });
+  } else {
+    list.forEach((item) => {
+      const seed = EXPENSE_TYPES.find((row) => row.id === item.id);
+      if (seed && !item.party) item.party = seed.party;
+      if (seed?.id === 'funcionarios') item.defaultNature = 'variable';
+      item.allowsSubtypes = allowsSubtypesOf(item, seed);
+    });
+  }
+  list.forEach((item) => {
+    if (RETIRED_EXPENSE_IDS.includes(item.id)) item.retired = true;
+    if (typeof item.allowsSubtypes !== 'boolean') item.allowsSubtypes = allowsSubtypesOf(item, null);
   });
   return list;
+}
+
+function ensurePayees(source, expenses) {
+  const stored = Array.isArray(source.payees) ? source.payees : [];
+  const list = [];
+  const seen = new Set();
+  stored.forEach((item) => {
+    const name = String(item?.name || '').trim().replace(/\s+/g, ' ');
+    const id = String(item?.id || '').trim();
+    if (!name || !id || seen.has(name.toLowerCase())) return;
+    seen.add(name.toLowerCase());
+    list.push({ id, name });
+  });
+  (expenses || []).forEach((row) => {
+    if (expensePartyKind(row.categoryId) !== 'staff') return;
+    const name = String(row.supplier || '').trim().replace(/\s+/g, ' ');
+    if (!name || seen.has(name.toLowerCase())) return;
+    seen.add(name.toLowerCase());
+    list.push({ id: taxonomyId(name, new Set(list.map((item) => item.id))), name });
+  });
+  return list;
+}
+
+function samePayees(left, right) {
+  const a = Array.isArray(left) ? left : [];
+  const b = Array.isArray(right) ? right : [];
+  if (a.length !== b.length) return false;
+  return a.every((item, index) => item?.id === b[index]?.id && item?.name === b[index]?.name);
 }
 
 function migrateCashFlow(raw) {
   if (!raw) return cashFlowFallback;
   const { movements: _movements, ...source } = raw;
 
-  const categories = ensureExpenseCategories(source.categories);
+  const categories = ensureExpenseCategories(source.categories, source.catalogReady !== true);
   const incomes = (source.incomes || []).map((row, index) => ({
     ...row,
     id: row.id || `inc-${index + 1}`,
@@ -336,13 +415,16 @@ function migrateCashFlow(raw) {
     revenueDelta: source.summary?.revenueDelta,
     expensesDelta: source.summary?.expensesDelta,
   });
+  const payees = ensurePayees(source, expenses);
 
   return {
     ...source,
     period: source.period || cashFlowFallback.period,
+    catalogReady: true,
     categories,
     incomes,
     expenses,
+    payees,
     summary: {
       ...source.summary,
       ...summary,
@@ -361,12 +443,11 @@ export async function ensureDashboardSeed() {
   const cashFlow = ops.cashFlow;
   if (!cashFlow) return;
   const migrated = migrateCashFlow(cashFlow);
-  const categoryIds = new Set((cashFlow.categories || []).map((item) => item.id));
   const needsWrite =
-    !cashFlow.categories?.length ||
-    !categoryIds.has('fornecedor') ||
-    !categoryIds.has('freelancer') ||
-    (cashFlow.expenses || []).some((row) => !row.nature || row.amount == null);
+    cashFlow.catalogReady !== true ||
+    (cashFlow.categories || []).find((item) => item.id === 'funcionarios')?.defaultNature === 'fixed' ||
+    (cashFlow.expenses || []).some((row) => !row.nature || row.amount == null) ||
+    !samePayees(cashFlow.payees, migrated.payees);
   if (needsWrite) {
     await writeDocument(DOCS.cashFlow, migrated);
   }
@@ -376,16 +457,20 @@ function normalizeInventory(raw) {
   const sourceDoc = raw && typeof raw === 'object' ? raw : inventoryFallback;
   const { metrics: _metrics, ...current } = sourceDoc;
   const source = Array.isArray(current.items) ? current.items : [];
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  const formats = mergeFormats(current.formats);
   let max = maxProductCode(source);
   const items = source.map((item) => {
     const codigo = item.codigo || formatProductCode(max + 1);
     if (!item.codigo) max += 1;
-    return presentProduct(item, codigo);
+    return presentProduct(item, codigo, groups);
   });
   return {
     ...inventoryFallback,
     ...current,
     filters: current.filters?.length ? current.filters : inventoryFallback.filters,
+    groups,
+    formats,
     items,
     entries: Array.isArray(current.entries) ? current.entries : [],
     productions: Array.isArray(current.productions) ? current.productions : [],
@@ -490,11 +575,45 @@ async function partyFromFreelancer(freelancerId, missingMessage) {
   return { supplier: person.name, supplierId: null, freelancerId: person.id };
 }
 
+function subtypeOf(category, subtypeId) {
+  if (!subtypeId) return null;
+  return (category?.subtypes || []).find((item) => item.id === subtypeId) || null;
+}
+
+function expenseNarrative(payload, category, parties, productNames = []) {
+  const subtype = subtypeOf(category, payload.subtypeId);
+  return describeExpense({
+    party: expensePartyOf(category),
+    categoryName: category.name,
+    subtypeName: subtype?.name || payload.subtype || '',
+    supplier: parties.supplier,
+    date: payload.date,
+    productNames,
+    note: payload.description,
+  });
+}
+
 async function resolveExpenseParties(payload, category) {
-  const kind = expensePartyKind(category.id);
+  const kind = expensePartyOf(category);
   if (kind === 'freelancer') {
     if (!payload.freelancerId) throw new Error('Selecione o freelancer.');
     return partyFromFreelancer(payload.freelancerId, 'Freelancer não encontrado.');
+  }
+  if (kind === 'staff') {
+    if (payload.staffId) {
+      const staff = await getStaff();
+      const person = (staff.people || []).find((item) => String(item.id) === String(payload.staffId));
+      if (!person) throw new Error('Funcionário não encontrado.');
+      return {
+        supplier: person.name || 'Funcionário',
+        supplierId: null,
+        freelancerId: null,
+        staffId: String(person.id),
+      };
+    }
+    const label = String(payload.supplier || '').trim();
+    if (!label) throw new Error('Informe o funcionário.');
+    return { supplier: label, supplierId: null, freelancerId: null, staffId: null };
   }
   if (payload.supplierId) return partyFromSupplier(payload.supplierId, 'Fornecedor não encontrado.');
   if (payload.freelancerId) return partyFromFreelancer(payload.freelancerId, 'Freelancer não encontrado.');
@@ -509,9 +628,10 @@ export async function createExpense(payload) {
   if (!category) throw new Error('Selecione a categoria.');
 
   const parties = await resolveExpenseParties(payload, category);
+  const subtype = subtypeOf(category, payload.subtypeId);
   const amountCents =
     payload.amount ?? parseMoneyToCents(payload.value ?? payload.dailyRate);
-  const nature = payload.nature || category.defaultNature || 'variable';
+  const nature = payload.nature || subtype?.defaultNature || category.defaultNature || 'variable';
 
   const expense = {
     id: payload.id || `exp-${Date.now()}`,
@@ -519,9 +639,14 @@ export async function createExpense(payload) {
     supplier: parties.supplier,
     supplierId: parties.supplierId,
     freelancerId: parties.freelancerId,
+    staffId: expensePartyOf(category) === 'staff' ? parties.staffId || payload.staffId || null : null,
+    payeeId: payload.payeeId || null,
     category: category.name,
     categoryId: category.id,
     categoryIcon: category.icon,
+    subtypeId: subtype?.id || null,
+    subtype: subtype?.name || '',
+    description: expenseNarrative(payload, category, parties, payload.productNames),
     nature,
     value: formatCents(amountCents),
     amount: amountCents,
@@ -577,7 +702,7 @@ function expenseCategoryId(name, taken) {
   return `${base}-${suffix}`;
 }
 
-export async function addExpenseCategory(name) {
+export async function addExpenseCategory(name, options) {
   const current = await getCashFlow();
   const label = String(name || '').trim().replace(/\s+/g, ' ');
   if (!label) throw new Error('Informe o nome da categoria.');
@@ -590,10 +715,164 @@ export async function addExpenseCategory(name) {
     name: label,
     type: 'expense',
     defaultNature: 'variable',
+    party: 'none',
     icon: 'category',
+    allowsSubtypes: Boolean(options?.allowsSubtypes),
+    description: cleanNote(options?.description),
+    subtypes: [],
   };
   await saveCashFlow(current, { categories: [...categories, category] });
   return category;
+}
+
+export async function renameExpenseCategory(categoryId, name, options) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o nome da categoria.');
+  if (FIXED_EXPENSE_IDS.includes(categoryId)) throw new Error('Essa categoria é fixa.');
+  const categories = ensureExpenseCategories(current.categories);
+  const category = categories.find((item) => item.id === categoryId && !item.retired);
+  if (!category) throw new Error('Categoria não encontrada.');
+  if (categories.some((item) => item.id !== categoryId && item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Essa categoria já existe.');
+  }
+  let allowsSubtypes = category.allowsSubtypes;
+  if (options && Object.prototype.hasOwnProperty.call(options, 'allowsSubtypes')) {
+    allowsSubtypes = Boolean(options.allowsSubtypes);
+    if (!allowsSubtypes && (category.subtypes || []).length) {
+      throw new Error('Essa categoria tem subcategoria.');
+    }
+  }
+  const description = options && Object.prototype.hasOwnProperty.call(options, 'description')
+    ? cleanNote(options.description)
+    : category.description || '';
+  const nextCategories = categories.map((item) =>
+    item.id === categoryId ? { ...item, name: label, allowsSubtypes, description } : item
+  );
+  const expenses = (current.expenses || []).map((row) =>
+    row.categoryId === categoryId ? { ...row, category: label } : row
+  );
+  await saveCashFlow(current, { categories: nextCategories, expenses });
+  return nextCategories.find((item) => item.id === categoryId);
+}
+
+export async function createExpenseSubtype(categoryId, name) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o nome da subcategoria.');
+  const categories = ensureExpenseCategories(current.categories);
+  const category = categories.find((item) => item.id === categoryId && !item.retired);
+  if (!category) throw new Error('Categoria não encontrada.');
+  if (!category.allowsSubtypes) throw new Error('Essa categoria não tem subcategoria.');
+  const subtypes = category.subtypes || [];
+  if (subtypes.some((item) => item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Essa subcategoria já existe.');
+  }
+  const subtype = {
+    id: taxonomyId(label, new Set(subtypes.map((item) => item.id))),
+    name: label,
+    defaultNature: 'variable',
+  };
+  const nextCategories = categories.map((item) =>
+    item.id === categoryId ? { ...item, subtypes: [...subtypes, subtype] } : item
+  );
+  await saveCashFlow(current, { categories: nextCategories });
+  return subtype;
+}
+
+export async function renameExpenseSubtype(categoryId, subtypeId, name) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o nome da subcategoria.');
+  const categories = ensureExpenseCategories(current.categories);
+  const category = categories.find((item) => item.id === categoryId && !item.retired);
+  if (!category || !(category.subtypes || []).some((item) => item.id === subtypeId)) {
+    throw new Error('Subcategoria não encontrada.');
+  }
+  if ((category.subtypes || []).some((item) => item.id !== subtypeId && item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Essa subcategoria já existe.');
+  }
+  const nextCategories = categories.map((item) =>
+    item.id === categoryId
+      ? { ...item, subtypes: item.subtypes.map((sub) => (sub.id === subtypeId ? { ...sub, name: label } : sub)) }
+      : item
+  );
+  const expenses = (current.expenses || []).map((row) =>
+    row.categoryId === categoryId && row.subtypeId === subtypeId ? { ...row, subtype: label } : row
+  );
+  await saveCashFlow(current, { categories: nextCategories, expenses });
+  return { id: subtypeId, name: label };
+}
+
+export async function removeExpenseCategory(categoryId) {
+  const current = await getCashFlow();
+  if (FIXED_EXPENSE_IDS.includes(categoryId)) throw new Error('Essa categoria é fixa.');
+  const categories = ensureExpenseCategories(current.categories);
+  if (!categories.some((item) => item.id === categoryId && !item.retired)) throw new Error('Categoria não encontrada.');
+  if ((current.expenses || []).some((row) => row.categoryId === categoryId)) {
+    throw new Error('Essa categoria está em compras.');
+  }
+  await saveCashFlow(current, { categories: categories.filter((item) => item.id !== categoryId) });
+}
+
+export async function removeExpenseSubtype(categoryId, subtypeId) {
+  const current = await getCashFlow();
+  const categories = ensureExpenseCategories(current.categories);
+  const category = categories.find((item) => item.id === categoryId && !item.retired);
+  if (!category || !(category.subtypes || []).some((item) => item.id === subtypeId)) {
+    throw new Error('Subcategoria não encontrada.');
+  }
+  const nextCategories = categories.map((item) =>
+    item.id === categoryId ? { ...item, subtypes: item.subtypes.filter((sub) => sub.id !== subtypeId) } : item
+  );
+  await saveCashFlow(current, { categories: nextCategories });
+}
+
+function payeeList(current) {
+  return (current.payees || []).map((item) => ({
+    id: item.id,
+    name: String(item.name || '').trim(),
+  })).filter((item) => item.id && item.name);
+}
+
+export async function createPayee(name) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o funcionário.');
+  const payees = payeeList(current);
+  const existing = payees.find((item) => item.name.toLowerCase() === label.toLowerCase());
+  if (existing) return existing;
+  const payee = { id: taxonomyId(label, new Set(payees.map((item) => item.id))), name: label };
+  await saveCashFlow(current, { payees: [...payees, payee] });
+  return payee;
+}
+
+export async function renamePayee(payeeId, name) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o funcionário.');
+  const payees = payeeList(current);
+  const currentPayee = payees.find((item) => item.id === payeeId);
+  if (!currentPayee) throw new Error('Funcionário não encontrado.');
+  if (payees.some((item) => item.id !== payeeId && item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Esse funcionário já existe.');
+  }
+  const nextPayees = payees.map((item) => (item.id === payeeId ? { ...item, name: label } : item));
+  const expenses = (current.expenses || []).map((row) => {
+    if (row.payeeId !== payeeId && row.supplier !== currentPayee.name) return row;
+    const description =
+      row.description === `Pagamento de ${currentPayee.name}` ? `Pagamento de ${label}` : row.description;
+    return { ...row, supplier: label, payeeId, description };
+  });
+  await saveCashFlow(current, { payees: nextPayees, expenses });
+  return { id: payeeId, name: label };
+}
+
+export async function removePayee(payeeId) {
+  const current = await getCashFlow();
+  const payees = payeeList(current);
+  if (!payees.some((item) => item.id === payeeId)) throw new Error('Funcionário não encontrado.');
+  await saveCashFlow(current, { payees: payees.filter((item) => item.id !== payeeId) });
 }
 
 async function saveCashFlow(current, patch) {
@@ -636,8 +915,9 @@ export async function updateExpense(expenseId, payload) {
   const category = categories.find((item) => item.id === payload.categoryId);
   if (!category) throw new Error('Selecione a categoria.');
   const parties = await resolveExpenseParties(payload, category);
+  const subtype = subtypeOf(category, payload.subtypeId);
   const amountCents = payload.amount ?? parseMoneyToCents(payload.value);
-  const nature = payload.nature || category.defaultNature || existing.nature || 'variable';
+  const nature = payload.nature || subtype?.defaultNature || category.defaultNature || existing.nature || 'variable';
   const expense = {
     ...existing,
     date: formatExpenseDate(payload.date),
@@ -645,9 +925,14 @@ export async function updateExpense(expenseId, payload) {
     supplier: parties.supplier,
     supplierId: parties.supplierId,
     freelancerId: parties.freelancerId,
+    staffId: expensePartyOf(category) === 'staff' ? parties.staffId || payload.staffId || existing.staffId || null : null,
+    payeeId: payload.payeeId || null,
     category: category.name,
     categoryId: category.id,
     categoryIcon: category.icon,
+    subtypeId: subtype?.id || null,
+    subtype: subtype?.name || '',
+    description: expenseNarrative(payload, category, parties, payload.productNames),
     nature,
     value: formatCents(amountCents),
     amount: amountCents,
@@ -678,7 +963,7 @@ export async function createIncome(payload) {
     id: payload.id || `inc-${Date.now()}`,
     date: formatExpenseDate(payload.date),
     description: payload.description.trim(),
-    category: payload.category || 'Varejo',
+    category: payload.category || 'Venda',
     categoryIcon: payload.categoryIcon || 'payments',
     categoryTone: payload.categoryTone || 'secondary',
     value: formatCents(amountCents),
@@ -702,7 +987,7 @@ export async function updateIncome(incomeId, payload) {
     date: formatExpenseDate(payload.date),
     createdAt: shiftCreatedAt(existing.createdAt, payload.date),
     description: String(payload.description || '').trim(),
-    category: payload.category || existing.category || 'Varejo',
+    category: payload.category || existing.category || 'Venda',
     categoryIcon: payload.categoryIcon || existing.categoryIcon || 'payments',
     categoryTone: payload.categoryTone || existing.categoryTone || 'secondary',
     value: formatCents(amountCents),
@@ -738,12 +1023,14 @@ function formatStockLabel(qty, unit) {
 
 function promotionRecord(row) {
   const weekday = row.vigencia === 'semana';
+  const days = weekday ? promotionDays(row) : [];
   return {
     id: row.id,
     produto_id: row.produto_id,
     preco_promocional: row.preco_promocional,
     vigencia: weekday ? 'semana' : 'periodo',
-    dia_semana: weekday ? Number(row.dia_semana) : null,
+    dia_semana: days[0] ?? null,
+    dias_semana: days,
     data_inicio: weekday ? null : row.data_inicio,
     data_termino: row.data_termino || null,
     inativa: Boolean(row.inativa),
@@ -783,7 +1070,7 @@ async function readServerNow() {
   return serverDate;
 }
 
-function presentProduct(item, codigo) {
+function presentProduct(item, codigo, groups = []) {
   const parsed = parseStockLabel(item.stock);
   const minParsed = parseStockLabel(item.minStock);
   const medida = normalizeMedida(item.medida) || normalizeMedida(item.unidade) || 'UN';
@@ -797,7 +1084,15 @@ function presentProduct(item, codigo) {
       : minParsed.qty;
   const lowStock = isLowStock(estoqueAtual, estoqueSugerido);
   const nome = String(item.nome || item.name || '').trim();
-  const categoria = String(item.categoria || item.category || 'Insumos').trim() || 'Insumos';
+  let taxonomy = resolveProductTaxonomy(item);
+  if (!taxonomy.grupoId && taxonomy.grupo && item.tipo !== 'combo') {
+    const group = (groups || []).find((row) => row.name.toLowerCase() === taxonomy.grupo.toLowerCase());
+    if (group) taxonomy = { ...taxonomy, grupoId: group.id, grupo: group.name };
+  }
+  const categoria =
+    item.tipo === 'combo'
+      ? String(item.categoria || item.category || 'Combos').trim() || 'Combos'
+      : taxonomy.subgrupo || taxonomy.grupo || 'Insumos';
   const descricao = String(item.descricao || item.subtitle || '').trim();
   const rawFoto = item.foto || item.image || '';
   const foto = item.tipo === 'combo' ? rawFoto : rawFoto || DEFAULT_PRODUCT_IMAGE;
@@ -806,6 +1101,10 @@ function presentProduct(item, codigo) {
       ? item.valor_unitario
       : item.cost || formatCents(0);
   const cost = String(valor).includes('R$') ? String(valor) : formatCents(parseMoneyToCents(valor));
+  const custoCompra =
+    item.custo_compra == null || String(item.custo_compra).trim() === ''
+      ? ''
+      : formatCents(parseMoneyToCents(item.custo_compra));
   const rest = { ...item };
   delete rest.unidade;
   return {
@@ -818,6 +1117,12 @@ function presentProduct(item, codigo) {
     subtitle: descricao,
     categoria,
     category: categoria,
+    grupoId: taxonomy.grupoId,
+    grupo: taxonomy.grupo,
+    subgrupoId: taxonomy.subgrupoId,
+    subgrupo: taxonomy.subgrupo,
+    formato: taxonomy.formato,
+    familia: taxonomy.familia,
     volume_peso: volumePeso,
     medida,
     tipo: item.tipo === 'combo' ? 'combo' : 'simples',
@@ -826,6 +1131,7 @@ function presentProduct(item, codigo) {
     estoque_sugerido: estoqueSugerido,
     valor_unitario: cost,
     cost,
+    custo_compra: custoCompra,
     foto,
     image: foto,
     stock: formatStockLabel(estoqueAtual, stockUnit),
@@ -841,10 +1147,33 @@ async function actorId() {
   return getCurrentUser()?.uid || null;
 }
 
+function taxonomyFromPayload(payload, groups, fallbackItem) {
+  const group =
+    (groups || []).find((item) => item.id === payload.grupoId) ||
+    (groups || []).find((item) => item.name === payload.grupo) ||
+    null;
+  const subgroup = group
+    ? (group.subgroups || []).find((item) => item.id === payload.subgrupoId) ||
+      (group.subgroups || []).find((item) => item.name === payload.subgrupo) ||
+      null
+    : null;
+  const grupo = group?.name || String(payload.grupo || fallbackItem?.grupo || '').trim();
+  const grupoId = group?.id || (grupo && fallbackItem?.grupo === grupo ? fallbackItem.grupoId : '') || '';
+  return {
+    grupoId: group?.id || grupoId,
+    grupo,
+    subgrupoId: subgroup?.id || '',
+    subgrupo: subgroup?.name || '',
+    formato: String(payload.formato ?? fallbackItem?.formato ?? '').trim(),
+    familia: String(payload.familia ?? fallbackItem?.familia ?? '').trim(),
+  };
+}
+
 function persistProduct(item) {
   const nome = item.nome || '';
   const descricao = item.descricao || '';
   const categoria = item.categoria || '';
+  const taxonomy = resolveProductTaxonomy(item);
   const foto = item.foto || '';
   const valor = item.valor_unitario ?? '';
   return {
@@ -857,6 +1186,12 @@ function persistProduct(item) {
     subtitle: descricao,
     categoria,
     category: categoria,
+    grupoId: item.tipo === 'combo' ? '' : taxonomy.grupoId,
+    grupo: item.tipo === 'combo' ? '' : taxonomy.grupo,
+    subgrupoId: item.tipo === 'combo' ? '' : taxonomy.subgrupoId,
+    subgrupo: item.tipo === 'combo' ? '' : taxonomy.subgrupo,
+    formato: item.tipo === 'combo' ? '' : taxonomy.formato,
+    familia: item.tipo === 'combo' ? '' : taxonomy.familia,
     volume_peso: Number.isFinite(Number(item.volume_peso)) ? Number(item.volume_peso) : 0,
     medida: normalizeMedida(item.medida) || 'UN',
     tipo: item.tipo === 'combo' ? 'combo' : 'simples',
@@ -865,6 +1200,7 @@ function persistProduct(item) {
     estoque_sugerido: Number.isFinite(Number(item.estoque_sugerido)) ? Number(item.estoque_sugerido) : 0,
     valor_unitario: valor,
     cost: valor,
+    custo_compra: item.custo_compra || '',
     foto,
     image: foto,
     stock: item.stock || '',
@@ -903,6 +1239,173 @@ export async function addInventoryCategory(name) {
   return { name: label, inventory: normalizeInventory(next) };
 }
 
+function cleanLabel(name, emptyMessage) {
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error(emptyMessage);
+  if (label.toLowerCase() === 'todos') throw new Error('Use outro nome.');
+  return label;
+}
+
+function cleanNote(value) {
+  return String(value || '').trim().slice(0, 240);
+}
+
+export async function createMenuGroup(name, description = '') {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o nome do grupo.');
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  if (groups.some((group) => group.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Esse grupo já existe.');
+  }
+  const group = {
+    id: taxonomyId(label, new Set(groups.map((item) => item.id))),
+    name: label,
+    description: cleanNote(description),
+    subgroups: [],
+  };
+  await saveInventory({ ...current, groups: [...groups, group] }, current.items || []);
+  return group;
+}
+
+export async function renameMenuGroup(groupId, name, description = '') {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o nome do grupo.');
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  if (!groups.some((group) => group.id === groupId)) throw new Error('Grupo não encontrado.');
+  if (groups.some((group) => group.id !== groupId && group.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Esse grupo já existe.');
+  }
+  const nextGroups = groups.map((group) =>
+    group.id === groupId ? { ...group, name: label, description: cleanNote(description) } : group
+  );
+  const items = (current.items || []).map((item) =>
+    item.grupoId === groupId ? persistProduct(presentProduct({ ...item, grupo: label }, item.codigo)) : persistProduct(presentProduct(item, item.codigo))
+  );
+  await saveInventory({ ...current, groups: nextGroups }, items);
+  return nextGroups.find((group) => group.id === groupId);
+}
+
+export async function createMenuSubgroup(groupId, name) {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o nome do subgrupo.');
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  const group = groups.find((item) => item.id === groupId);
+  if (!group) throw new Error('Grupo não encontrado.');
+  if ((group.subgroups || []).some((item) => item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Esse subgrupo já existe.');
+  }
+  const subgroup = {
+    id: taxonomyId(label, new Set((group.subgroups || []).map((item) => item.id))),
+    name: label,
+  };
+  const nextGroups = groups.map((item) =>
+    item.id === groupId ? { ...item, subgroups: [...(item.subgroups || []), subgroup] } : item
+  );
+  await saveInventory({ ...current, groups: nextGroups }, current.items || []);
+  return subgroup;
+}
+
+export async function renameMenuSubgroup(groupId, subgroupId, name) {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o nome do subgrupo.');
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  const group = groups.find((item) => item.id === groupId);
+  if (!group || !(group.subgroups || []).some((item) => item.id === subgroupId)) {
+    throw new Error('Subgrupo não encontrado.');
+  }
+  if ((group.subgroups || []).some((item) => item.id !== subgroupId && item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Esse subgrupo já existe.');
+  }
+  const nextGroups = groups.map((item) =>
+    item.id === groupId
+      ? {
+          ...item,
+          subgroups: item.subgroups.map((sub) => (sub.id === subgroupId ? { ...sub, name: label } : sub)),
+        }
+      : item
+  );
+  const items = (current.items || []).map((item) =>
+    item.subgrupoId === subgroupId
+      ? persistProduct(presentProduct({ ...item, subgrupo: label, categoria: label }, item.codigo))
+      : persistProduct(presentProduct(item, item.codigo))
+  );
+  await saveInventory({ ...current, groups: nextGroups }, items);
+  return { id: subgroupId, name: label };
+}
+
+export async function createProductFormat(name) {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o formato.');
+  const formats = mergeFormats(current.formats);
+  if (formats.some((item) => item.toLowerCase() === label.toLowerCase())) throw new Error('Esse formato já existe.');
+  await saveInventory({ ...current, formats: [...formats, label] }, current.items || []);
+  return label;
+}
+
+export async function renameProductFormat(currentName, name) {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o formato.');
+  const formats = mergeFormats(current.formats);
+  if (!formats.some((item) => item.toLowerCase() === String(currentName || '').toLowerCase())) {
+    throw new Error('Formato não encontrado.');
+  }
+  if (formats.some((item) => item.toLowerCase() === label.toLowerCase() && item.toLowerCase() !== String(currentName).toLowerCase())) {
+    throw new Error('Esse formato já existe.');
+  }
+  const nextFormats = formats.map((item) => (item.toLowerCase() === String(currentName).toLowerCase() ? label : item));
+  const items = (current.items || []).map((item) =>
+    String(item.formato || '').toLowerCase() === String(currentName).toLowerCase()
+      ? persistProduct(presentProduct({ ...item, formato: label }, item.codigo))
+      : persistProduct(presentProduct(item, item.codigo))
+  );
+  await saveInventory({ ...current, formats: nextFormats }, items);
+  return label;
+}
+
+export async function removeMenuGroup(groupId) {
+  const current = await getInventory();
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  if (!groups.some((group) => group.id === groupId)) throw new Error('Grupo não encontrado.');
+  if ((current.items || []).some((item) => item.grupoId === groupId)) {
+    throw new Error('Esse grupo está em produtos.');
+  }
+  await saveInventory(
+    { ...current, groups: groups.filter((group) => group.id !== groupId) },
+    current.items || []
+  );
+}
+
+export async function removeMenuSubgroup(groupId, subgroupId) {
+  const current = await getInventory();
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  const group = groups.find((item) => item.id === groupId);
+  if (!group || !(group.subgroups || []).some((item) => item.id === subgroupId)) {
+    throw new Error('Subgrupo não encontrado.');
+  }
+  if ((current.items || []).some((item) => item.subgrupoId === subgroupId)) {
+    throw new Error('Esse subgrupo está em produtos.');
+  }
+  const nextGroups = groups.map((item) =>
+    item.id === groupId ? { ...item, subgroups: item.subgroups.filter((sub) => sub.id !== subgroupId) } : item
+  );
+  await saveInventory({ ...current, groups: nextGroups }, current.items || []);
+}
+
+export async function removeProductFormat(name) {
+  const current = await getInventory();
+  const formats = mergeFormats(current.formats);
+  if (!formats.some((item) => item.toLowerCase() === String(name || '').toLowerCase())) {
+    throw new Error('Formato não encontrado.');
+  }
+  if ((current.items || []).some((item) => String(item.formato || '').toLowerCase() === String(name).toLowerCase())) {
+    throw new Error('Esse formato está em produtos.');
+  }
+  await saveInventory(
+    { ...current, formats: formats.filter((item) => item.toLowerCase() !== String(name).toLowerCase()) },
+    current.items || []
+  );
+}
+
 export async function createInventoryItem(payload) {
   const current = await getInventory();
   const nome = String(payload.nome || payload.name || '').trim();
@@ -915,7 +1418,9 @@ export async function createInventoryItem(payload) {
     throw new Error('Estoque sugerido inválido.');
   }
 
-  const categoria = String(payload.categoria || payload.category || 'Insumos').trim() || 'Insumos';
+  const placed = taxonomyFromPayload(payload, current.groups);
+  if (!placed.grupo) throw new Error('Selecione o grupo.');
+  const categoria = placed.subgrupo || placed.grupo;
   const medida = assertMedida(payload.medida);
   const volumePeso = assertVolumePeso(payload.volume_peso);
   const now = new Date().toISOString();
@@ -936,11 +1441,13 @@ export async function createInventoryItem(payload) {
       marca: payload.marca,
       descricao: payload.descricao,
       categoria,
+      ...placed,
       volume_peso: volumePeso,
       medida,
       estoque_atual: estoqueAtual,
       estoque_sugerido: estoqueSugerido,
       valor_unitario: payload.valor_unitario ?? payload.cost,
+      custo_compra: payload.custo_compra,
       produzido: Boolean(payload.produzido),
       foto: payload.foto || payload.image || '',
       stock: formatStockLabel(estoqueAtual, 'un'),
@@ -980,6 +1487,8 @@ export async function updateInventoryItem(itemId, payload) {
     throw new Error('Estoque sugerido inválido.');
   }
 
+  const placed = taxonomyFromPayload(payload, current.groups, currentItem);
+  if (!placed.grupo && currentItem.tipo !== 'combo') throw new Error('Selecione o grupo.');
   const now = new Date().toISOString();
   const actor = await actorId();
   const draft = presentProduct(
@@ -988,12 +1497,14 @@ export async function updateInventoryItem(itemId, payload) {
       nome,
       marca: payload.marca ?? currentItem.marca,
       descricao: payload.descricao ?? currentItem.descricao,
-      categoria: payload.categoria || payload.category || currentItem.categoria,
+      ...placed,
+      categoria: placed.subgrupo || placed.grupo || currentItem.categoria,
       volume_peso: volumePeso,
       medida,
       estoque_atual: estoqueAtual,
       estoque_sugerido: estoqueSugerido,
       valor_unitario: payload.valor_unitario ?? payload.cost ?? currentItem.valor_unitario,
+      custo_compra: payload.custo_compra != null ? payload.custo_compra : currentItem.custo_compra,
       produzido: payload.produzido == null ? Boolean(currentItem.produzido) : Boolean(payload.produzido),
       foto: payload.foto || payload.image || currentItem.foto,
       stock: formatStockLabel(estoqueAtual, parseStockLabel(currentItem.stock).unit || 'un'),
@@ -1102,9 +1613,9 @@ export async function registerPurchase(payload) {
     const categories = cash.categories?.length ? cash.categories : expenseCategories;
     const category = categories.find((item) => item.id === payload.categoryId);
     if (!category) throw new Error('Selecione a categoria.');
-    if (expensePartyKind(category.id) === 'freelancer') {
-      throw new Error('Compra de estoque não usa a categoria Freelancer.');
-    }
+    const party = expensePartyKind(category.id);
+    if (party === 'freelancer') throw new Error('Compra de estoque não usa a categoria Freelancer.');
+    if (party === 'staff') throw new Error('Compra de estoque não usa a categoria Funcionários.');
 
     const grouped = new Map();
     linhas.forEach((linha) => {
@@ -1183,6 +1694,14 @@ export async function registerPurchase(payload) {
         payload.nature === 'fixed' || payload.nature === 'variable'
           ? payload.nature
           : category.defaultNature || 'variable',
+      description: describeExpense({
+        party: 'supplier',
+        categoryName: category.name,
+        supplier: supplier.name,
+        date,
+        productNames: itens.map((linha) => linha.nome),
+        note: payload.description,
+      }),
       value: formatCents(amountCents),
       amount: amountCents,
       recurrence: payload.recurrence === 'monthly' ? 'monthly' : null,
@@ -1696,6 +2215,143 @@ export async function createCustomer(payload) {
   return customer;
 }
 
+export async function updateCustomer(customerId, payload) {
+  const current = await getCustomers();
+  const existing = current.customers.find((item) => String(item.id) === String(customerId));
+  if (!existing) throw new Error('Cliente não encontrado.');
+  const nome = String(payload.nome || '').trim();
+  if (!nome) throw new Error('Informe o nome.');
+  if (!isValidPhone(payload.contato)) throw new Error('Contato inválido.');
+  const customer = { ...existing, nome, contato: maskPhone(payload.contato) };
+  await writeDocument(DOCS.customers, {
+    customers: current.customers.map((item) => (item.id === existing.id ? customer : item)),
+  });
+  return customer;
+}
+
+function moneyLabel(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function buildPayments(payload, due, now) {
+  if (due <= 0.001) return [];
+  const raw =
+    Array.isArray(payload.pagamentos) && payload.pagamentos.length
+      ? payload.pagamentos
+      : [
+          {
+            forma_pagamento: payload.forma_pagamento,
+            valor: due,
+            valor_recebido: payload.valor_recebido,
+            parcelas: payload.parcelas,
+          },
+        ];
+  const payments = raw.map((row, index) => {
+    const forma = assertPaymentMethod(row.forma_pagamento);
+    const valor = assertPrice(row.valor);
+    if (valor <= 0) throw new Error('Informe o valor do pagamento.');
+    let valorRecebido = null;
+    let troco = null;
+    let parcelas = null;
+    if (forma === 'dinheiro') {
+      valorRecebido = assertPrice(row.valor_recebido);
+      if (valorRecebido < valor) throw new Error('O dinheiro entregue precisa cobrir o pagamento.');
+      troco = Math.round((valorRecebido - valor) * 100) / 100;
+    }
+    if (forma === 'cartao_credito') parcelas = assertInstallments(row.parcelas);
+    return {
+      id: `pay-${Date.now()}-${index}`,
+      valor,
+      forma_pagamento: forma,
+      valor_recebido: valorRecebido,
+      troco,
+      parcelas,
+      created_at: now.toISOString(),
+    };
+  });
+  const sum = Math.round(payments.reduce((acc, row) => acc + row.valor, 0) * 100) / 100;
+  if (Math.abs(sum - due) > 0.001) throw new Error('A soma dos pagamentos precisa fechar o saldo.');
+  return payments;
+}
+
+function withoutComandaBalance(expenses, saleId) {
+  return (expenses || []).filter(
+    (row) => !(row.source === 'comanda_saldo' && String(row.saleId) === String(saleId))
+  );
+}
+
+function withComandaBalance(expenses, sale, now) {
+  const rest = withoutComandaBalance(expenses, sale.id);
+  const falta = Math.max(saleBalance(sale), 0);
+  if (sale.status !== 'aberta' || falta <= 0.001) return rest;
+  const cents = Math.round(falta * 100);
+  const paid = salePaidAmount(sale);
+  const faltaLabel = moneyLabel(falta);
+  return [
+    {
+      id: `exp-comanda-${sale.id}`,
+      date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
+      description:
+        paid > 0.001
+          ? `Comanda ${sale.numero_comanda} · falta ${faltaLabel}`
+          : `Comanda ${sale.numero_comanda} · produtos servidos, falta ${faltaLabel}`,
+      category: 'Comanda',
+      categoryId: 'comanda_aberta',
+      categoryIcon: 'receipt_long',
+      nature: 'variable',
+      supplier: sale.cliente_nome || '',
+      supplierId: null,
+      amount: cents,
+      value: formatCents(cents),
+      source: 'comanda_saldo',
+      saleId: sale.id,
+      createdAt: now.toISOString(),
+    },
+    ...rest,
+  ];
+}
+
+function cashWithComanda(cash, sale, now, income) {
+  const expenses = withComandaBalance(cash.expenses, sale, now);
+  const incomes = income ? [income, ...(cash.incomes || [])] : cash.incomes || [];
+  const summary = buildCashFlowSummary(incomes, expenses, {
+    revenueDelta: cash.summary?.revenueDelta,
+    expensesDelta: cash.summary?.expensesDelta,
+  });
+  return {
+    ...cash,
+    incomes,
+    expenses,
+    summary: { ...cash.summary, ...summary },
+  };
+}
+
+function adjustSaleStock(inventory, previousItens, nextResolved, alreadyDeducted) {
+  if (!alreadyDeducted) return deductSaleStock(inventory, nextResolved);
+  const prev = new Map();
+  (previousItens || []).forEach((item) => {
+    const id = String(item.produto_id);
+    prev.set(id, (prev.get(id) || 0) + Number(item.quantidade || 0));
+  });
+  const deltas = [];
+  nextResolved.forEach((line) => {
+    const id = String(line.produto.id);
+    const before = prev.get(id) || 0;
+    prev.delete(id);
+    const delta = line.quantidade - before;
+    if (delta !== 0) deltas.push({ ...line, quantidade: delta });
+  });
+  prev.forEach((qty, id) => {
+    const produto = (inventory.items || []).find((item) => String(item.id) === id);
+    if (!produto || !qty) return;
+    deltas.push({ produto, quantidade: -qty });
+  });
+  if (!deltas.length) {
+    return (inventory.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  }
+  return deductSaleStock(inventory, deltas);
+}
+
 function resolveSaleLines(inventory, linhas, now) {
   if (!Array.isArray(linhas) || !linhas.length) throw new Error('O carrinho está vazio.');
   return linhas.map((linha) => {
@@ -1703,9 +2359,11 @@ function resolveSaleLines(inventory, linhas, now) {
     if (!produto) throw new Error('Produto não encontrado.');
     const quantidade = Number(linha.quantidade);
     if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
-    const valorUnitario = saleUnitPrice(produto, inventory.promotions, now);
+    const promo = promotionPriceAt(inventory.promotions, produto.id, now);
+    const valorUnitario =
+      promo != null ? promo : parseMoneyToCents(produto.valor_unitario || produto.cost || 0) / 100;
     const valorTotal = Math.round(valorUnitario * quantidade * 100) / 100;
-    return { produto, quantidade, valor_unitario: valorUnitario, valor_total: valorTotal };
+    return { produto, quantidade, valor_unitario: valorUnitario, valor_total: valorTotal, promocao: promo != null };
   });
 }
 
@@ -1716,6 +2374,7 @@ function saleItems(resolved) {
     quantidade: line.quantidade,
     valor_unitario: line.valor_unitario,
     valor_total: line.valor_total,
+    promocao: Boolean(line.promocao),
   }));
 }
 
@@ -1746,14 +2405,6 @@ function deductSaleStock(inventory, resolved) {
     take(line.produto.id, line.quantidade);
   });
   return items.map((item) => persistProduct(presentProduct(item, item.codigo)));
-}
-
-function pdvIncomeDescription(numero, clienteNome, observacao, tag) {
-  const who = clienteNome || 'Consumidor';
-  const base = numero != null ? `PDV · comanda ${numero} · ${who}` : `PDV · ${who}`;
-  const tagged = tag ? `${base} · ${tag}` : base;
-  const note = optionalNote(observacao);
-  return note ? `${tagged} · ${note}` : tagged;
 }
 
 function assertOpenComandaFree(sales, numero, saleId) {
@@ -1827,6 +2478,7 @@ export async function saveOpenSale(payload) {
       pagamentos: existing?.pagamentos || [],
       historico: existing?.historico || [],
       itens: saleItems(resolved),
+      estoque_baixado: true,
       created_at: existing?.created_at || now.toISOString(),
       updated_at: now.toISOString(),
       usuario_id: existing?.usuario_id || usuarioId,
@@ -1834,15 +2486,20 @@ export async function saveOpenSale(payload) {
     const sales = existing
       ? inventory.sales.map((item) => (item.id === sale.id ? sale : item))
       : [sale, ...(inventory.sales || [])];
+    const stored = adjustSaleStock(inventory, existing?.itens, resolved, Boolean(existing?.estoque_baixado));
+    const cash = ops.cashFlow || cashFlowFallback;
     return {
-      ops: { ...ops, inventory: { ...inventory, sales } },
+      ops: {
+        ...ops,
+        inventory: { ...inventory, items: stored, sales },
+        cashFlow: cashWithComanda(cash, sale, now, null),
+      },
       value: sale,
     };
   });
 }
 
 export async function registerSale(payload) {
-  const forma = assertPaymentMethod(payload.forma_pagamento);
   const numero = optionalComanda(payload.numero_comanda);
   const usuarioId = await actorId();
   await ensureDashboardSeed();
@@ -1862,43 +2519,25 @@ export async function registerSale(payload) {
     const already = salePaidAmount(existing);
     if (already - total > 0.001) throw new Error('O total não pode ficar menor que o já pago.');
     const due = Math.round((total - already) * 100) / 100;
-    let valorRecebido = null;
-    let troco = null;
-    let parcelas = null;
-    if (forma === 'dinheiro' && due > 0) {
-      valorRecebido = assertPrice(payload.valor_recebido);
-      if (valorRecebido < due) throw new Error('Valor recebido menor que o saldo.');
-      troco = Math.round((valorRecebido - due) * 100) / 100;
-    }
-    if (forma === 'cartao_credito' && due > 0) parcelas = assertInstallments(payload.parcelas);
-    const stored = deductSaleStock(inventory, resolved);
-    const payment =
-      due > 0
-        ? {
-            id: `pay-${Date.now()}`,
-            valor: due,
-            forma_pagamento: forma,
-            valor_recebido: valorRecebido,
-            troco,
-            parcelas,
-            created_at: now.toISOString(),
-          }
-        : null;
+    const payments = buildPayments(payload, due, now);
+    const payment = payments[0] || null;
+    const stored = adjustSaleStock(inventory, existing?.itens, resolved, Boolean(existing?.estoque_baixado));
     const sale = normalizeSale({
       id: existing?.id || `sale-${Date.now()}`,
       numero_comanda: numero,
       status: 'paga',
       cliente_id: cliente.id,
       cliente_nome: cliente.nome,
-      forma_pagamento: forma,
-      valor_recebido: valorRecebido,
-      troco,
-      parcelas,
+      forma_pagamento: payments.length === 1 ? payments[0].forma_pagamento : null,
+      valor_recebido: payments.length === 1 ? payments[0].valor_recebido : null,
+      troco: payments.length === 1 ? payments[0].troco : null,
+      parcelas: payments.length === 1 ? payments[0].parcelas : null,
       total,
       observacao: optionalNote(payload.observacao, existing?.observacao),
-      pagamentos: payment ? [...(existing?.pagamentos || []), payment] : existing?.pagamentos || [],
+      pagamentos: [...(existing?.pagamentos || []), ...payments],
       historico: existing?.historico || [],
       itens: saleItems(resolved),
+      estoque_baixado: true,
       created_at: existing?.created_at || now.toISOString(),
       updated_at: now.toISOString(),
       usuario_id: usuarioId,
@@ -1912,8 +2551,8 @@ export async function registerSale(payload) {
       ? {
           id: `inc-${payment.id}`,
           date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
-          description: pdvIncomeDescription(numero, cliente.nome, sale.observacao),
-          category: 'Varejo',
+          description: saleDescription(sale),
+          category: saleGroupLabel(sale, inventory.items),
           categoryIcon: 'payments',
           categoryTone: 'secondary',
           value: formatCents(amountCents),
@@ -1925,11 +2564,6 @@ export async function registerSale(payload) {
           createdAt: now.toISOString(),
         }
       : null;
-    const incomes = payment ? [income, ...(cash.incomes || [])] : cash.incomes || [];
-    const summary = buildCashFlowSummary(incomes, cash.expenses || [], {
-      revenueDelta: cash.summary?.revenueDelta,
-      expensesDelta: cash.summary?.expensesDelta,
-    });
     return {
       ops: {
         ...ops,
@@ -1938,11 +2572,103 @@ export async function registerSale(payload) {
           items: stored,
           sales,
         },
-        cashFlow: {
-          ...cash,
-          incomes,
-          summary: { ...cash.summary, ...summary },
-        },
+        cashFlow: cashWithComanda(cash, sale, now, income),
+      },
+      value: sale,
+    };
+  });
+}
+
+export async function updateRecordedSale(saleId, payload) {
+  const id = String(saleId || '').trim();
+  if (!id) throw new Error('Venda não encontrada.');
+  await ensureDashboardSeed();
+  const now = await readServerNow();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const existing = (inventory.sales || []).find((sale) => String(sale.id) === id);
+    if (!existing) throw new Error('Venda não encontrada.');
+    const resolved = resolveSaleLines(inventory, payload.itens, now);
+    const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
+    const formPayments = (Array.isArray(payload.pagamentos) ? payload.pagamentos : []).filter(
+      (row) => Number(row?.valor) > 0
+    );
+    const declared = Math.round(formPayments.reduce((acc, row) => acc + Number(row.valor || 0), 0) * 100) / 100;
+    const openSale = existing.status === 'aberta';
+    if (declared - total > 0.001 || (!openSale && Math.abs(declared - total) > 0.001)) {
+      throw new Error('A soma dos pagamentos precisa fechar o saldo.');
+    }
+    const payments = declared > 0.001 ? buildPayments({ pagamentos: formPayments }, declared, now) : [];
+    const covers = total <= 0.001 || total - declared <= 0.001;
+    const status = !openSale || covers ? 'paga' : 'aberta';
+    const stored = adjustSaleStock(inventory, existing.itens, resolved, Boolean(existing.estoque_baixado));
+    const sale = normalizeSale({
+      ...existing,
+      status,
+      forma_pagamento: payments.length === 1 ? payments[0].forma_pagamento : null,
+      valor_recebido: payments.length === 1 ? payments[0].valor_recebido : null,
+      troco: payments.length === 1 ? payments[0].troco : null,
+      parcelas: payments.length === 1 ? payments[0].parcelas : null,
+      total,
+      observacao: optionalNote(payload.observacao, ''),
+      pagamentos: payments,
+      itens: saleItems(resolved),
+      estoque_baixado: true,
+      updated_at: now.toISOString(),
+    });
+    const sales = inventory.sales.map((item) => (item.id === sale.id ? sale : item));
+    const cash = ops.cashFlow || cashFlowFallback;
+    const historyPayIds = new Set();
+    (existing.historico || []).forEach((cycle) => {
+      (cycle.pagamentos || []).forEach((pay) => historyPayIds.add(`inc-${pay.id}`));
+    });
+    const currentPayIds = new Set((existing.pagamentos || []).map((pay) => `inc-${pay.id}`));
+    const kept = [];
+    const removed = [];
+    (cash.incomes || []).forEach((row) => {
+      const rowId = String(row.id || '');
+      if (historyPayIds.has(rowId)) {
+        kept.push(row);
+        return;
+      }
+      if (String(row.saleId) === id || currentPayIds.has(rowId)) {
+        removed.push(row);
+        return;
+      }
+      kept.push(row);
+    });
+    const original = [...removed].sort((left, right) =>
+      String(left.createdAt || '').localeCompare(String(right.createdAt || ''))
+    )[0];
+    const paidCents = Math.round(declared * 100);
+    const falta = Math.max(Math.round((total - declared) * 100) / 100, 0);
+    const description =
+      status === 'aberta' && declared > 0.001 && falta > 0.001
+        ? `${saleDescription(sale)} · pago ${moneyLabel(declared)} · falta ${moneyLabel(falta)}`
+        : saleDescription(sale);
+    const income =
+      paidCents > 0
+        ? {
+            id: original?.id || `inc-${payments[0].id}`,
+            date: original?.date || formatExpenseDate(format(now, 'yyyy-MM-dd')),
+            description,
+            category: saleGroupLabel(sale, stored),
+            categoryIcon: 'payments',
+            categoryTone: 'secondary',
+            value: formatCents(paidCents),
+            amount: paidCents,
+            source: 'pdv',
+            saleId: sale.id,
+            cliente: existing.cliente_nome || '',
+            importKey: null,
+            createdAt: original?.createdAt || now.toISOString(),
+          }
+        : null;
+    return {
+      ops: {
+        ...ops,
+        inventory: { ...inventory, items: stored, sales },
+        cashFlow: cashWithComanda({ ...cash, incomes: kept }, sale, now, income),
       },
       value: sale,
     };
@@ -1980,7 +2706,7 @@ export async function registerPartialPayment(payload) {
     let parcelas = null;
     if (forma === 'dinheiro') {
       valorRecebido = assertPrice(payload.valor_recebido);
-      if (valorRecebido < valor) throw new Error('Valor recebido menor que o pagamento.');
+      if (valorRecebido < valor) throw new Error('O dinheiro entregue precisa cobrir o pagamento.');
       troco = Math.round((valorRecebido - valor) * 100) / 100;
     }
     if (forma === 'cartao_credito') parcelas = assertInstallments(payload.parcelas);
@@ -2018,26 +2744,26 @@ export async function registerPartialPayment(payload) {
       itens: keepOpen ? [] : existing.itens,
       pagamentos: keepOpen ? [] : [...(existing.pagamentos || []), payment],
       historico: cycle ? [...(existing.historico || []), cycle] : existing.historico || [],
+      estoque_baixado: Boolean(existing.estoque_baixado) || covers,
       updated_at: now.toISOString(),
       usuario_id: existing.usuario_id || usuarioId,
     });
     const sales = inventory.sales.map((item) => (item.id === existing.id ? sale : item));
-    const stored = covers
-      ? deductSaleStock(inventory, storedSaleLines(inventory, existing.itens))
-      : ops.inventory?.items || inventory.items;
+    const stored =
+      covers && !existing.estoque_baixado
+        ? deductSaleStock(inventory, storedSaleLines(inventory, existing.itens))
+        : inventory.items;
     const cash = ops.cashFlow || cashFlowFallback;
     const amountCents = Math.round(valor * 100);
-    const numero = sale.numero_comanda;
+    const falta = Math.max(saleBalance(sale), 0);
     const income = {
       id: `inc-${payment.id}`,
       date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
-      description: pdvIncomeDescription(
-        numero,
-        sale.cliente_nome,
-        sale.observacao,
-        destino === 'fechar' ? 'fechamento' : destino === 'ativa' ? 'quitada' : 'parcial',
-      ),
-      category: 'Varejo',
+      description:
+        falta > 0.001
+          ? `${saleDescription(existing)} · pago ${moneyLabel(valor)} · falta ${moneyLabel(falta)}`
+          : saleDescription(existing),
+      category: saleGroupLabel(existing, inventory.items),
       categoryIcon: 'payments',
       categoryTone: 'secondary',
       value: formatCents(amountCents),
@@ -2048,11 +2774,6 @@ export async function registerPartialPayment(payload) {
       importKey: null,
       createdAt: now.toISOString(),
     };
-    const incomes = [income, ...(cash.incomes || [])];
-    const summary = buildCashFlowSummary(incomes, cash.expenses || [], {
-      revenueDelta: cash.summary?.revenueDelta,
-      expensesDelta: cash.summary?.expensesDelta,
-    });
     return {
       ops: {
         ...ops,
@@ -2061,11 +2782,7 @@ export async function registerPartialPayment(payload) {
           items: stored,
           sales,
         },
-        cashFlow: {
-          ...cash,
-          incomes,
-          summary: { ...cash.summary, ...summary },
-        },
+        cashFlow: cashWithComanda(cash, sale, now, income),
       },
       value: sale,
     };
@@ -2322,6 +3039,12 @@ export async function updateDaily(target, payload) {
       categoryIcon: dailyCategory?.icon || 'person',
       value: formatCents(amountCents),
       amount: amountCents,
+      description: describeExpense({
+        party: 'freelancer',
+        categoryName: dailyCategory?.name || 'Freelancer',
+        supplier: person.name,
+        date: payload.date,
+      }),
       source: 'freelancer_daily',
     };
     await saveCashFlow(cash, { expenses });
@@ -2555,8 +3278,8 @@ export async function getStaff() {
 async function syncPeoplePayroll(people) {
   const current = await getCashFlow();
   const category =
-    (current.categories || expenseCategories).find((item) => item.id === 'salarios') ||
-    expenseCategories.find((item) => item.id === 'salarios');
+    (current.categories || expenseCategories).find((item) => item.id === 'funcionarios') ||
+    expenseCategories.find((item) => item.id === 'funcionarios');
   const expenses = syncStaffPayrollExpenses(
     people,
     current.expenses || [],
@@ -2569,10 +3292,11 @@ async function syncPeoplePayroll(people) {
       isoDate: iso,
       supplier: person.name || 'Funcionário',
       supplierId: null,
-      category: category?.name || 'Salários',
-      categoryId: category?.id || 'salarios',
+      category: category?.name || 'Funcionários',
+      categoryId: category?.id || 'funcionarios',
       categoryIcon: category?.icon || 'badge',
-      nature: 'fixed',
+      description: `Pagamento de ${person.name || 'funcionário'}`,
+      nature: 'variable',
       value: formatCents(amount),
       amount,
       recurrence: 'monthly',
@@ -2684,6 +3408,32 @@ export async function saveStaffPerson(payload) {
   return memberFromPerson(person);
 }
 
+function staffExpenseRow(row) {
+  return (
+    expensePartyKind(row?.categoryId) === 'staff' ||
+    row?.categoryId === 'funcionarios' ||
+    row?.categoryId === 'salarios'
+  );
+}
+
+async function renameStaffExpenses(staffId, previousName, nextName) {
+  const current = await getCashFlow();
+  const previous = String(previousName || '').trim().toLowerCase();
+  let changed = false;
+  const expenses = (current.expenses || []).map((row) => {
+    if (!staffExpenseRow(row) || row.source === 'comanda_saldo') return row;
+    const linked =
+      String(row.staffId || '') === String(staffId) ||
+      (!row.staffId && previous && String(row.supplier || '').trim().toLowerCase() === previous);
+    if (!linked) return row;
+    changed = true;
+    const description =
+      row.description === `Pagamento de ${previousName}` ? `Pagamento de ${nextName}` : row.description;
+    return { ...row, supplier: nextName, staffId: String(staffId), description };
+  });
+  if (changed) await saveCashFlow(current, { expenses });
+}
+
 export async function updateStaffPerson(staffId, payload) {
   const current = await getStaff();
   const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
@@ -2699,6 +3449,9 @@ export async function updateStaffPerson(staffId, payload) {
   });
   const next = await storeStaffPeople(people);
   const saved = next.people.find((person) => String(person.id) === String(staffId));
+  if (saved && existing.name !== saved.name) {
+    await renameStaffExpenses(saved.id, existing.name, saved.name);
+  }
   if (saved?.uid) {
     await patchStaffUser(saved.uid, {
       name: saved.name,

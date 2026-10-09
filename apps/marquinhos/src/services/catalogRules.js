@@ -52,11 +52,22 @@ export function promotionIsActive(promotion, now) {
   return promotionWindowOpen(promotion, now);
 }
 
+export function promotionDays(promotion) {
+  const raw =
+    Array.isArray(promotion?.dias_semana) && promotion.dias_semana.length
+      ? promotion.dias_semana
+      : [promotion?.dia_semana];
+  const values = raw
+    .map((value) => weekdayByValue(value)?.value)
+    .filter((value) => value === 0 || value);
+  const unique = new Set(values);
+  return WEEKDAYS.map((day) => day.value).filter((value) => unique.has(value));
+}
+
 function promotionApplies(promotion, now) {
   if (!promotionIsActive(promotion, now)) return false;
   if (!isWeekdayPromotion(promotion)) return true;
-  const day = weekdayByValue(promotion.dia_semana);
-  return Boolean(day) && now.getDay() === day.value;
+  return promotionDays(promotion).includes(now.getDay());
 }
 
 function promotionRank(promotion) {
@@ -87,10 +98,10 @@ export function assertPromotionWindow(inicio, termino) {
   };
 }
 
-export function assertWeekday(value) {
-  const day = weekdayByValue(value);
-  if (!day) throw new Error('Escolha um dia da semana.');
-  return day.value;
+export function assertWeekdays(values) {
+  const days = promotionDays({ dias_semana: Array.isArray(values) ? values : [values] });
+  if (!days.length) throw new Error('Escolha ao menos um dia da semana.');
+  return days;
 }
 
 export function assertOptionalEnd(value) {
@@ -102,9 +113,13 @@ export function assertOptionalEnd(value) {
 
 export function promotionSchedule(payload) {
   if (payload?.vigencia === 'semana') {
+    const days = assertWeekdays(
+      Array.isArray(payload.dias_semana) && payload.dias_semana.length ? payload.dias_semana : payload.dia_semana
+    );
     return {
       vigencia: 'semana',
-      dia_semana: assertWeekday(payload.dia_semana),
+      dia_semana: days[0],
+      dias_semana: days,
       data_inicio: null,
       data_termino: assertOptionalEnd(payload.data_termino),
     };
@@ -113,6 +128,7 @@ export function promotionSchedule(payload) {
   return {
     vigencia: 'periodo',
     dia_semana: null,
+    dias_semana: [],
     data_inicio: janela.data_inicio,
     data_termino: janela.data_termino,
   };
@@ -151,11 +167,16 @@ export function formatCatalogDate(value) {
   return format(parsed, 'dd/MM/yyyy HH:mm', { locale: ptBR });
 }
 
+function weekdayPhrase(days) {
+  const phrases = days.map((value) => weekdayByValue(value)?.phrase).filter(Boolean);
+  if (!phrases.length) return '—';
+  if (phrases.length === 1) return `Toda ${phrases[0]}`;
+  if (phrases.length === 2) return `Toda ${phrases[0]} e ${phrases[1]}`;
+  return `Toda ${phrases.slice(0, -1).join(', ')} e ${phrases[phrases.length - 1]}`;
+}
+
 export function formatPromotionStart(promotion) {
-  if (isWeekdayPromotion(promotion)) {
-    const day = weekdayByValue(promotion.dia_semana);
-    return day ? `Toda ${day.phrase}` : '—';
-  }
+  if (isWeekdayPromotion(promotion)) return weekdayPhrase(promotionDays(promotion));
   return formatCatalogDate(promotion?.data_inicio);
 }
 

@@ -118,15 +118,31 @@ export function Dropdown({
               className="z-[110] rounded-2xl border border-outline bg-surface p-2 shadow-sm"
             >
             {search ? (
-              <input
-                ref={searchRef}
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Buscar"
-                aria-label={`Buscar ${label}`}
-                className="mb-2 h-11 w-full rounded-lg border border-outline bg-surface px-3 text-sm font-normal text-on-surface outline-none placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-0 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
-              />
+              <div className="relative mb-2">
+                <input
+                  ref={searchRef}
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Buscar"
+                  aria-label={`Buscar ${label}`}
+                  className={`h-11 w-full rounded-lg border border-outline bg-surface pl-3 text-sm font-normal text-on-surface outline-none placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-0 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none [&::-moz-search-clear-button]:hidden ${query ? 'pr-11' : 'pr-3'}`}
+                />
+                {query ? (
+                  <button
+                    type="button"
+                    aria-label="Limpar busca"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setQuery('');
+                      searchRef.current?.focus();
+                    }}
+                    className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-lg text-on-surface-variant outline-none focus:outline-none focus:ring-0"
+                  >
+                    <Icon name="close" className="text-xl" />
+                  </button>
+                ) : null}
+              </div>
             ) : null}
             <ul
               id={listId}

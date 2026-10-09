@@ -1,7 +1,9 @@
 import { memo, useMemo, useState } from 'react';
 import { isValid, parseISO } from 'date-fns';
 import { Button } from '../ui/Button';
+import { Tag } from '../ui/DataTable';
 import { Icon } from '../ui/Icon';
+import { productGroupTag } from '../../services/catalogTaxonomy';
 import { SearchField } from '../ui/SearchField';
 import { PdvModal } from './PdvModal';
 import { saleUnitPrice } from '../../services/catalogRules';
@@ -48,7 +50,8 @@ export const PdvCatalog = memo(function PdvCatalog({
       id: String(item.id),
       nome: item.nome || item.name || 'Produto',
       codigo: item.codigo || '',
-      categoria: item.categoria || item.category || '',
+      categoria: item.grupo || item.categoria || item.category || '',
+      formato: item.formato || '',
       foto: item.foto || item.image || '',
       preco: valid ? saleUnitPrice(item, promotions, pricedAt) : saleUnitPrice(item, []),
       source: item,
@@ -112,6 +115,7 @@ export const PdvCatalog = memo(function PdvCatalog({
                   </div>
                   <div className="mt-3 pr-14">
                     <p className="line-clamp-2 text-sm font-semibold text-on-surface">{item.nome}</p>
+                    {item.formato ? <p className="text-xs text-on-surface-variant">{item.formato}</p> : null}
                     <p className="mt-1 font-headline text-lg font-extrabold text-on-surface">{money(item.preco)}</p>
                   </div>
                 </button>
@@ -156,6 +160,16 @@ export const PdvCatalog = memo(function PdvCatalog({
   );
 });
 
+function CatalogGroup({ item }) {
+  const tag = productGroupTag(item);
+  if (tag.label === '—') return <p className="font-medium text-on-surface">—</p>;
+  return (
+    <Tag tone={tag.tone} icon={tag.icon}>
+      {tag.label}
+    </Tag>
+  );
+}
+
 function Spec({ label, value }) {
   return (
     <div className="space-y-1">
@@ -178,7 +192,10 @@ function ProductSpecs({ item }) {
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Spec label="Código" value={item.codigo} />
-        <Spec label="Categoria" value={source.categoria || source.category || item.categoria} />
+        <div className="space-y-1">
+          <p className="text-xs font-label font-bold uppercase text-on-surface-variant">Grupo</p>
+          <CatalogGroup item={source.grupo || source.grupoId ? source : { grupo: source.categoria || source.category || item.categoria }} />
+        </div>
         <Spec label="Marca" value={source.marca} />
         <Spec label="Volume / peso" value={volume} />
         <Spec label="Medida" value={source.medida} />

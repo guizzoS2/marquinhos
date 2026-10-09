@@ -201,11 +201,12 @@ export function CatalogPage({ embedded = false, tab: tabProp }) {
                     <Td tone="muted">{formatPromotionStart(row)}</Td>
                     <Td tone="muted">{formatPromotionEnd(row)}</Td>
                     <Td>
-                      <StatusPill tone={row.status === 'Ativa' ? 'accent' : 'neutral'}>
+                      <StatusPill tone={row.status === 'Ativa' ? 'success' : 'neutral'}>
+                        <Icon name={row.status === 'Ativa' ? 'check' : 'cancel'} className="text-sm" />
                         {row.status === 'Ativa' ? 'Ativa' : 'Inativa'}
                       </StatusPill>
                     </Td>
-                    <Td align="right">
+                    <Td align="right" nowrap>
                       <TableActions>
                           <Button
                             type="button"
@@ -296,7 +297,8 @@ export function CatalogPage({ embedded = false, tab: tabProp }) {
                     icon="sell"
                     title={productName(row.produto_id)}
                     badge={
-                      <StatusPill tone={row.status === 'Ativa' ? 'accent' : 'neutral'}>
+                      <StatusPill tone={row.status === 'Ativa' ? 'success' : 'neutral'}>
+                        <Icon name={row.status === 'Ativa' ? 'check' : 'cancel'} className="text-sm" />
                         {row.status === 'Ativa' ? 'Ativa' : 'Inativa'}
                       </StatusPill>
                     }
@@ -403,7 +405,7 @@ export function CatalogPage({ embedded = false, tab: tabProp }) {
                       <Td align="right" tone="strong">
                         {combo.valor_unitario}
                       </Td>
-                      <Td align="right">
+                      <Td align="right" nowrap>
                         <TableActions>
                               <Button
                                 type="button"

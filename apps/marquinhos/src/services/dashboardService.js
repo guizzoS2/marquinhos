@@ -15,6 +15,14 @@ import {
   cancelPurchase,
   createExpense,
   addExpenseCategory,
+  renameExpenseCategory,
+  createExpenseSubtype,
+  renameExpenseSubtype,
+  removeExpenseCategory,
+  removeExpenseSubtype,
+  createPayee,
+  renamePayee,
+  removePayee,
   updateExpense,
   deleteExpense,
   createIncome,
@@ -33,13 +41,24 @@ import {
   deleteCombo,
   getCustomers,
   createCustomer,
+  updateCustomer,
   registerSale,
   saveOpenSale,
+  updateRecordedSale as saveRecordedSale,
   createOpenComanda,
   registerPartialPayment,
   closeShift,
   deleteInventoryItem,
   createInventoryItem,
+  createMenuGroup,
+  renameMenuGroup,
+  createMenuSubgroup,
+  renameMenuSubgroup,
+  createProductFormat,
+  renameProductFormat,
+  removeMenuGroup,
+  removeMenuSubgroup,
+  removeProductFormat,
   updateInventoryItem,
   peekNextProductCode,
   addInventoryCategory,
@@ -152,9 +171,9 @@ export function createCashExpense(payload) {
   return createExpense(payload);
 }
 
-export function createExpenseCategory(name) {
+export function createExpenseCategory(name, options) {
   requireAdmin();
-  return addExpenseCategory(name);
+  return addExpenseCategory(name, options);
 }
 
 export function editCashExpense(expenseId, payload) {
@@ -237,8 +256,16 @@ export function addCustomer(payload) {
   return createCustomer(payload);
 }
 
+export function editCustomer(customerId, payload) {
+  return updateCustomer(customerId, payload);
+}
+
 export function checkoutSale(payload) {
   return registerSale(payload);
+}
+
+export function updateRecordedSale(saleId, payload) {
+  return saveRecordedSale(saleId, payload);
 }
 
 export function saveOpenTab(payload) {
@@ -268,6 +295,74 @@ export function peekInventoryCode() {
 
 export function addInventoryFilter(name) {
   return addInventoryCategory(name);
+}
+
+export function addMenuGroup(name, description) {
+  return createMenuGroup(name, description);
+}
+
+export function editMenuGroup(groupId, name, description) {
+  return renameMenuGroup(groupId, name, description);
+}
+
+export function addMenuSubgroup(groupId, name) {
+  return createMenuSubgroup(groupId, name);
+}
+
+export function editMenuSubgroup(groupId, subgroupId, name) {
+  return renameMenuSubgroup(groupId, subgroupId, name);
+}
+
+export function addFormat(name) {
+  return createProductFormat(name);
+}
+
+export function editFormat(currentName, name) {
+  return renameProductFormat(currentName, name);
+}
+
+export function deleteMenuGroup(groupId) {
+  return removeMenuGroup(groupId);
+}
+
+export function deleteMenuSubgroup(groupId, subgroupId) {
+  return removeMenuSubgroup(groupId, subgroupId);
+}
+
+export function deleteFormat(name) {
+  return removeProductFormat(name);
+}
+
+export function editExpenseCategory(categoryId, name, options) {
+  return renameExpenseCategory(categoryId, name, options);
+}
+
+export function addExpenseSubtype(categoryId, name) {
+  return createExpenseSubtype(categoryId, name);
+}
+
+export function editExpenseSubtype(categoryId, subtypeId, name) {
+  return renameExpenseSubtype(categoryId, subtypeId, name);
+}
+
+export function deleteExpenseCategory(categoryId) {
+  return removeExpenseCategory(categoryId);
+}
+
+export function deleteExpenseSubtype(categoryId, subtypeId) {
+  return removeExpenseSubtype(categoryId, subtypeId);
+}
+
+export function addPayee(name) {
+  return createPayee(name);
+}
+
+export function editPayee(payeeId, name) {
+  return renamePayee(payeeId, name);
+}
+
+export function deletePayee(payeeId) {
+  return removePayee(payeeId);
 }
 
 export function editInventoryProduct(itemId, payload) {

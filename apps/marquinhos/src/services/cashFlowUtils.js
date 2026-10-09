@@ -1,3 +1,5 @@
+import { describeExpense, expenseTypeLabel, partyForCategoryId } from './catalogTaxonomy';
+
 /** Parse "R$ 1.250,00" or number to cents */
 export function parseMoneyToCents(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -29,13 +31,42 @@ export function formatCompactCents(cents) {
 }
 
 export function expensePartyKind(categoryId) {
-  if (categoryId === 'fornecedor') return 'supplier';
-  if (categoryId === 'freelancer') return 'freelancer';
-  return 'none';
+  return partyForCategoryId(categoryId);
 }
 
 export function natureLabel(nature) {
   return nature === 'fixed' ? 'Fixa' : 'Variável';
+}
+
+function csvCell(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+export function movementCategoryText(row) {
+  const parts = [];
+  if (row?.tipo === 'entrada') {
+    (row.groupTags || []).forEach((tag) => {
+      if (tag?.label) parts.push(tag.label);
+    });
+    if (row.comanda) parts.push('Comanda');
+  } else if (row?.categoria) {
+    parts.push(row.categoria);
+  }
+  if (row?.promocao) parts.push('Promoção');
+  if (row?.tipo === 'saida' && row.nature) parts.push(natureLabel(row.nature));
+  return parts.join(' · ');
+}
+
+export function buildMovementCsv(rows = []) {
+  const lines = [['Data/Hora', 'Descrição', 'Origem', 'Categoria', 'Valor'].map(csvCell).join(';')];
+  rows.forEach((row) => {
+    lines.push(
+      [row.data_hora, row.descricao, row.entidade || '', movementCategoryText(row), row.valor]
+        .map(csvCell)
+        .join(';')
+    );
+  });
+  return `\uFEFF${lines.join('\n')}`;
 }
 
 const MONTH_INDEX = {
@@ -244,19 +275,30 @@ export function unifyCashMovements(incomes = [], expenses = []) {
       tipo: 'entrada',
       nature: null,
     })),
-    ...expenses.map((row) => ({
+    ...expenses.map((row) => {
+      const descricao =
+        row.description ||
+        describeExpense({
+          party: partyForCategoryId(row.categoryId),
+          categoryName: row.category,
+          subtypeName: row.subtype || '',
+          supplier: row.supplier || '',
+          date: row.date || '',
+        });
+      return {
       id: row.id,
       data_hora: formatMovementStamp(row),
       date: row.date,
       createdAt: row.createdAt || null,
-      descricao: row.description || '—',
-      description: row.description || '',
+      descricao,
+      description: descricao,
       entidade: row.supplier || null,
       supplier: row.supplier || '',
       supplierId: row.supplierId || '',
       freelancerId: row.freelancerId || '',
       source: row.source || 'manual',
-      categoria: row.category || '',
+      saleId: row.saleId || null,
+      categoria: expenseTypeLabel(row),
       categoryId: row.categoryId || '',
       categoryIcon: row.categoryIcon || 'payments',
       categoryTone: null,
@@ -265,7 +307,8 @@ export function unifyCashMovements(incomes = [], expenses = []) {
       tipo: 'saida',
       nature: row.nature || 'variable',
       recurrence: row.recurrence || '',
-    })),
+    };
+    }),
   ];
   return rows.sort((left, right) => movementTime(right) - movementTime(left) || String(right.id).localeCompare(String(left.id)));
 }

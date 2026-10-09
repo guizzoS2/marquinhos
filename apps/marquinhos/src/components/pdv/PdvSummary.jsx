@@ -3,27 +3,18 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { Dropdown } from '../ui/Dropdown';
 import { Icon } from '../ui/Icon';
-import { Input } from '../ui/Input';
-import { RoleSelect } from '../freelancers/RoleSelect';
 import { useModal } from '../../contexts/ModalContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useCartDispatch, useCartState } from '../../contexts/CartContext';
 import { checkoutSale, saveOpenTab } from '../../services/dashboardService';
-import { CARD_INSTALLMENTS, PAYMENT_OPTIONS, parseReaisInput } from '../../services/inventoryProduct';
 import { saleBalance, salePaidAmount } from '../../services/saleRules';
+import { blankPayment, PaymentSplits, paymentsError, paymentsFromForm } from '../sales/PaymentSplits';
 import { PartialCloseForm } from './PartialCloseForm';
 import { PdvModal } from './PdvModal';
 
 function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
-
-const PAYMENT_ICONS = {
-  dinheiro: 'payments',
-  cartao_credito: 'credit_card',
-  cartao_debito: 'contactless',
-  pix: 'qr_code_2',
-};
 
 function LinePhoto({ src }) {
   const [broken, setBroken] = useState(false);
@@ -51,6 +42,7 @@ export function PdvSummary({ items = [], sales = [] }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [savingTab, setSavingTab] = useState(false);
+  const [payments, setPayments] = useState([blankPayment()]);
   const [partialOpen, setPartialOpen] = useState(false);
 
   const photos = useMemo(() => {
@@ -60,7 +52,6 @@ export function PdvSummary({ items = [], sales = [] }) {
     });
     return map;
   }, [items]);
-  const recebido = parseReaisInput(state.valorRecebido);
 
   const open = useMemo(() => (sales || []).filter((sale) => sale.status === 'aberta'), [sales]);
   const selected = open.find((sale) => String(sale.id) === String(state.saleId || '')) || null;
@@ -139,10 +130,6 @@ export function PdvSummary({ items = [], sales = [] }) {
     Math.round(salePayload().itens.reduce((sum, line) => sum + Number(line.valor_total || 0), 0) * 100) / 100;
   const alreadyPaid = selected ? salePaidAmount(selected) : 0;
   const due = Math.round((chargeTotal - alreadyPaid) * 100) / 100;
-  const troco =
-    state.formaPagamento === 'dinheiro' && state.valorRecebido !== '' && Number.isFinite(recebido)
-      ? Math.round((recebido - due) * 100) / 100
-      : null;
 
   function guardComanda() {
     if (!state.lines.length) {
@@ -187,8 +174,9 @@ export function PdvSummary({ items = [], sales = [] }) {
       toast.error('O total não pode ficar menor que o já pago.');
       return;
     }
-    if (due > 0 && state.formaPagamento === 'dinheiro' && (troco == null || troco < 0)) {
-      toast.error('Informe um valor recebido que cubra o saldo.');
+    const payError = paymentsError(payments, Math.max(due, 0));
+    if (payError) {
+      toast.error(payError);
       return;
     }
     openModal('confirm', {
@@ -199,9 +187,7 @@ export function PdvSummary({ items = [], sales = [] }) {
       onConfirm: async () => {
         await checkoutSale({
           ...salePayload(),
-          forma_pagamento: state.formaPagamento,
-          valor_recebido: state.formaPagamento === 'dinheiro' ? recebido : null,
-          parcelas: state.formaPagamento === 'cartao_credito' ? Number(state.parcelas) : null,
+          pagamentos: paymentsFromForm(payments, Math.max(due, 0)),
         });
         dispatch({ type: 'clear' });
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -253,6 +239,9 @@ export function PdvSummary({ items = [], sales = [] }) {
                 <div className="min-w-0 flex-1">
                   <p className="break-words font-semibold text-on-surface">{line.nome}</p>
                   <p className="font-headline font-extrabold text-on-surface">{money(line.valor_total)}</p>
+                  <p className="text-sm text-on-surface-variant">
+                    Disponível {Number(items.find((item) => String(item.id) === String(line.produto_id))?.estoque_atual ?? 0)}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center justify-end gap-2">
@@ -305,62 +294,7 @@ export function PdvSummary({ items = [], sales = [] }) {
           ) : null}
         </div>
 
-        <div className="space-y-2">
-          <p id="pdv-pagamento" className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">
-            Forma de pagamento
-          </p>
-          <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="pdv-pagamento">
-            {PAYMENT_OPTIONS.map((option) => {
-              const selected = state.formaPagamento === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => dispatch({ type: 'set-payment', formaPagamento: option.value })}
-                  className={`inline-flex min-h-11 w-full min-w-0 items-center gap-2 rounded-full px-4 text-left text-sm font-semibold leading-5 [&_.material-symbols-outlined]:text-xl ${
-                    selected
-                      ? 'bg-primary text-on-primary'
-                      : 'border border-outline bg-surface text-on-surface hover:bg-surface-container-low'
-                  }`}
-                >
-                  <Icon name={PAYMENT_ICONS[option.value] || 'payments'} className="shrink-0" />
-                  <span className="min-w-0">{option.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {state.formaPagamento === 'dinheiro' ? (
-          <div className="grid grid-cols-1 gap-3">
-            <Input
-              label="Valor recebido (R$)"
-              inputMode="decimal"
-              value={state.valorRecebido}
-              onChange={(event) => dispatch({ type: 'set-received', valorRecebido: event.target.value })}
-              required
-            />
-            <div className="space-y-2">
-              <p className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">Troco</p>
-              <p
-                className={`flex min-h-11 items-center font-headline text-xl font-extrabold ${troco != null && troco < 0 ? 'text-error' : 'text-on-surface'}`}
-              >
-                {troco == null ? '—' : money(troco)}
-              </p>
-            </div>
-          </div>
-        ) : null}
-
-        {state.formaPagamento === 'cartao_credito' ? (
-          <RoleSelect
-            id="pdv-parcelas"
-            label="Parcelas"
-            options={CARD_INSTALLMENTS.map((item) => ({ value: String(item), label: `${item}x` }))}
-            value={state.parcelas}
-            onChange={(parcelas) => dispatch({ type: 'set-installments', parcelas })}
-          />
-        ) : null}
+        {due > 0 ? <PaymentSplits due={due} payments={payments} onChange={setPayments} /> : null}
 
         <div className="flex flex-col gap-3">
           <Button type="button" variant="secondary" className="w-full" onClick={saveOpen} disabled={savingTab || !state.lines.length}>
@@ -374,14 +308,14 @@ export function PdvSummary({ items = [], sales = [] }) {
               className="w-full"
               onClick={() => {
                 if (state.lines.length) {
-                  toast.error('Salve os itens da comanda antes do fechamento parcial.');
+                  toast.error('Salve os itens da comanda antes do fechamento.');
                   return;
                 }
                 setPartialOpen(true);
               }}
             >
               <Icon name="payments" />
-              Fechamento parcial
+              Fechamento
             </Button>
           ) : null}
           <Button type="button" className="w-full" onClick={finish} disabled={!salePayload().itens.length}>

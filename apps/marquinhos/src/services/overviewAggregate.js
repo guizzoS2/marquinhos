@@ -19,6 +19,7 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCents, parseCashFlowDate, parseMoneyToCents } from './cashFlowUtils';
+import { stockGroupOf } from './catalogTaxonomy';
 
 const PERIODS = ['hoje', 'semana', 'mes', 'ano'];
 
@@ -66,6 +67,24 @@ function inPeriod(date, range) {
   return date && isWithinInterval(date, { start: range.start, end: range.end });
 }
 
+function expenseIso(row, purchase) {
+  const purchaseDate = String(purchase?.date || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)) return purchaseDate;
+  const iso = String(row?.isoDate || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const parsed = parseCashFlowDate(row?.date);
+  if (parsed) return parsed;
+  const created = rowDate(row);
+  return created ? format(created, 'yyyy-MM-dd') : '';
+}
+
+function isoInPeriod(iso, range) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) return false;
+  const start = format(range.start, 'yyyy-MM-dd');
+  const end = format(range.end, 'yyyy-MM-dd');
+  return iso >= start && iso <= end;
+}
+
 function isProductCost(row) {
   return row?.source === 'purchase';
 }
@@ -76,6 +95,68 @@ function isFreelaCost(row) {
     row?.source === 'platform_daily' ||
     row?.categoryId === 'freelancer'
   );
+}
+
+function isStaffCost(row) {
+  const id = String(row?.categoryId || '').toLowerCase();
+  const name = String(row?.category || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return row?.source === 'staff_payroll' || id === 'funcionarios' || id === 'salarios' || name === 'funcionarios' || name === 'salarios';
+}
+
+function stamp(row) {
+  const date = rowDate(row);
+  return date ? format(date, 'dd/MM/yyyy HH:mm', { locale: ptBR }) : row?.date || '—';
+}
+
+function saleTitle(sale) {
+  if (sale?.numero_comanda) return `Comanda ${sale.numero_comanda}`;
+  return sale?.cliente_nome || 'Venda';
+}
+
+function saleDetail(sale) {
+  const names = (sale?.itens || []).map((item) => item?.nome).filter(Boolean);
+  if (!names.length) return '—';
+  if (names.length <= 3) return names.join(', ');
+  return `${names.slice(0, 3).join(', ')} e mais ${names.length - 3}`;
+}
+
+function saleEntry(sale) {
+  return {
+    id: `sale-${sale.id}`,
+    sort: sale.created_at || sale.updated_at || '',
+    when: stamp(sale),
+    title: saleTitle(sale),
+    detail: saleDetail(sale),
+    value: formatCents(reaisToCents(sale.total)),
+    tone: 'positive',
+  };
+}
+
+function expenseEntry(row) {
+  const title = row?.description || row?.supplier || row?.category || 'Despesa';
+  const detail = row?.supplier && row.supplier !== title ? row.supplier : row?.category || '';
+  return {
+    id: `exp-${row.id}`,
+    sort: row?.createdAt || row?.date || '',
+    when: stamp(row),
+    title,
+    detail,
+    value: formatCents(expenseCents(row)),
+    tone: 'danger',
+  };
+}
+
+function byNewest(rows) {
+  return rows.slice().sort((left, right) => String(right.sort).localeCompare(String(left.sort)));
+}
+
+function countLabel(count, singular, plural) {
+  const total = new Intl.NumberFormat('pt-BR').format(count);
+  return `${total} ${count === 1 ? singular : plural}`;
 }
 
 function latestUnitCostCents(purchases, productId) {
@@ -146,6 +227,28 @@ function lineCents(line) {
   return reaisToCents(line?.valor_unitario) * qty;
 }
 
+function splitLineGroups(product, cents, catalog, groups, comboItems) {
+  if (!product || !cents) return [];
+  if (product.tipo !== 'combo') {
+    const group = stockGroupOf(product, groups);
+    return group ? [{ group, cents }] : [];
+  }
+  const parts = (comboItems || []).filter((row) => String(row.combo_id) === String(product.id));
+  const weighted = parts
+    .map((part) => {
+      const child = catalog.get(String(part.produto_associado_id));
+      const group = stockGroupOf(child, groups);
+      if (!group) return null;
+      const qty = Number(part.quantidade) || 1;
+      const price = Math.max(parseMoneyToCents(child?.valor_unitario), 1);
+      return { group, weight: price * qty };
+    })
+    .filter(Boolean);
+  const totalWeight = weighted.reduce((sum, row) => sum + row.weight, 0);
+  if (!totalWeight) return [];
+  return weighted.map((row) => ({ group: row.group, cents: Math.round((cents * row.weight) / totalWeight) }));
+}
+
 function withPercents(rows) {
   const total = rows.reduce((sum, row) => sum + row.cents, 0);
   if (!total) return { total: 0, rows: [] };
@@ -161,8 +264,9 @@ function withPercents(rows) {
   return {
     total,
     rows: rows.map((row, index) => ({
-      id: row.name,
+      id: row.id || row.name,
       name: row.name,
+      cents: row.cents,
       value: formatCents(row.cents),
       share: percents[index] / 100,
       percent: percents[index],
@@ -183,16 +287,62 @@ export function aggregateOverview(period, sources, now = new Date()) {
   const expenses = (cash.expenses || []).filter((row) => inPeriod(rowDate(row), range));
 
   let revenueCents = 0;
+  const saleRows = [];
   sales.forEach((sale) => {
     revenueCents += reaisToCents(sale.total);
+    saleRows.push(saleEntry(sale));
   });
 
   let productCents = 0;
   let freelaCents = 0;
+  let freelaCount = 0;
+  let staffCents = 0;
+  let staffCount = 0;
+  const costRows = [];
+  const freelaRows = [];
+  const staffRows = [];
   expenses.forEach((row) => {
     const cents = expenseCents(row);
-    if (isProductCost(row)) productCents += cents;
-    else if (isFreelaCost(row)) freelaCents += cents;
+    const entry = expenseEntry(row);
+    if (isProductCost(row)) {
+      productCents += cents;
+      costRows.push(entry);
+    } else if (isFreelaCost(row)) {
+      freelaCents += cents;
+      costRows.push(entry);
+    }
+    if (isFreelaCost(row)) {
+      freelaCount += 1;
+      freelaRows.push(entry);
+    }
+    if (isStaffCost(row)) {
+      staffCents += cents;
+      staffCount += 1;
+      staffRows.push(entry);
+    }
+  });
+  const purchaseByExpense = new Map(
+    (inventory.purchases || [])
+      .filter((purchase) => purchase?.expenseId)
+      .map((purchase) => [String(purchase.expenseId), purchase])
+  );
+  let fixedCents = 0;
+  let variableCents = 0;
+  const fixedRows = [];
+  const variableRows = [];
+  (cash.expenses || []).forEach((row) => {
+    const purchase = purchaseByExpense.get(String(row.id));
+    if (purchase?.status === 'cancelada' || row?.source === 'comanda_saldo') return;
+    if (!isoInPeriod(expenseIso(row, purchase), range)) return;
+    const cents = expenseCents(row);
+    const entry = expenseEntry(row);
+    if (row?.nature === 'fixed') {
+      fixedCents += cents;
+      fixedRows.push(entry);
+    } else {
+      variableCents += cents;
+      variableRows.push(entry);
+    }
   });
   const costCents = productCents + freelaCents;
   const profitCents = revenueCents - costCents;
@@ -234,10 +384,12 @@ export function aggregateOverview(period, sources, now = new Date()) {
       sold.set(id, current);
 
       const product = catalog.get(String(line.produto_id));
-      const category = String(product?.categoria || product?.category || 'Outros').trim() || 'Outros';
-      const bucket = categories.get(category) || { name: category, cents: 0 };
-      bucket.cents += lineCents(line);
-      categories.set(category, bucket);
+      splitLineGroups(product, lineCents(line), catalog, inventory.groups, inventory.comboItems).forEach((part) => {
+        const key = part.group.id || part.group.name;
+        const bucket = categories.get(key) || { id: key, name: part.group.name, cents: 0 };
+        bucket.cents += part.cents;
+        categories.set(key, bucket);
+      });
     });
   });
   const categoryChart = withPercents(
@@ -245,6 +397,7 @@ export function aggregateOverview(period, sources, now = new Date()) {
       .filter((row) => row.cents > 0)
       .sort((left, right) => right.cents - left.cents || left.name.localeCompare(right.name))
   );
+  const groups = categoryChart.rows.slice(0, 5);
   const topSold = [...sold.values()]
     .sort((left, right) => right.qty - left.qty || left.name.localeCompare(right.name))
     .slice(0, 5)
@@ -267,6 +420,7 @@ export function aggregateOverview(period, sources, now = new Date()) {
     if (Number.isFinite(atual) && Number.isFinite(sugerido) && atual <= sugerido) {
       alerts.push({
         id: `${item.id}-stock`,
+        productId: item.id,
         name: item.nome || item.name,
         detail: `Estoque ${atual} / sugerido ${sugerido}`,
         icon: 'warning',
@@ -277,6 +431,7 @@ export function aggregateOverview(period, sources, now = new Date()) {
     if (cost != null && price < cost) {
       alerts.push({
         id: `${item.id}-margin`,
+        productId: item.id,
         name: item.nome || item.name,
         detail: 'Margem negativa',
         icon: 'trending_down',
@@ -291,26 +446,59 @@ export function aggregateOverview(period, sources, now = new Date()) {
     period: range.id,
     seriesUnit,
     kpis: [
-      { id: 'revenue', label: 'Faturamento', value: formatCents(revenueCents), icon: 'payments' },
-      { id: 'cost', label: 'Custos', value: formatCents(costCents), icon: 'engineering' },
+      { id: 'revenue', label: 'Faturamento', value: formatCents(revenueCents), icon: 'payments', entries: byNewest(saleRows) },
+      { id: 'cost', label: 'Custos', value: formatCents(costCents), icon: 'engineering', entries: byNewest(costRows) },
       {
         id: 'profit',
         label: 'Lucro líquido',
         value: formatCents(profitCents),
         icon: profitCents < 0 ? 'trending_down' : 'trending_up',
         valueTone: profitTone,
+        entries: byNewest([...saleRows, ...costRows]),
       },
-      { id: 'ticket', label: 'Ticket médio', value: formatCents(ticketCents), icon: 'receipt_long' },
+      { id: 'ticket', label: 'Ticket médio', value: formatCents(ticketCents), icon: 'receipt_long', entries: byNewest(saleRows) },
       {
         id: 'orders',
         label: 'Qtd. de pedidos',
         value: new Intl.NumberFormat('pt-BR').format(sales.length),
         icon: 'point_of_sale',
+        entries: byNewest(saleRows),
+      },
+      {
+        id: 'freela',
+        label: 'Freelas',
+        value: formatCents(freelaCents),
+        badge: countLabel(freelaCount, 'diária', 'diárias'),
+        badgeTone: 'neutral',
+        icon: 'group',
+        entries: byNewest(freelaRows),
+      },
+      {
+        id: 'staff',
+        label: 'Funcionários',
+        value: formatCents(staffCents),
+        badge: countLabel(staffCount, 'lançamento', 'lançamentos'),
+        badgeTone: 'neutral',
+        icon: 'badge',
+        entries: byNewest(staffRows),
+      },
+      {
+        id: 'fixed',
+        label: 'Despesas fixas',
+        value: formatCents(fixedCents),
+        icon: 'lock',
+        entries: byNewest(fixedRows),
+      },
+      {
+        id: 'variable',
+        label: 'Despesas variáveis',
+        value: formatCents(variableCents),
+        icon: 'tune',
+        entries: byNewest(variableRows),
       },
     ],
     series,
-    categories: categoryChart.rows,
-    categoriesTotal: formatCents(categoryChart.total),
+    groups,
     alerts,
     topSold,
   };

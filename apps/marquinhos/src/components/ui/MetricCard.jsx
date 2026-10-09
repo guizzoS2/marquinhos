@@ -7,9 +7,10 @@ const badgeClasses = {
   critical: 'text-error font-bold text-xs animate-pulse',
 };
 
-export function MetricCard({ label, value, badge, badgeTone = 'neutral', icon, valueTone }) {
-  return (
-    <div className="h-full min-w-0 bg-surface border border-outline rounded-xl p-4 md:p-5">
+export function MetricCard({ label, value, badge, badgeTone = 'neutral', icon, valueTone, onClick }) {
+  const className = `h-full min-w-0 bg-surface border border-outline rounded-xl p-4 md:p-5 text-left ${onClick ? 'w-full cursor-pointer' : ''}`;
+  const body = (
+    <>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-11 h-11 rounded-lg bg-primary text-on-primary flex items-center justify-center shrink-0">
@@ -26,8 +27,16 @@ export function MetricCard({ label, value, badge, badgeTone = 'neutral', icon, v
       >
         {value}
       </h3>
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {body}
+      </button>
+    );
+  }
+  return <div className={className}>{body}</div>;
 }
 
 const rowCols = {

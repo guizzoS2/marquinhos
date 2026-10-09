@@ -1,12 +1,39 @@
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
-import { StatusPill } from '../ui/DataTable';
+import { StatusPill, Tag } from '../ui/DataTable';
+import { expenseTag } from '../../services/catalogTaxonomy';
 import { natureLabel } from '../../services/cashFlowUtils';
 import { payLabel, movementCycle } from '../../services/movementLink';
 import { saleBalance, salePaidAmount } from '../../services/saleRules';
 
 function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function categoryTags(movement, label) {
+  if (movement?.tipo === 'entrada' && movement.groupTags?.length) return movement.groupTags;
+  if (movement?.tipo !== 'entrada' && (movement?.categoryId || label)) {
+    const tag = expenseTag(movement?.categoryId, { icon: movement?.categoryIcon, name: label });
+    return [{ ...tag, label: label || 'Despesa' }];
+  }
+  if (movement?.groupTags?.length) return movement.groupTags;
+  return [];
+}
+
+function ClassTags({ label, tags }) {
+  if (!tags.length) return <Field label={label} value="" />;
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-label font-bold uppercase text-on-surface-variant">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {tags.map((tag) => (
+          <Tag key={tag.label} tone={tag.tone} icon={tag.icon}>
+            {tag.label}
+          </Tag>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Field({ label, value }) {
@@ -77,9 +104,18 @@ function SaleSpecs({ movement, sale }) {
         {sale.numero_comanda ? <Field label="Comanda" value={String(sale.numero_comanda)} /> : null}
         <div className="space-y-1">
           <p className="text-xs font-label font-bold uppercase text-on-surface-variant">Status</p>
-          <StatusPill tone={sale.status === 'cancelada' ? 'neutral' : 'accent'}>{saleStatusLabel(sale)}</StatusPill>
+          <StatusPill
+            tone={sale.status === 'cancelada' ? 'danger' : sale.status === 'paga' ? 'success' : 'accent'}
+          >
+            <Icon
+              name={sale.status === 'cancelada' ? 'cancel' : sale.status === 'paga' ? 'check' : 'receipt_long'}
+              className="text-sm"
+            />
+            {saleStatusLabel(sale)}
+          </StatusPill>
         </div>
         <Field label="Valor desta entrada" value={movement?.valor} />
+        <ClassTags label="Grupo" tags={movement?.groupTags || []} />
         <PaymentFields payment={cycle?.pagamento} />
       </div>
       {sale.observacao ? <Field label="Observação" value={sale.observacao} /> : null}
@@ -108,14 +144,15 @@ function PurchaseSpecs({ movement, purchase }) {
     <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field label="Data" value={movement?.data_hora} />
-        <Field label="Fornecedor" value={fornecedor} />
-        <Field label="Categoria" value={categoria} />
+        <Field label="Origem" value={fornecedor} />
+        <ClassTags label="Categoria" tags={categoryTags(movement, categoria)} />
         <Field label="Natureza" value={movement?.nature ? natureLabel(movement.nature) : '—'} />
         <Field label="Valor" value={valor} />
         {purchase ? (
           <div className="space-y-1">
             <p className="text-xs font-label font-bold uppercase text-on-surface-variant">Status</p>
-            <StatusPill tone={purchase.status === 'cancelada' ? 'neutral' : 'accent'}>
+            <StatusPill tone={purchase.status === 'cancelada' ? 'danger' : 'success'}>
+              <Icon name={purchase.status === 'cancelada' ? 'cancel' : 'check'} className="text-sm" />
               {purchase.status === 'cancelada' ? 'Cancelada' : 'Ativa'}
             </StatusPill>
           </div>
@@ -140,8 +177,8 @@ function MovementSpecs({ movement }) {
       <Field label="Data" value={movement?.data_hora} />
       <Field label="Tipo" value={saida ? 'Saída' : 'Entrada'} />
       {descricao ? <Field label="Descrição" value={descricao} /> : null}
-      {origem && origem !== descricao ? <Field label={saida ? 'Fornecedor' : 'Origem'} value={origem} /> : null}
-      <Field label="Categoria" value={movement?.categoria} />
+      {origem && origem !== descricao ? <Field label="Origem" value={origem} /> : null}
+      <ClassTags label="Categoria" tags={categoryTags(movement, movement?.categoria)} />
       {saida ? <Field label="Natureza" value={movement?.nature ? natureLabel(movement.nature) : '—'} /> : null}
       <Field label="Valor" value={movement?.valor} />
     </div>

@@ -68,7 +68,7 @@ export function SuppliersList({ onEdit, onDelete, onOpen, action = null }) {
                 <Td align="right" tone="strong">
                   {supplier.lastValue || '—'}
                 </Td>
-                <Td align="right">
+                <Td align="right" nowrap>
                   <TableActions>
                     <Button type="button" size="icon" variant="secondary" onClick={() => onOpen?.(supplier)} aria-label={`Ver ${supplier.name}`}>
                       <Icon name="visibility" />
