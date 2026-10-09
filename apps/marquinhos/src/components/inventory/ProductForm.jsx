@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
 import { FileField } from '../ui/FileField';
+import { FieldModal } from '../ui/FieldModal';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
+import { CategoryForm } from './CategoryForm';
 import { useToast } from '../../contexts/ToastContext';
 import {
   addInventoryProduct,
@@ -20,7 +22,10 @@ import { SegmentedControl } from '../ui/SegmentedControl';
 
 export function ProductForm({ item, categories, onSuccess, onCancel }) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const isEdit = Boolean(item);
+  const [extraCategories, setExtraCategories] = useState([]);
+  const [addingCategory, setAddingCategory] = useState(false);
   const categorySource = (categories?.length ? categories : inventoryFallback.filters).filter(
     (entry) => entry !== 'Todos'
   );
@@ -30,8 +35,11 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
     enabled: !isEdit,
   });
   const categoryOptions = categorySource.includes(item?.categoria || item?.category)
-    ? categorySource
+    ? [...categorySource]
     : [...categorySource, item?.categoria || item?.category].filter(Boolean);
+  for (const name of extraCategories) {
+    if (name && !categoryOptions.includes(name)) categoryOptions.push(name);
+  }
 
   const [form, setForm] = useState({
     nome: item?.nome || item?.name || '',
@@ -105,7 +113,16 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
 
   const codigo = isEdit ? item?.codigo || '' : nextCode || '';
 
+  function addCategory(name) {
+    const label = String(name || '').trim();
+    if (!label) return;
+    setExtraCategories((prev) => (prev.includes(label) ? prev : [...prev, label]));
+    setForm((prev) => ({ ...prev, categoria: label }));
+    queryClient.invalidateQueries({ queryKey: ['inventory'] });
+  }
+
   return (
+    <>
     <form className="space-y-4" onSubmit={handleSubmit}>
       <Input label="Código" value={codigo} readOnly disabled />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -139,14 +156,26 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-2 md:col-span-2">
           <FieldLabel required>Categoria</FieldLabel>
-          <Dropdown
-            id="produto-categoria"
-            label="Categoria"
-            muted
-            value={form.categoria}
-            onChange={(categoria) => setForm((prev) => ({ ...prev, categoria }))}
-            options={categoryOptions.map((category) => ({ value: category, label: category }))}
-          />
+          <div className="flex items-center gap-2">
+            <Dropdown
+              id="produto-categoria"
+              className="min-w-0 flex-1"
+              label="Categoria"
+              muted
+              value={form.categoria}
+              onChange={(categoria) => setForm((prev) => ({ ...prev, categoria }))}
+              options={categoryOptions.map((category) => ({ value: category, label: category }))}
+            />
+            <Button
+              type="button"
+              size="icon"
+              className="shrink-0"
+              aria-label="Nova categoria"
+              onClick={() => setAddingCategory(true)}
+            >
+              <Icon name="add" />
+            </Button>
+          </div>
         </div>
         <div className="space-y-2 md:col-span-2">
           <p className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">Origem</p>
@@ -227,5 +256,11 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
         </Button>
       </div>
     </form>
+    {addingCategory ? (
+      <FieldModal title="Nova categoria" icon="category" onClose={() => setAddingCategory(false)}>
+        <CategoryForm onCancel={() => setAddingCategory(false)} onSuccess={addCategory} />
+      </FieldModal>
+    ) : null}
+    </>
   );
 }

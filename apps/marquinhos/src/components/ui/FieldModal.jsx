@@ -1,12 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './Button';
 import { Icon } from './Icon';
 
 export function FieldModal({ title, icon, wide = false, onClose, children }) {
+  const panel = useRef(null);
+
   useEffect(() => {
     function onKey(event) {
       if (event.key !== 'Escape') return;
+      const open = document.querySelectorAll('[data-field-modal]');
+      if (open.length && open[open.length - 1] !== panel.current) return;
       event.stopPropagation();
       onClose();
     }
@@ -15,7 +19,7 @@ export function FieldModal({ title, icon, wide = false, onClose, children }) {
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-[105] flex items-center justify-center p-4">
+    <div ref={panel} data-field-modal className="fixed inset-0 z-[105] flex items-center justify-center p-4">
       <button
         type="button"
         aria-label="Fechar modal"
