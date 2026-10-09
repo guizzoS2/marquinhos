@@ -95,7 +95,6 @@ export function ProductForm({ item, onSuccess, onCancel }) {
     grupoId: placed.grupoId,
     subgrupoId: placed.subgrupoId,
     formato: placed.formato || 'Unidade',
-    familia: placed.familia,
     volume_peso: item && item.volume_peso != null ? String(item.volume_peso) : '',
     medida: PRODUCT_MEASURES.includes(item?.medida) ? item.medida : 'UN',
     estoque_atual: item ? String(item.estoque_atual ?? 0) : '0',
@@ -154,7 +153,6 @@ export function ProductForm({ item, onSuccess, onCancel }) {
       grupoId: form.grupoId,
       subgrupoId: form.subgrupoId,
       formato: form.formato,
-      familia: form.familia,
       volume_peso: form.volume_peso,
       medida: form.medida,
       estoque_atual: form.estoque_atual,
@@ -282,12 +280,6 @@ export function ProductForm({ item, onSuccess, onCancel }) {
             </Button>
           </div>
         </div>
-        <Input
-          label="Família"
-          value={form.familia}
-          onChange={(event) => setForm((prev) => ({ ...prev, familia: event.target.value }))}
-          placeholder="Ex.: Heineken"
-        />
         <div className="space-y-2 md:col-span-2">
           <p className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">Origem</p>
           <SegmentedControl
