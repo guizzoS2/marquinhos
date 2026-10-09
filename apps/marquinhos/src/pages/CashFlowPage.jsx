@@ -223,7 +223,7 @@ export function CashFlowPage() {
                   ) : null}
                 </div>
               </Td>
-              <Td align="right" tone={row.tipo === 'entrada' ? 'strong' : 'danger'}>
+              <Td align="right" tone={row.tipo === 'entrada' ? 'positive' : 'danger'}>
                 {row.valor}
               </Td>
               <Td align="right">

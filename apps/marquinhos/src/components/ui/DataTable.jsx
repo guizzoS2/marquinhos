@@ -9,6 +9,7 @@ const cellTone = {
   muted: 'text-on-surface-variant',
   strong: 'font-semibold text-on-surface',
   danger: 'font-semibold text-error',
+  positive: 'font-semibold text-success',
 };
 
 export function DataTable({ children, minWidth = '' }) {

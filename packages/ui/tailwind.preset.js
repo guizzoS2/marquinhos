@@ -20,6 +20,7 @@ export default {
         'on-background': '#111111',
         'secondary-container': '#FFDB15',
         error: '#B31B25',
+        success: '#1B7A32',
         tertiary: '#3D3D3D',
         'surface-dim': '#E5E5E5',
         primary: 'var(--color-primary, #FFDB15)',
