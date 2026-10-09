@@ -339,6 +339,7 @@ export function PdvSummary({ items = [], sales = [] }) {
               inputMode="decimal"
               value={state.valorRecebido}
               onChange={(event) => dispatch({ type: 'set-received', valorRecebido: event.target.value })}
+              required
             />
             <div className="space-y-2">
               <p className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">Troco</p>

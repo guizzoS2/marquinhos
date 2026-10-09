@@ -100,7 +100,7 @@ export function SalesPage({ embedded = false }) {
       {embedded ? null : (
         <PageHeader
           title="Vendas"
-          description="Entradas do PDV. A mesma linha aparece no fluxo de caixa."
+          description="Vendas do balcão. A mesma linha entra no fluxo de caixa."
         />
       )}
       <FilterBar

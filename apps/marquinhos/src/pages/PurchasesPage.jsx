@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, isValid, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { fetchCashFlow, fetchCustomers, fetchInventory, removeCashExpense, removeSupplier, reversePurchase } from '../services/dashboardService';
+import { fetchCashFlow, fetchInventory, removeCashExpense, removeSupplier, reversePurchase } from '../services/dashboardService';
 import { natureLabel, parseCashFlowDate, toIsoDate } from '../services/cashFlowUtils';
 import { OpenComandas } from '../components/pdv/OpenComandas';
 import { SuppliersList } from '../components/suppliers/SuppliersList';
@@ -46,8 +46,6 @@ export function PurchasesPage() {
   const queryClient = useQueryClient();
   const cash = useQuery({ queryKey: ['cash-flow'], queryFn: fetchCashFlow });
   const inventory = useQuery({ queryKey: ['inventory'], queryFn: fetchInventory });
-  const customers = useQuery({ queryKey: ['customers'], queryFn: fetchCustomers });
-
   useEffect(() => {
     if (requested === 'despesas') setParams({}, { replace: true });
   }, [requested, setParams]);
@@ -207,7 +205,7 @@ export function PurchasesPage() {
     <div className="space-y-6 p-4 font-body md:p-8">
       <PageHeader
         title="Compras e vendas"
-        description="Compras, vendas, comandas, fechamento e fornecedores."
+        description="Compre, venda, acompanhe as comandas e feche o caixa."
       />
       <Tabs
         label="Compras e vendas"
@@ -349,7 +347,7 @@ export function PurchasesPage() {
       {tab === 'vendas' ? <SalesPage embedded /> : null}
 
       {tab === 'comandas' ? (
-        <OpenComandas sales={inventory.data.sales || []} customers={customers.data?.customers || []} />
+        <OpenComandas sales={inventory.data.sales || []} />
       ) : null}
 
       {tab === 'fechamento' ? <CloseShiftPage /> : null}

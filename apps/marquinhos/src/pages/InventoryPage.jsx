@@ -179,8 +179,8 @@ export function InventoryPage() {
     <>
       <div className="p-4 md:p-8 space-y-6">
         <PageHeader
-          title="Controle de Estoque e Produtos"
-          description="Gerencie seu estoque e defina alertas de estoque mínimo."
+          title="Estoque"
+          description="Veja o que tem no bar, registre a produção e monte promoções e combos."
         />
 
         <Tabs

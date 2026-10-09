@@ -15,6 +15,7 @@ import { moneyInputValue, parseReaisInput, PRODUCT_MEASURES } from '../../servic
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { readLocalImage } from '../../services/readLocalImage';
 import { Dropdown } from '../ui/Dropdown';
+import { FieldLabel } from '../ui/FieldLabel';
 import { SegmentedControl } from '../ui/SegmentedControl';
 
 export function ProductForm({ item, categories, onSuccess, onCancel }) {
@@ -137,12 +138,7 @@ export function ProductForm({ item, categories, onSuccess, onCancel }) {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-2 md:col-span-2">
-          <label
-            htmlFor="produto-categoria"
-            className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
-          >
-            Categoria
-          </label>
+          <FieldLabel required>Categoria</FieldLabel>
           <Dropdown
             id="produto-categoria"
             label="Categoria"

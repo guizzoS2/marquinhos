@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
+import { RequiredMark } from '../ui/FieldLabel';
 import { formatCents } from '../../services/cashFlowUtils';
 import { formatIsoBr, hasStaffAccount, nextPayrollDate, staffAccountLabel } from '@fnl/dashboard/staffPayroll';
 
@@ -142,11 +143,17 @@ export function HouseStaffDialog({
               <Input label="Custo mensal" name="monthlyCost" inputMode="decimal" value={info.monthlyCost} onChange={(event) => setInfo((prev) => ({ ...prev, monthlyCost: event.target.value }))} required />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="space-y-2">
-                  <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">Início</span>
+                  <span className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">
+                    Início
+                    <RequiredMark />
+                  </span>
                   <input className={fieldClass} type="date" value={info.contractStart} onChange={(event) => setInfo((prev) => ({ ...prev, contractStart: event.target.value }))} required />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">Fim</span>
+                  <span className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">
+                    Fim
+                    <RequiredMark />
+                  </span>
                   <input className={fieldClass} type="date" value={info.contractEnd} onChange={(event) => setInfo((prev) => ({ ...prev, contractEnd: event.target.value }))} required />
                 </label>
               </div>

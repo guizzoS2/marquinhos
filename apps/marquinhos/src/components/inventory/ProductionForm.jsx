@@ -5,6 +5,7 @@ import { Input } from '../ui/Input';
 import { useToast } from '../../contexts/ToastContext';
 import { addProduction, editProduction } from '../../services/dashboardService';
 import { Dropdown } from '../ui/Dropdown';
+import { FieldLabel } from '../ui/FieldLabel';
 
 export function ProductionForm({ items = [], production = null, onSuccess, onCancel }) {
   const toast = useToast();
@@ -46,9 +47,7 @@ export function ProductionForm({ items = [], production = null, onSuccess, onCan
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
       <div className="space-y-2">
-        <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label" htmlFor="producao-produto">
-          Produto
-        </label>
+        <FieldLabel required>Produto</FieldLabel>
         <Dropdown
           id="producao-produto"
           label="Produto"

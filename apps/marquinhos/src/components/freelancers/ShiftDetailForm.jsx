@@ -6,6 +6,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { editDaily, removeDaily } from '../../services/dashboardService';
 import { SHIFT_STATUSES, peopleByRole } from '../../services/freelancerSchedule';
 import { Dropdown } from '../ui/Dropdown';
+import { FieldLabel } from '../ui/FieldLabel';
 import { RoleSelect } from './RoleSelect';
 
 function shiftReducer(state, action) {
@@ -114,12 +115,7 @@ export function ShiftDetailForm({ shift, people = [], roles = [], onSuccess, onC
       />
 
       <div className="space-y-2">
-        <label
-          htmlFor="shift-freelancer"
-          className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
-        >
-          Selecionar Freelancer
-        </label>
+        <FieldLabel required>Selecionar Freelancer</FieldLabel>
         <Dropdown
           id="shift-freelancer"
           label="Selecionar Freelancer"

@@ -28,6 +28,7 @@ import { ComboForm } from '../catalog/ComboForm';
 import { ComboDetail } from '../catalog/ComboDetail';
 import { PromotionForm } from '../catalog/PromotionForm';
 import { CustomerForm } from '../pdv/CustomerForm';
+import { NewComandaForm } from '../pdv/NewComandaForm';
 import { PurchaseForm } from '../suppliers/PurchaseForm';
 import { NewSupplierForm } from '../suppliers/NewSupplierForm';
 import { SuppliersList } from '../suppliers/SuppliersList';
@@ -47,6 +48,7 @@ const titles = {
   'edit-combo': 'Editar combo',
   'combo-detail': 'Detalhes do combo',
   'new-customer': 'Novo Cliente',
+  'new-comanda': 'Nova comanda',
   'new-daily': 'Registrar Diária',
   'shift-detail': 'Agendamento',
   'new-freelancer': 'Novo Freelancer',
@@ -322,6 +324,8 @@ export function AppModal() {
               ? modal.payload?.sale || modal.payload?.movement?.tipo === 'entrada'
                 ? 'point_of_sale'
                 : 'payments'
+            : modal.type === 'new-comanda'
+              ? 'receipt_long'
             : modal.type === 'new-order' || modal.type === 'new-sale'
                 ? 'point_of_sale'
                 : modal.type === 'confirm'
@@ -476,6 +480,8 @@ export function AppModal() {
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
+        ) : modal.type === 'new-comanda' ? (
+          <NewComandaForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
         ) : modal.type === 'new-customer' ? (
           <CustomerForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
         ) : modal.type === 'new-promotion' || modal.type === 'edit-promotion' ? (

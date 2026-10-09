@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
+import { FieldLabel } from '../ui/FieldLabel';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { RoleSelect } from '../freelancers/RoleSelect';
 import { useToast } from '../../contexts/ToastContext';
@@ -98,9 +99,7 @@ export function PromotionForm({ items = [], promotion = null, reactivate = false
       {vigencia === 'semana' ? (
         <div className="space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-              Dia da semana
-            </p>
+            <FieldLabel required>Dia da semana</FieldLabel>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Dia da semana">
               {WEEKDAYS.map((day) => {
                 const selected = diaSemana === day.value;

@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { Input } from '../ui/Input';
+import { FieldLabel } from '../ui/FieldLabel';
 import { FieldModal } from '../ui/FieldModal';
 import { useToast } from '../../contexts/ToastContext';
 import { createDaily } from '../../services/dashboardService';
@@ -122,12 +123,9 @@ export function DailyForm({ people = [], roles = [], onSuccess, onCancel }) {
       />
 
       <div className="space-y-2">
-        <label
-          htmlFor="daily-freelancer"
-          className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
-        >
+        <FieldLabel id="daily-freelancer-label" required>
           Selecionar Freelancer
-        </label>
+        </FieldLabel>
         <div className="flex items-center gap-2">
           <Dropdown
             id="daily-freelancer"

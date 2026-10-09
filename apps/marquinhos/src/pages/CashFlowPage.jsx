@@ -147,7 +147,7 @@ export function CashFlowPage() {
     <div className="p-4 md:p-8 space-y-6 font-body">
       <PageHeader
         title="Fluxo de Caixa"
-        description="Visão consolidada da saúde financeira do Artisan Lounge"
+        description="Acompanhe entradas, saídas e o resultado do período."
       />
 
       <MetricGrid>

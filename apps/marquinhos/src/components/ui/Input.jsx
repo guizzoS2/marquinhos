@@ -1,4 +1,5 @@
 import { DateField } from './DateField';
+import { RequiredMark } from './FieldLabel';
 
 export function Input({
   label,
@@ -34,6 +35,7 @@ export function Input({
           className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1"
         >
           {label}
+          {props.required ? <RequiredMark /> : null}
         </label>
       ) : null}
       <input

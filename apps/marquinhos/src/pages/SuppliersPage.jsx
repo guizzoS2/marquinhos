@@ -102,7 +102,7 @@ export function SuppliersPage() {
     <div className="p-4 md:p-8 space-y-6">
       <PageHeader
         title="Fornecedores"
-        description="Cadastro de fornecedores e entradas no estoque."
+        description="Quem abastece o bar e as compras já feitas."
       />
 
       <Tabs

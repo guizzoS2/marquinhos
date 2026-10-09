@@ -1,16 +1,11 @@
 import { useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
-import { Dropdown } from '../ui/Dropdown';
 import { FilterBar } from '../ui/FilterBar';
 import { Icon } from '../ui/Icon';
-import { Input } from '../ui/Input';
 import { Pagination } from '../ui/Pagination';
 import { SearchField } from '../ui/SearchField';
 import { usePagedList } from '../ui/usePagedList';
 import { useModal } from '../../contexts/ModalContext';
-import { useToast } from '../../contexts/ToastContext';
-import { openComanda } from '../../services/dashboardService';
 import { PAYMENT_OPTIONS } from '../../services/inventoryProduct';
 import { formatSaleStamp, saleBalance, salePaidAmount } from '../../services/saleRules';
 import { PartialCloseForm } from './PartialCloseForm';
@@ -20,15 +15,9 @@ function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-export function OpenComandas({ sales = [], customers = [] }) {
-  const toast = useToast();
-  const queryClient = useQueryClient();
+export function OpenComandas({ sales = [] }) {
   const { openModal } = useModal();
   const [query, setQuery] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [numero, setNumero] = useState('');
-  const [clienteId, setClienteId] = useState('');
-  const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState(null);
   const [paying, setPaying] = useState(false);
   const open = useMemo(() => sales.filter((sale) => sale.status === 'aberta'), [sales]);
@@ -46,95 +35,18 @@ export function OpenComandas({ sales = [], customers = [] }) {
   }, [open, query]);
   const page = usePagedList(visible, `${query}|${visible.map((sale) => sale.id).join('|')}`);
 
-  const clienteOptions = [
-    { value: '', label: 'Consumidor' },
-    ...customers.map((item) => ({ value: String(item.id), label: item.nome })),
-  ];
-
-  async function createComanda(event) {
-    event.preventDefault();
-    const value = Number(numero);
-    if (!Number.isInteger(value) || value <= 0) {
-      toast.error('Número da comanda inválido.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await openComanda({ numero_comanda: value, cliente_id: clienteId || null });
-      setNumero('');
-      setClienteId('');
-      setCreating(false);
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
-      toast.success('Comanda criada.');
-    } catch (err) {
-      toast.error(err?.message || 'Não foi possível criar a comanda.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <section className="min-w-0 space-y-6">
       <FilterBar
         actions={
-          creating ? null : (
-            <Button type="button" onClick={() => setCreating(true)}>
-              <Icon name="add" />
-              Nova comanda
-            </Button>
-          )
+          <Button type="button" onClick={() => openModal('new-comanda')}>
+            <Icon name="add" />
+            Nova comanda
+          </Button>
         }
       >
         <SearchField value={query} onChange={setQuery} placeholder="Buscar comanda" label="Buscar comanda" />
       </FilterBar>
-
-      {creating ? (
-        <form className="space-y-4 rounded-2xl border border-outline bg-surface p-4" onSubmit={createComanda}>
-          <Input
-            label="Número"
-            inputMode="numeric"
-            value={numero}
-            onChange={(event) => setNumero(event.target.value.replace(/\D/g, ''))}
-            required
-          />
-          <div className="space-y-2">
-            <p className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">Cliente</p>
-            <Dropdown
-              label="Cliente"
-              muted
-              value={clienteId}
-              onChange={setClienteId}
-              options={clienteOptions}
-              placeholder="Consumidor"
-            />
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() =>
-              openModal('new-customer', {
-                onSuccess: (customer) => {
-                  setClienteId(String(customer.id));
-                  queryClient.invalidateQueries({ queryKey: ['customers'] });
-                },
-              })
-            }
-          >
-            <Icon name="add" />
-            Novo cliente
-          </Button>
-          <div className="flex flex-wrap justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={() => setCreating(false)} disabled={saving}>
-              <Icon name="cancel" />
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={saving}>
-              <Icon name="add" />
-              {saving ? 'Salvando...' : 'Criar comanda'}
-            </Button>
-          </div>
-        </form>
-      ) : null}
 
       {open.length === 0 ? (
         <p className="rounded-2xl border border-outline bg-surface p-4 text-on-surface-variant">

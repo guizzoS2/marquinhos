@@ -139,6 +139,7 @@ export function PartialCloseForm({ sale, onSuccess, onCancel }) {
             inputMode="decimal"
             value={recebido}
             onChange={(event) => setRecebido(event.target.value)}
+            required
           />
           <div className="space-y-2">
             <p className="pl-1 text-xs font-label font-bold uppercase text-on-surface-variant">Troco</p>

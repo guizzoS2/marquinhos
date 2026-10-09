@@ -271,9 +271,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
           required
         />
         <div className="space-y-2">
-          <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">
-            Categoria
-          </label>
+          <FieldLabel required>Categoria</FieldLabel>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Dropdown
               className="min-w-0 flex-1"
@@ -291,9 +289,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
         </div>
         {party !== 'freelancer' ? (
           <div className="space-y-2">
-            <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">
-              Fornecedor
-            </label>
+            <FieldLabel required={buying}>Fornecedor</FieldLabel>
             <div className="flex items-center gap-2">
               <Dropdown
                 className="min-w-0 flex-1"
@@ -318,9 +314,9 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
                 <Icon name="add" />
               </Button>
             </div>
-            <p className="pl-1 text-[11px] text-on-surface-variant">
-              {suppliers.length ? 'Opcional. Obrigatório se houver produto.' : 'Nenhum fornecedor cadastrado.'}
-            </p>
+            {suppliers.length ? null : (
+              <p className="pl-1 text-[11px] text-on-surface-variant">Nenhum fornecedor cadastrado.</p>
+            )}
           </div>
         ) : null}
         {editing && linkedPurchase?.itens?.length ? (
@@ -402,9 +398,7 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
         ) : null}
         {party === 'freelancer' ? (
           <div className="space-y-2">
-            <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">
-              Freelancer
-            </label>
+            <FieldLabel required>Freelancer</FieldLabel>
             <Dropdown
               label="Freelancer"
               muted
@@ -432,7 +426,6 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
               onChange={(event) => setForm((prev) => ({ ...prev, supplier: event.target.value }))}
               placeholder="Ex.: Conta de luz"
             />
-            <p className="pl-1 text-[11px] text-on-surface-variant">Opcional.</p>
           </div>
         ) : null}
         <div className="space-y-2">

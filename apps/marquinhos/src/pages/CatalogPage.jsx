@@ -112,7 +112,7 @@ export function CatalogPage({ embedded = false, tab: tabProp }) {
     <div className={embedded ? 'space-y-6' : 'space-y-6 p-4 md:p-8'}>
       {embedded ? null : (
         <>
-          <PageHeader title="Catálogo" description="Promoções e combos vendidos como produto." />
+          <PageHeader title="Catálogo" description="Promoções e combos que o bar vende como um produto só." />
           <Tabs
             items={[
               { id: 'promocoes', label: 'Promoções' },

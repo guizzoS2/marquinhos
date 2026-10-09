@@ -263,7 +263,7 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
           id="venda-observacao"
           value={observacao}
           onChange={(event) => setObservacao(event.target.value)}
-          placeholder="Opcional"
+          placeholder="Ex.: sem gelo"
           rows={3}
           className="min-h-11 w-full rounded-2xl border border-outline bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface outline-none placeholder:font-normal placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-0"
         />
@@ -369,6 +369,7 @@ export function NewSaleForm({ items = [], promotions = [], sales = [], serverNow
             inputMode="decimal"
             value={recebido}
             onChange={(event) => setRecebido(event.target.value)}
+            required
           />
           <div className="space-y-2">
             <FieldLabel>Troco</FieldLabel>

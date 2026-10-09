@@ -14,6 +14,7 @@ import {
   startOfWeek,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { RequiredMark } from './FieldLabel';
 import { Icon } from './Icon';
 
 const WEEK_START = 0;
@@ -132,6 +133,7 @@ export function DateField({
       {!inline && label ? (
         <label htmlFor={id} className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
           {label}
+          {required ? <RequiredMark /> : null}
         </label>
       ) : null}
       <input

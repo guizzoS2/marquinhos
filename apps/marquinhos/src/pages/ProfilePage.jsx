@@ -91,7 +91,7 @@ export function ProfilePage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <PageHeader title="Perfil do Usuário" description="Dados da sua conta neste bar." />
+      <PageHeader title="Perfil" description="Dados da sua conta neste bar." />
 
       <form className={`${panel} space-y-6`} onSubmit={handleSubmit}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">

@@ -204,9 +204,7 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
       <form className="space-y-5" onSubmit={handleSubmit}>
         <Input label="Data" type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
         <div className="space-y-2">
-          <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-            Fornecedor
-          </label>
+          <FieldLabel required>Fornecedor</FieldLabel>
           <div className="flex items-center gap-2">
             <Dropdown
               className="min-w-0 flex-1"
@@ -241,7 +239,7 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
               <LineFields>
                 <div className="flex min-w-0 items-end gap-2">
                   <div className="min-w-0 flex-1 space-y-2">
-                    <FieldLabel>Produto</FieldLabel>
+                    <FieldLabel required>Produto</FieldLabel>
                     <Dropdown
                       className="w-full"
                       label="Produto"
@@ -306,9 +304,7 @@ export function PurchaseForm({ items = [], suppliers = [], onSuccess, onCancel }
           </Button>
         </div>
         <div className="space-y-2">
-          <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
-            Categoria financeira
-          </label>
+          <FieldLabel required>Categoria financeira</FieldLabel>
           <div className="flex items-center gap-2">
             <Dropdown
               className="min-w-0 flex-1"
