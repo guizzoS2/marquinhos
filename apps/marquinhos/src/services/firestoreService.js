@@ -498,7 +498,6 @@ async function resolveExpenseParties(payload, category) {
   if (payload.supplierId) return partyFromSupplier(payload.supplierId, 'Fornecedor não encontrado.');
   if (payload.freelancerId) return partyFromFreelancer(payload.freelancerId, 'Freelancer não encontrado.');
   const label = String(payload.supplier || '').trim();
-  if (!label) throw new Error('Informe a descrição.');
   return { supplier: label, supplierId: null, freelancerId: null };
 }
 

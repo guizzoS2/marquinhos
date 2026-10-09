@@ -221,10 +221,6 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
       setError('Selecione o freelancer.');
       return;
     }
-    if (party !== 'freelancer' && !form.supplierId && !String(form.supplier || '').trim()) {
-      setError('Informe a descrição.');
-      return;
-    }
     const supplierName =
       party === 'freelancer'
         ? people.find((item) => String(item.id) === String(form.freelancerId))?.name || form.supplier
@@ -421,14 +417,16 @@ export function ExpenseForm({ onSuccess, onCancel, categories: categoriesProp, e
           </div>
         ) : null}
         {party !== 'freelancer' && !form.supplierId ? (
-          <Input
-            label="Descrição"
-            name="supplier"
-            value={form.supplier}
-            onChange={(event) => setForm((prev) => ({ ...prev, supplier: event.target.value }))}
-            placeholder="Ex.: Conta de luz"
-            required
-          />
+          <div className="space-y-2">
+            <Input
+              label="Descrição"
+              name="supplier"
+              value={form.supplier}
+              onChange={(event) => setForm((prev) => ({ ...prev, supplier: event.target.value }))}
+              placeholder="Ex.: Conta de luz"
+            />
+            <p className="pl-1 text-[11px] text-on-surface-variant">Opcional.</p>
+          </div>
         ) : null}
         <div className="space-y-2">
           <label className="pl-1 text-xs font-bold uppercase text-on-surface-variant font-label">
