@@ -1,15 +1,57 @@
 import { useMemo, useState } from 'react';
 import { Button } from '../ui/Button';
+import { DataTable, StatusPill, TBody, Td, Th, THead, Tr } from '../ui/DataTable';
 import { FilterBar } from '../ui/FilterBar';
 import { Icon } from '../ui/Icon';
 import { Pagination } from '../ui/Pagination';
 import { SearchField } from '../ui/SearchField';
+import { SegmentedControl } from '../ui/SegmentedControl';
+import { Tabs } from '../ui/Tabs';
 import { usePagedList } from '../ui/usePagedList';
+import { useViewMode } from '../ui/useViewMode';
 import { useModal } from '../../contexts/ModalContext';
 import { PAYMENT_OPTIONS } from '../../services/inventoryProduct';
 import { formatSaleStamp, saleBalance, salePaidAmount } from '../../services/saleRules';
 import { PartialCloseForm } from './PartialCloseForm';
 import { PdvModal } from './PdvModal';
+
+const KINDS = [
+  { id: 'aberta', label: 'Abertas' },
+  { id: 'fechada', label: 'Fechadas' },
+  { id: 'parcial', label: 'Parciais' },
+];
+
+const KIND_LABEL = {
+  aberta: 'Aberta',
+  fechada: 'Fechada',
+  parcial: 'Parcial',
+};
+
+const EMPTY_KIND = {
+  aberta: 'Nenhuma comanda aberta.',
+  fechada: 'Nenhuma comanda fechada.',
+  parcial: 'Nenhuma comanda parcial.',
+};
+
+function comandaKind(sale) {
+  if (!sale?.numero_comanda) return '';
+  if (sale.status === 'paga') return 'fechada';
+  if (sale.status !== 'aberta') return '';
+  if (salePaidAmount(sale) > 0 && saleBalance(sale) > 0) return 'parcial';
+  return 'aberta';
+}
+
+function itemText(sale) {
+  const itens = sale?.itens || [];
+  if (!itens.length) return '—';
+  return itens.map((item) => `${item.nome} × ${item.quantidade}`).join(', ');
+}
+
+function stampText(sale) {
+  const stamp = formatSaleStamp(sale?.updated_at || sale?.created_at);
+  if (stamp.data === '—') return '—';
+  return `${stamp.data} ${stamp.hora}`;
+}
 
 function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -18,22 +60,36 @@ function money(value) {
 export function OpenComandas({ sales = [] }) {
   const { openModal } = useModal();
   const [query, setQuery] = useState('');
+  const [kind, setKind] = useState('aberta');
+  const [view, setView] = useViewMode('comandas');
   const [detail, setDetail] = useState(null);
   const [paying, setPaying] = useState(false);
-  const open = useMemo(() => sales.filter((sale) => sale.status === 'aberta'), [sales]);
+  const grouped = useMemo(() => {
+    return (sales || [])
+      .filter((sale) => comandaKind(sale) === kind)
+      .sort((left, right) =>
+        String(right.updated_at || right.created_at || '').localeCompare(
+          String(left.updated_at || left.created_at || '')
+        )
+      );
+  }, [sales, kind]);
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return open;
-    return open.filter((sale) => {
-      const quitada = saleBalance(sale) <= 0 && (sale.historico || []).length ? 'quitada' : '';
-      const saldo = salePaidAmount(sale) > 0 && saleBalance(sale) > 0 ? 'saldo' : '';
-      return [sale.numero_comanda, sale.cliente_nome, sale.observacao, quitada, saldo, 'aberta', 'comanda']
+    if (!term) return grouped;
+    return grouped.filter((sale) => {
+      const label = KIND_LABEL[comandaKind(sale)] || '';
+      return [sale.numero_comanda, sale.cliente_nome, sale.observacao, itemText(sale), stampText(sale), label, 'comanda']
         .join(' ')
         .toLowerCase()
         .includes(term);
     });
-  }, [open, query]);
-  const page = usePagedList(visible, `${query}|${visible.map((sale) => sale.id).join('|')}`);
+  }, [grouped, query]);
+  const page = usePagedList(visible, `${kind}|${query}|${visible.map((sale) => sale.id).join('|')}`);
+
+  function openDetail(sale) {
+    setPaying(false);
+    setDetail(sale);
+  }
 
   return (
     <section className="min-w-0 space-y-6">
@@ -45,53 +101,103 @@ export function OpenComandas({ sales = [] }) {
           </Button>
         }
       >
+        <SegmentedControl
+          label="Visualização das comandas"
+          items={[
+            { id: 'list', label: 'Lista' },
+            { id: 'cards', label: 'Cards' },
+          ]}
+          value={view}
+          onChange={setView}
+        />
         <SearchField value={query} onChange={setQuery} placeholder="Buscar comanda" label="Buscar comanda" />
       </FilterBar>
 
-      {open.length === 0 ? (
+      <Tabs label="Tipo de comanda" items={KINDS} value={kind} onChange={setKind} />
+
+      {grouped.length === 0 ? (
         <p className="rounded-2xl border border-outline bg-surface p-4 text-on-surface-variant">
-          Nenhuma comanda aberta.
+          {EMPTY_KIND[kind]}
         </p>
       ) : visible.length === 0 ? (
         <p className="rounded-2xl border border-outline bg-surface p-4 text-on-surface-variant">
           Nenhuma comanda encontrada.
         </p>
+      ) : view === 'list' ? (
+        <div className="space-y-4">
+          <DataTable minWidth="min-w-[72rem]">
+            <THead>
+              <Th>Número</Th>
+              <Th>Cliente</Th>
+              <Th>Data/Hora</Th>
+              <Th>Itens</Th>
+              <Th>Observação</Th>
+              <Th align="right">Total</Th>
+              <Th align="right">Pago</Th>
+              <Th align="right">Saldo</Th>
+              <Th>Tipo</Th>
+            </THead>
+            <TBody>
+              {page.rows.map((sale) => {
+                const type = comandaKind(sale);
+                return (
+                  <Tr key={sale.id} onClick={() => openDetail(sale)}>
+                    <Td tone="strong">{sale.numero_comanda}</Td>
+                    <Td>{sale.cliente_nome || 'Consumidor'}</Td>
+                    <Td tone="muted" className="whitespace-nowrap">
+                      {stampText(sale)}
+                    </Td>
+                    <Td tone="muted">{itemText(sale)}</Td>
+                    <Td tone="muted">{sale.observacao || '—'}</Td>
+                    <Td align="right" tone="strong">
+                      {money(sale.total)}
+                    </Td>
+                    <Td align="right">{money(salePaidAmount(sale))}</Td>
+                    <Td align="right" tone={saleBalance(sale) > 0 ? 'danger' : 'default'}>
+                      {money(Math.max(saleBalance(sale), 0))}
+                    </Td>
+                    <Td>
+                      <StatusPill tone={type === 'aberta' ? 'accent' : 'neutral'}>{KIND_LABEL[type]}</StatusPill>
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </DataTable>
+          <Pagination state={page} />
+        </div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {page.rows.map((sale) => (
-              <button
-                key={sale.id}
-                type="button"
-                onClick={() => {
-                  setPaying(false);
-                  setDetail(sale);
-                }}
-                className="flex min-h-11 w-full items-center gap-3 rounded-2xl border border-outline bg-surface p-3 text-left hover:bg-surface-container-low"
-              >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-container-low text-on-surface">
-                  <Icon name="receipt_long" className="text-xl" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold text-on-surface">
-                    Comanda {sale.numero_comanda}
+            {page.rows.map((sale) => {
+              const type = comandaKind(sale);
+              return (
+                <button
+                  key={sale.id}
+                  type="button"
+                  onClick={() => openDetail(sale)}
+                  className="flex min-h-11 w-full items-center gap-3 rounded-2xl border border-outline bg-surface p-3 text-left hover:bg-surface-container-low"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-container-low text-on-surface">
+                    <Icon name="receipt_long" className="text-xl" />
                   </span>
-                  <span className="block truncate text-sm text-on-surface-variant">
-                    {sale.cliente_nome || 'Consumidor'}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-on-surface">
+                      Comanda {sale.numero_comanda}
+                    </span>
+                    <span className="block truncate text-sm text-on-surface-variant">
+                      {sale.cliente_nome || 'Consumidor'}
+                    </span>
                   </span>
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="block font-headline font-extrabold text-on-surface">
-                    {money(salePaidAmount(sale) > 0 ? saleBalance(sale) : sale.total)}
+                  <span className="shrink-0 text-right">
+                    <span className="block font-headline font-extrabold text-on-surface">
+                      {money(type === 'parcial' ? saleBalance(sale) : sale.total)}
+                    </span>
+                    <span className="block text-xs text-on-surface-variant">{KIND_LABEL[type]}</span>
                   </span>
-                  {saleBalance(sale) <= 0 && (sale.historico || []).length ? (
-                    <span className="block text-xs text-on-surface-variant">Quitada</span>
-                  ) : salePaidAmount(sale) > 0 ? (
-                    <span className="block text-xs text-on-surface-variant">Saldo</span>
-                  ) : null}
-                </span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
           <Pagination state={page} />
         </div>
@@ -106,7 +212,9 @@ export function OpenComandas({ sales = [] }) {
             setDetail(null);
           }}
         >
-          <p className="text-sm text-on-surface-variant">Cliente {detail.cliente_nome || 'Consumidor'}</p>
+          <p className="text-sm text-on-surface-variant">
+            {KIND_LABEL[comandaKind(detail)] || 'Comanda'} · Cliente {detail.cliente_nome || 'Consumidor'}
+          </p>
           {detail.observacao ? <p className="break-words text-sm text-on-surface">{detail.observacao}</p> : null}
           <p className="text-sm text-on-surface">
             Total {money(detail.total)} · Pago {money(salePaidAmount(detail))} · Saldo {money(saleBalance(detail))}
@@ -191,7 +299,7 @@ export function OpenComandas({ sales = [] }) {
             />
           ) : (
             <div className="flex flex-wrap justify-end gap-3">
-              {saleBalance(detail) > 0 ? (
+              {detail.status === 'aberta' && saleBalance(detail) > 0 ? (
                 <Button type="button" onClick={() => setPaying(true)}>
                   <Icon name="payments" />
                   Fechamento parcial
