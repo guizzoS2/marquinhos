@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
-import { DataTable, EmptyRow, TableActions, Tag, TBody, Td, Th, THead, Tr } from '../ui/DataTable';
+import { DataTable, EmptyRow, TableActions, TBody } from '../ui/DataTable';
 import { FieldModal } from '../ui/FieldModal';
 import { Icon } from '../ui/Icon';
+import { IconPicker } from '../ui/IconPicker';
 import { Input } from '../ui/Input';
 import { SegmentedControl } from '../ui/SegmentedControl';
+import { TaxonomyCard, TaxonomyChildren } from '../ui/TaxonomyCard';
+import { SubCell, SubRow, SubTable, TaxonomyHead, TaxonomyRow } from '../ui/TaxonomyTable';
 import { useViewMode } from '../ui/useViewMode';
 import { useModal } from '../../contexts/ModalContext';
 import { useToast } from '../../contexts/ToastContext';
-import { groupTag } from '../../services/catalogTaxonomy';
+import { groupIcon } from '../../services/catalogTaxonomy';
+import { GROUP_ICONS } from '../../services/taxonomyIcons';
 import {
   addFormat,
   addMenuGroup,
@@ -26,7 +30,9 @@ function NameForm({
   label,
   initial = '',
   initialDescription = '',
+  initialIcon = '',
   withDescription = false,
+  withIcon = false,
   submitLabel,
   onSubmit,
   onCancel,
@@ -34,6 +40,7 @@ function NameForm({
   const toast = useToast();
   const [name, setName] = useState(initial);
   const [description, setDescription] = useState(initialDescription);
+  const [icon, setIcon] = useState(initialIcon || 'category');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,7 +49,7 @@ function NameForm({
     setSaving(true);
     setError('');
     try {
-      await onSubmit(name, description);
+      await onSubmit(name, description, icon);
       onCancel();
     } catch (err) {
       const message = err?.message || 'Não foi possível salvar.';
@@ -71,6 +78,7 @@ function NameForm({
           />
         </div>
       ) : null}
+      {withIcon ? <IconPicker value={icon} onChange={setIcon} related={GROUP_ICONS} relatedLabel="Cardápio e estoque" /> : null}
       {error ? <p className="text-sm font-medium text-error">{error}</p> : null}
       <div className="flex flex-wrap justify-end gap-3">
         <Button variant="secondary" type="button" onClick={onCancel}>
@@ -102,15 +110,29 @@ function GroupActions({ group, onEdit, onDelete, onAddSub }) {
   );
 }
 
-export function GroupsPanel({ groups = [], formats = [] }) {
+function plural(count, one, many) {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+export function GroupsPanel({ groups = [], formats = [], items = [] }) {
   const toast = useToast();
   const { openModal } = useModal();
   const queryClient = useQueryClient();
   const [view, setView] = useViewMode('grupos');
   const [editor, setEditor] = useState(null);
+  const [expanded, setExpanded] = useState(() => new Set());
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
+  }
+
+  function toggle(id) {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function confirmRemove(message, action, success) {
@@ -132,6 +154,17 @@ export function GroupsPanel({ groups = [], formats = [] }) {
     refresh();
   }
 
+  function productCount(groupId, subgroupId) {
+    return items.filter(
+      (item) => item.grupoId === groupId && (subgroupId === undefined || item.subgrupoId === subgroupId)
+    ).length;
+  }
+
+  function groupSubtitle(group) {
+    const subs = (group.subgroups || []).length;
+    return `${plural(subs, 'subgrupo', 'subgrupos')} · ${plural(productCount(group.id), 'produto', 'produtos')}`;
+  }
+
   function groupActions(group) {
     return (
       <GroupActions
@@ -145,44 +178,34 @@ export function GroupsPanel({ groups = [], formats = [] }) {
     );
   }
 
-  function subgroupList(group) {
-    if (!(group.subgroups || []).length) {
-      return <p className="text-sm text-on-surface-variant">Sem subgrupo.</p>;
-    }
+  function subgroupActions(group, sub) {
     return (
-      <ul className="space-y-2">
-        {group.subgroups.map((sub) => (
-          <li key={sub.id} className="flex items-center justify-between gap-3">
-            <span className="min-w-0 break-words text-sm text-on-surface">{sub.name}</span>
-            <div className="flex shrink-0 gap-2">
-              <Button
-                type="button"
-                size="icon"
-                variant="secondary"
-                aria-label={`Editar ${sub.name}`}
-                onClick={() => setEditor({ kind: 'subgroup', group, subgroup: sub })}
-              >
-                <Icon name="edit" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="danger"
-                aria-label={`Excluir ${sub.name}`}
-                onClick={() =>
-                  confirmRemove(
-                    `Excluir o subgrupo "${sub.name}"?`,
-                    () => deleteMenuSubgroup(group.id, sub.id),
-                    'Subgrupo excluído.'
-                  )
-                }
-              >
-                <Icon name="delete" />
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <TableActions>
+        <Button
+          type="button"
+          size="icon"
+          variant="secondary"
+          aria-label={`Editar ${sub.name}`}
+          onClick={() => setEditor({ kind: 'subgroup', group, subgroup: sub })}
+        >
+          <Icon name="edit" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="danger"
+          aria-label={`Excluir ${sub.name}`}
+          onClick={() =>
+            confirmRemove(
+              `Excluir o subgrupo "${sub.name}"?`,
+              () => deleteMenuSubgroup(group.id, sub.id),
+              'Subgrupo excluído.'
+            )
+          }
+        >
+          <Icon name="delete" />
+        </Button>
+      </TableActions>
     );
   }
 
@@ -207,74 +230,101 @@ export function GroupsPanel({ groups = [], formats = [] }) {
         groups.length === 0 ? (
           <p className="text-sm text-on-surface-variant">Nenhum grupo.</p>
         ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {groups.map((group) => {
-            const tag = groupTag(group);
-            return (
-              <article key={group.id} className="space-y-3 rounded-xl border border-outline bg-surface p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-2">
-                    <Tag tone={tag.tone} icon={tag.icon}>
-                      {group.name}
-                    </Tag>
-                    {group.description ? (
-                      <p className="break-words text-sm text-on-surface-variant">{group.description}</p>
-                    ) : null}
-                  </div>
-                  {groupActions(group)}
-                </div>
-                {subgroupList(group)}
-              </article>
-            );
-          })}
-        </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {groups.map((group) => (
+              <TaxonomyCard
+                key={group.id}
+                icon={groupIcon(group)}
+                title={group.name}
+                subtitle={groupSubtitle(group)}
+                description={group.description}
+                actions={groupActions(group)}
+              >
+                <TaxonomyChildren
+                  label="Subgrupos"
+                  items={group.subgroups || []}
+                  empty="Nenhum subgrupo."
+                  renderMeta={(sub) => plural(productCount(group.id, sub.id), 'produto', 'produtos')}
+                  renderActions={(sub) => subgroupActions(group, sub)}
+                />
+              </TaxonomyCard>
+            ))}
+          </div>
         )
       ) : (
         <DataTable>
-          <THead>
-            <Th>Grupo</Th>
-            <Th>Descrição</Th>
-            <Th>Subgrupos</Th>
-            <Th align="right">Ações</Th>
-          </THead>
+          <TaxonomyHead label="Grupo" />
           <TBody>
             {groups.length === 0 ? (
               <EmptyRow colSpan={4}>Nenhum grupo.</EmptyRow>
             ) : (
               groups.map((group) => {
-                const tag = groupTag(group);
+                const subs = group.subgroups || [];
+                const open = expanded.has(group.id);
                 return (
-                  <Tr key={group.id}>
-                    <Td>
-                      <Tag tone={tag.tone} icon={tag.icon}>
-                        {group.name}
-                      </Tag>
-                    </Td>
-                    <Td tone="muted">{group.description || '—'}</Td>
-                    <Td>{subgroupList(group)}</Td>
-                    <Td align="right" nowrap>
-                      {groupActions(group)}
-                    </Td>
-                  </Tr>
+                  <TaxonomyRow
+                    key={group.id}
+                    icon={groupIcon(group)}
+                    title={group.name}
+                    subtitle={groupSubtitle(group)}
+                    description={group.description}
+                    actions={groupActions(group)}
+                    open={open}
+                    onToggle={subs.length ? () => toggle(group.id) : null}
+                    expandLabel={`${open ? 'Recolher' : 'Ver'} subgrupos de ${group.name}`}
+                  >
+                    <SubTable
+                      columns={[
+                        { label: 'Subgrupo' },
+                        { label: 'Produtos', align: 'right' },
+                        { label: 'Ações', align: 'right' },
+                      ]}
+                    >
+                      {subs.map((sub) => (
+                        <SubRow key={sub.id}>
+                          <SubCell>
+                            <span className="font-semibold">{sub.name}</span>
+                          </SubCell>
+                          <SubCell align="right" muted fit>
+                            {productCount(group.id, sub.id)}
+                          </SubCell>
+                          <SubCell align="right" fit>
+                            {subgroupActions(group, sub)}
+                          </SubCell>
+                        </SubRow>
+                      ))}
+                    </SubTable>
+                  </TaxonomyRow>
                 );
               })
             )}
           </TBody>
         </DataTable>
       )}
-      <article className="space-y-3 rounded-xl border border-outline bg-surface p-4">
+      <article className="space-y-3 rounded-xl border border-outline bg-surface p-4 md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-headline text-lg font-bold text-on-surface">Formatos</h3>
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-on-primary">
+              <Icon name="straighten" filled className="text-2xl" />
+            </div>
+            <div>
+              <h3 className="font-headline text-lg font-extrabold text-on-surface">Formatos</h3>
+              <p className="text-xs text-on-surface-variant">{plural(formats.length, 'formato', 'formatos')}</p>
+            </div>
+          </div>
           <Button type="button" variant="secondary" onClick={() => setEditor({ kind: 'format' })}>
             <Icon name="add" />
             Novo formato
           </Button>
         </div>
-        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {formats.map((format) => (
-            <li key={format} className="flex items-center justify-between gap-3">
-              <span className="text-sm text-on-surface">{format}</span>
-              <div className="flex shrink-0 gap-2">
+            <li
+              key={format}
+              className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-outline-variant px-3 py-1"
+            >
+              <span className="min-w-0 break-words text-sm font-semibold text-on-surface">{format}</span>
+              <TableActions>
                 <Button
                   type="button"
                   size="icon"
@@ -295,7 +345,7 @@ export function GroupsPanel({ groups = [], formats = [] }) {
                 >
                   <Icon name="delete" />
                 </Button>
-              </div>
+              </TableActions>
             </li>
           ))}
         </ul>
@@ -310,12 +360,17 @@ export function GroupsPanel({ groups = [], formats = [] }) {
             label="Nome do grupo"
             initial={editor.group?.name || ''}
             initialDescription={editor.group?.description || ''}
+            initialIcon={editor.group ? groupIcon(editor.group) : ''}
             withDescription
+            withIcon
             submitLabel={editor.group ? 'Salvar' : 'Criar grupo'}
             onCancel={() => setEditor(null)}
-            onSubmit={(name, description) =>
+            onSubmit={(name, description, icon) =>
               run(
-                () => (editor.group ? editMenuGroup(editor.group.id, name, description) : addMenuGroup(name, description)),
+                () =>
+                  editor.group
+                    ? editMenuGroup(editor.group.id, name, description, icon)
+                    : addMenuGroup(name, description, icon),
                 editor.group ? 'Grupo atualizado.' : 'Grupo criado.'
               )
             }

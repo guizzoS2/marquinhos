@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
-import { DataTable, EmptyRow, TableActions, Tag, TBody, Td, Th, THead, Tr } from '../ui/DataTable';
+import { DataTable, EmptyRow, TableActions, TBody } from '../ui/DataTable';
 import { FieldModal } from '../ui/FieldModal';
 import { Icon } from '../ui/Icon';
+import { IconPicker } from '../ui/IconPicker';
 import { Input } from '../ui/Input';
 import { SegmentedControl } from '../ui/SegmentedControl';
+import { TaxonomyCard, TaxonomyChildren } from '../ui/TaxonomyCard';
+import { SubCell, SubRow, SubTable, TaxonomyHead, TaxonomyRow } from '../ui/TaxonomyTable';
 import { useModal } from '../../contexts/ModalContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useViewMode } from '../ui/useViewMode';
@@ -18,13 +21,21 @@ import {
   editExpenseSubtype,
   fetchCashFlow,
 } from '../../services/dashboardService';
-import { activeExpenseTypes, categoryAllowsSubtypes, expenseTag, fixedExpenseCategory } from '../../services/catalogTaxonomy';
+import {
+  activeExpenseTypes,
+  categoryAllowsSubtypes,
+  expenseIcon,
+  fixedExpenseCategory,
+} from '../../services/catalogTaxonomy';
+import { EXPENSE_ICONS } from '../../services/taxonomyIcons';
 
 function NameForm({
   label,
   initial = '',
   initialDescription = '',
+  initialIcon = '',
   withDescription = false,
+  withIcon = false,
   allows = false,
   showMode = false,
   submitLabel,
@@ -34,6 +45,7 @@ function NameForm({
   const toast = useToast();
   const [name, setName] = useState(initial);
   const [description, setDescription] = useState(initialDescription);
+  const [icon, setIcon] = useState(initialIcon || 'category');
   const [mode, setMode] = useState(allows ? 'com' : 'sem');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -43,7 +55,7 @@ function NameForm({
     setSaving(true);
     setError('');
     try {
-      await onSubmit(name, mode === 'com', description);
+      await onSubmit(name, { allowsSubtypes: mode === 'com', description, icon });
       onCancel();
     } catch (err) {
       const message = err?.message || 'Não foi possível salvar.';
@@ -84,6 +96,7 @@ function NameForm({
           onChange={setMode}
         />
       ) : null}
+      {withIcon ? <IconPicker value={icon} onChange={setIcon} related={EXPENSE_ICONS} relatedLabel="Despesas e compras" /> : null}
       {error ? <p className="text-sm font-medium text-error">{error}</p> : null}
       <div className="flex flex-wrap justify-end gap-3">
         <Button variant="secondary" type="button" onClick={onCancel}>
@@ -100,18 +113,24 @@ function NameForm({
 }
 
 function CategoryActions({ category, onEdit, onDelete, onAddSub }) {
-  const fixed = fixedExpenseCategory(category.id);
-  if (fixed) return <span className="text-sm text-on-surface-variant">(fixo)</span>;
+  if (fixedExpenseCategory(category.id)) {
+    return (
+      <span className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-on-surface-variant">
+        <Icon name="lock" className="text-base" />
+        Não editável
+      </span>
+    );
+  }
   return (
     <TableActions>
-      <Button type="button" size="icon" variant="secondary" aria-label={`Editar ${category.name}`} onClick={onEdit}>
-        <Icon name="edit" />
-      </Button>
       {categoryAllowsSubtypes(category) ? (
         <Button type="button" size="icon" variant="secondary" aria-label={`Nova subcategoria em ${category.name}`} onClick={onAddSub}>
           <Icon name="add" />
         </Button>
       ) : null}
+      <Button type="button" size="icon" variant="secondary" aria-label={`Editar ${category.name}`} onClick={onEdit}>
+        <Icon name="edit" />
+      </Button>
       <Button type="button" size="icon" variant="danger" aria-label={`Excluir ${category.name}`} onClick={onDelete}>
         <Icon name="delete" />
       </Button>
@@ -119,29 +138,12 @@ function CategoryActions({ category, onEdit, onDelete, onAddSub }) {
   );
 }
 
-function CategoryTag({ category }) {
-  const tag = expenseTag(category.id, { icon: category.icon, name: category.name });
-  return (
-    <Tag tone={tag.tone} icon={tag.icon}>
-      {category.name}
-    </Tag>
-  );
+function natureLabel(nature) {
+  return nature === 'fixed' ? 'Fixa' : 'Variável';
 }
 
-function SubtypeRow({ subtype, onEdit, onDelete }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="min-w-0 break-words text-sm text-on-surface">{subtype.name}</span>
-      <div className="flex shrink-0 gap-2">
-        <Button type="button" size="icon" variant="secondary" aria-label={`Editar ${subtype.name}`} onClick={onEdit}>
-          <Icon name="edit" />
-        </Button>
-        <Button type="button" size="icon" variant="danger" aria-label={`Excluir ${subtype.name}`} onClick={onDelete}>
-          <Icon name="delete" />
-        </Button>
-      </div>
-    </div>
-  );
+function plural(count, one, many) {
+  return `${count} ${count === 1 ? one : many}`;
 }
 
 export function ExpenseTypesPanel({ onClose }) {
@@ -151,12 +153,21 @@ export function ExpenseTypesPanel({ onClose }) {
   const cash = useQuery({ queryKey: ['cash-flow'], queryFn: fetchCashFlow });
   const [view, setView] = useViewMode('categorias');
   const [editor, setEditor] = useState(null);
+  const [expanded, setExpanded] = useState(() => new Set());
   const types = activeExpenseTypes(cash.data?.categories || []);
-  const fixedTypes = types.filter((type) => fixedExpenseCategory(type.id));
-  const openTypes = types.filter((type) => !fixedExpenseCategory(type.id));
+  const expenses = cash.data?.expenses || [];
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+  }
+
+  function toggle(id) {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function confirmRemove(message, action, success) {
@@ -178,10 +189,68 @@ export function ExpenseTypesPanel({ onClose }) {
     refresh();
   }
 
-  function subtypeList(type) {
-    if (!categoryAllowsSubtypes(type)) return 'Sem subcategoria';
-    const names = (type.subtypes || []).map((item) => item.name);
-    return names.length ? names.join(', ') : 'Nenhuma subcategoria';
+  function entryCount(categoryId, subtypeId) {
+    return expenses.filter(
+      (row) => row.categoryId === categoryId && (subtypeId === undefined || row.subtypeId === subtypeId)
+    ).length;
+  }
+
+  function subtitle(type) {
+    const subs = categoryAllowsSubtypes(type)
+      ? plural((type.subtypes || []).length, 'subcategoria', 'subcategorias')
+      : 'Sem subcategoria';
+    return `${subs} · ${plural(entryCount(type.id), 'lançamento', 'lançamentos')}`;
+  }
+
+  function tags(type) {
+    const list = [`Despesa ${natureLabel(type.defaultNature).toLowerCase()}`];
+    if (fixedExpenseCategory(type.id)) list.unshift('Padrão');
+    return list;
+  }
+
+  function categoryActions(type) {
+    return (
+      <CategoryActions
+        category={type}
+        onEdit={() => setEditor({ kind: 'type', type })}
+        onAddSub={() => setEditor({ kind: 'subtype', type })}
+        onDelete={() =>
+          confirmRemove(`Excluir a categoria "${type.name}"?`, () => deleteExpenseCategory(type.id), 'Categoria excluída.')
+        }
+      />
+    );
+  }
+
+  function subtypeActions(type, sub) {
+    if (fixedExpenseCategory(type.id)) return null;
+    return (
+      <TableActions>
+        <Button
+          type="button"
+          size="icon"
+          variant="secondary"
+          aria-label={`Editar ${sub.name}`}
+          onClick={() => setEditor({ kind: 'subtype', type, subtype: sub })}
+        >
+          <Icon name="edit" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="danger"
+          aria-label={`Excluir ${sub.name}`}
+          onClick={() =>
+            confirmRemove(
+              `Excluir a subcategoria "${sub.name}"?`,
+              () => deleteExpenseSubtype(type.id, sub.id),
+              'Subcategoria excluída.'
+            )
+          }
+        >
+          <Icon name="delete" />
+        </Button>
+      </TableActions>
+    );
   }
 
   return (
@@ -201,134 +270,93 @@ export function ExpenseTypesPanel({ onClose }) {
           Nova categoria
         </Button>
       </div>
-      {cash.isLoading ? <p className="text-sm text-on-surface-variant">Carregando categorias...</p> : null}
-      {fixedTypes.length ? (
-        <section className="space-y-2">
-          <h3 className="text-sm font-bold text-on-surface">Fixas</h3>
-          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {fixedTypes.map((type) => (
-              <li key={type.id} className="min-w-0 rounded-xl border border-outline px-3 py-2">
-                <CategoryTag category={type} />
-                {type.description ? (
-                  <p className="mt-1 break-words text-sm text-on-surface-variant">{type.description}</p>
+      {view === 'cards' ? (
+        cash.isLoading ? (
+          <p className="text-sm text-on-surface-variant">Carregando categorias...</p>
+        ) : types.length === 0 ? (
+          <p className="text-sm text-on-surface-variant">Nenhuma categoria.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {types.map((type) => (
+              <TaxonomyCard
+                key={type.id}
+                icon={expenseIcon(type)}
+                title={type.name}
+                subtitle={subtitle(type)}
+                tags={tags(type)}
+                description={type.description}
+                actions={categoryActions(type)}
+              >
+                {categoryAllowsSubtypes(type) ? (
+                  <TaxonomyChildren
+                    label="Subcategorias"
+                    items={type.subtypes || []}
+                    empty="Nenhuma subcategoria."
+                    renderMeta={(sub) =>
+                      `${natureLabel(sub.defaultNature || type.defaultNature)} · ${plural(
+                        entryCount(type.id, sub.id),
+                        'lançamento',
+                        'lançamentos'
+                      )}`
+                    }
+                    renderActions={(sub) => subtypeActions(type, sub)}
+                  />
                 ) : null}
-              </li>
+              </TaxonomyCard>
             ))}
-          </ul>
-        </section>
-      ) : null}
-      {!cash.isLoading && !openTypes.length && fixedTypes.length ? null : view === 'cards' ? (
-        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {openTypes.map((type) => (
-            <li key={type.id} className="space-y-3 rounded-xl border border-outline p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 space-y-2">
-                  <CategoryTag category={type} />
-                  {type.description ? (
-                    <p className="break-words text-sm text-on-surface-variant">{type.description}</p>
-                  ) : null}
-                </div>
-                <CategoryActions
-                  category={type}
-                  onEdit={() => setEditor({ kind: 'type', type })}
-                  onAddSub={() => setEditor({ kind: 'subtype', type })}
-                  onDelete={() =>
-                    confirmRemove(
-                      `Excluir a categoria "${type.name}"?`,
-                      () => deleteExpenseCategory(type.id),
-                      'Categoria excluída.'
-                    )
-                  }
-                />
-              </div>
-              {categoryAllowsSubtypes(type) ? (
-                <div className="space-y-2">
-                  {(type.subtypes || []).length ? (
-                    (type.subtypes || []).map((sub) => (
-                      <SubtypeRow
-                        key={sub.id}
-                        subtype={sub}
-                        onEdit={() => setEditor({ kind: 'subtype', type, subtype: sub })}
-                        onDelete={() =>
-                          confirmRemove(
-                            `Excluir a subcategoria "${sub.name}"?`,
-                            () => deleteExpenseSubtype(type.id, sub.id),
-                            'Subcategoria excluída.'
-                          )
-                        }
-                      />
-                    ))
-                  ) : (
-                    <p className="text-sm text-on-surface-variant">Nenhuma subcategoria</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-on-surface-variant">Sem subcategoria</p>
-              )}
-            </li>
-          ))}
-        </ul>
+          </div>
+        )
       ) : (
         <DataTable>
-          <THead>
-            <Th>Categoria</Th>
-            <Th>Descrição</Th>
-            <Th>Subcategorias</Th>
-            <Th align="right">Ações</Th>
-          </THead>
+          <TaxonomyHead label="Categoria" />
           <TBody>
-            {openTypes.length === 0 ? (
-              <EmptyRow colSpan={4}>
-                {cash.isLoading ? 'Carregando categorias...' : fixedTypes.length ? 'Nenhuma outra categoria.' : 'Nenhuma categoria.'}
-              </EmptyRow>
+            {types.length === 0 ? (
+              <EmptyRow colSpan={4}>{cash.isLoading ? 'Carregando categorias...' : 'Nenhuma categoria.'}</EmptyRow>
             ) : (
-              openTypes.map((type) => (
-                <Tr key={type.id}>
-                  <Td>
-                    <CategoryTag category={type} />
-                  </Td>
-                  <Td tone="muted">{type.description || '—'}</Td>
-                  <Td>
-                    {categoryAllowsSubtypes(type) ? (
-                      <div className="space-y-2">
-                        {(type.subtypes || []).map((sub) => (
-                          <SubtypeRow
-                            key={sub.id}
-                            subtype={sub}
-                            onEdit={() => setEditor({ kind: 'subtype', type, subtype: sub })}
-                            onDelete={() =>
-                              confirmRemove(
-                                `Excluir a subcategoria "${sub.name}"?`,
-                                () => deleteExpenseSubtype(type.id, sub.id),
-                                'Subcategoria excluída.'
-                              )
-                            }
-                          />
-                        ))}
-                        {(type.subtypes || []).length ? null : (
-                          <span className="text-sm text-on-surface-variant">Nenhuma subcategoria</span>
-                        )}
-                      </div>
-                    ) : (
-                      subtypeList(type)
-                    )}
-                  </Td>
-                  <Td align="right" nowrap>
-                    <CategoryActions
-                      category={type}
-                      onEdit={() => setEditor({ kind: 'type', type })}
-                      onAddSub={() => setEditor({ kind: 'subtype', type })}
-                      onDelete={() =>
-                        confirmRemove(
-                          `Excluir a categoria "${type.name}"?`,
-                          () => deleteExpenseCategory(type.id),
-                          'Categoria excluída.'
-                        )
-                      }
-                    />
-                  </Td>
-                </Tr>
-              ))
+              types.map((type) => {
+                const subs = categoryAllowsSubtypes(type) ? type.subtypes || [] : [];
+                const open = expanded.has(type.id);
+                return (
+                  <TaxonomyRow
+                    key={type.id}
+                    icon={expenseIcon(type)}
+                    title={type.name}
+                    tag={fixedExpenseCategory(type.id) ? 'Padrão' : ''}
+                    subtitle={subtitle(type)}
+                    description={type.description}
+                    actions={categoryActions(type)}
+                    open={open}
+                    onToggle={subs.length ? () => toggle(type.id) : null}
+                    expandLabel={`${open ? 'Recolher' : 'Ver'} subcategorias de ${type.name}`}
+                  >
+                    <SubTable
+                      columns={[
+                        { label: 'Subcategoria' },
+                        { label: 'Natureza' },
+                        { label: 'Lançamentos', align: 'right', desktopOnly: true },
+                        { label: 'Ações', align: 'right' },
+                      ]}
+                    >
+                      {subs.map((sub) => (
+                        <SubRow key={sub.id}>
+                          <SubCell>
+                            <span className="font-semibold">{sub.name}</span>
+                          </SubCell>
+                          <SubCell muted fit>
+                            {natureLabel(sub.defaultNature || type.defaultNature)}
+                          </SubCell>
+                          <SubCell align="right" muted fit desktopOnly>
+                            {entryCount(type.id, sub.id)}
+                          </SubCell>
+                          <SubCell align="right" fit>
+                            {subtypeActions(type, sub)}
+                          </SubCell>
+                        </SubRow>
+                      ))}
+                    </SubTable>
+                  </TaxonomyRow>
+                );
+              })
             )}
           </TBody>
         </DataTable>
@@ -347,17 +375,16 @@ export function ExpenseTypesPanel({ onClose }) {
             label="Nome da categoria"
             initial={editor.type?.name || ''}
             initialDescription={editor.type?.description || ''}
+            initialIcon={editor.type ? expenseIcon(editor.type) : ''}
             withDescription
+            withIcon
             allows={editor.type ? categoryAllowsSubtypes(editor.type) : false}
             showMode
             submitLabel={editor.type ? 'Salvar' : 'Criar categoria'}
             onCancel={() => setEditor(null)}
-            onSubmit={(name, allowsSubtypes, description) =>
+            onSubmit={(name, options) =>
               run(
-                () =>
-                  editor.type
-                    ? editExpenseCategory(editor.type.id, name, { allowsSubtypes, description })
-                    : createExpenseCategory(name, { allowsSubtypes, description }),
+                () => (editor.type ? editExpenseCategory(editor.type.id, name, options) : createExpenseCategory(name, options)),
                 editor.type ? 'Categoria atualizada.' : 'Categoria criada.'
               )
             }

@@ -475,7 +475,7 @@ export function InventoryPage() {
             </div>
           </section>
         ) : section === 'grupos' ? (
-          <GroupsPanel groups={data.groups || []} formats={data.formats || []} />
+          <GroupsPanel groups={data.groups || []} formats={data.formats || []} items={data.items || []} />
         ) : (
           <CatalogPage embedded tab={section} />
         )}
