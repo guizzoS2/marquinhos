@@ -195,6 +195,7 @@ function cloneGroup(group) {
     id: group.id,
     name: group.name,
     description: String(group.description || '').trim(),
+    ...(group.icon ? { icon: String(group.icon) } : {}),
     subgroups: (group.subgroups || []).map((item) => ({ id: item.id, name: item.name })),
   };
 }
@@ -393,6 +394,15 @@ export function groupTag(source = {}) {
   if (known) return known;
   const label = name || id || 'Grupo';
   return { tone: tagToneFor(id || label), icon: 'category', label };
+}
+
+export function groupIcon(group) {
+  return group?.icon || groupTag(group || {}).icon;
+}
+
+export function expenseIcon(category) {
+  if (category?.icon && category.icon !== 'category') return category.icon;
+  return expenseTag(category?.id, { icon: category?.icon, name: category?.name }).icon;
 }
 
 export function productGroupTag(item) {

@@ -34,6 +34,7 @@ import {
 } from './inventoryProduct';
 import { assertPrice, promotionDays, promotionPriceAt, promotionSchedule, promotionStatus } from './catalogRules';
 import { aggregateOverview } from './overviewAggregate';
+import { cleanIcon } from './taxonomyIcons';
 import {
   describeExpense,
   expensePartyOf,
@@ -716,7 +717,7 @@ export async function addExpenseCategory(name, options) {
     type: 'expense',
     defaultNature: 'variable',
     party: 'none',
-    icon: 'category',
+    icon: cleanIcon(options?.icon),
     allowsSubtypes: Boolean(options?.allowsSubtypes),
     description: cleanNote(options?.description),
     subtypes: [],
@@ -746,8 +747,9 @@ export async function renameExpenseCategory(categoryId, name, options) {
   const description = options && Object.prototype.hasOwnProperty.call(options, 'description')
     ? cleanNote(options.description)
     : category.description || '';
+  const icon = options?.icon ? cleanIcon(options.icon, category.icon || 'category') : category.icon;
   const nextCategories = categories.map((item) =>
-    item.id === categoryId ? { ...item, name: label, allowsSubtypes, description } : item
+    item.id === categoryId ? { ...item, name: label, allowsSubtypes, description, icon } : item
   );
   const expenses = (current.expenses || []).map((row) =>
     row.categoryId === categoryId ? { ...row, category: label } : row
@@ -1250,7 +1252,7 @@ function cleanNote(value) {
   return String(value || '').trim().slice(0, 240);
 }
 
-export async function createMenuGroup(name, description = '') {
+export async function createMenuGroup(name, description = '', icon = '') {
   const current = await getInventory();
   const label = cleanLabel(name, 'Informe o nome do grupo.');
   const groups = mergeMenuGroups(current.groups, current.filters);
@@ -1261,13 +1263,14 @@ export async function createMenuGroup(name, description = '') {
     id: taxonomyId(label, new Set(groups.map((item) => item.id))),
     name: label,
     description: cleanNote(description),
+    icon: cleanIcon(icon),
     subgroups: [],
   };
   await saveInventory({ ...current, groups: [...groups, group] }, current.items || []);
   return group;
 }
 
-export async function renameMenuGroup(groupId, name, description = '') {
+export async function renameMenuGroup(groupId, name, description = '', icon = '') {
   const current = await getInventory();
   const label = cleanLabel(name, 'Informe o nome do grupo.');
   const groups = mergeMenuGroups(current.groups, current.filters);
@@ -1276,7 +1279,14 @@ export async function renameMenuGroup(groupId, name, description = '') {
     throw new Error('Esse grupo já existe.');
   }
   const nextGroups = groups.map((group) =>
-    group.id === groupId ? { ...group, name: label, description: cleanNote(description) } : group
+    group.id === groupId
+      ? {
+          ...group,
+          name: label,
+          description: cleanNote(description),
+          ...(icon ? { icon: cleanIcon(icon, group.icon || 'category') } : {}),
+        }
+      : group
   );
   const items = (current.items || []).map((item) =>
     item.grupoId === groupId ? persistProduct(presentProduct({ ...item, grupo: label }, item.codigo)) : persistProduct(presentProduct(item, item.codigo))

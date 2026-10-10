@@ -297,12 +297,12 @@ export function addInventoryFilter(name) {
   return addInventoryCategory(name);
 }
 
-export function addMenuGroup(name, description) {
-  return createMenuGroup(name, description);
+export function addMenuGroup(name, description, icon) {
+  return createMenuGroup(name, description, icon);
 }
 
-export function editMenuGroup(groupId, name, description) {
-  return renameMenuGroup(groupId, name, description);
+export function editMenuGroup(groupId, name, description, icon) {
+  return renameMenuGroup(groupId, name, description, icon);
 }
 
 export function addMenuSubgroup(groupId, name) {
