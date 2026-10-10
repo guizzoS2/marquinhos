@@ -1,6 +1,11 @@
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase';
-import { createAuthUserRest } from './identity';
+import { createAuthUserRest, randomStaffPassword, sendStaffPasswordReset } from './identity';
+import {
+  assertStaffInfo,
+  normalizeStaffPerson,
+  syncStaffPayrollExpenses,
+} from '@fnl/dashboard/staffPayroll';
 import {
   overviewFallback,
   cashFlowFallback,
@@ -12,8 +17,57 @@ import {
 import {
   buildCashFlowSummary,
   formatCents,
+  expensePartyKind,
   parseMoneyToCents,
+  unifyCashMovements,
 } from './cashFlowUtils';
+import {
+  assertInstallments,
+  assertMedida,
+  assertPaymentMethod,
+  assertVolumePeso,
+  formatProductCode,
+  isLowStock,
+  maxProductCode,
+  nextProductCode,
+  normalizeMedida,
+} from './inventoryProduct';
+import { assertPrice, promotionDays, promotionPriceAt, promotionSchedule, promotionStatus } from './catalogRules';
+import { aggregateOverview } from './overviewAggregate';
+import { cleanIcon } from './taxonomyIcons';
+import {
+  describeExpense,
+  expensePartyOf,
+  mergeFormats,
+  mergeMenuGroups,
+  resolveProductTaxonomy,
+  RETIRED_EXPENSE_IDS,
+  saleDescription,
+  saleGroupLabel,
+  taxonomyId,
+  EXPENSE_TYPES,
+  FIXED_EXPENSE_IDS,
+} from './catalogTaxonomy';
+import {
+  assertComanda,
+  optionalComanda,
+  optionalNote,
+  normalizeSale,
+  saleBalance,
+  salePaidAmount,
+} from './saleRules';
+import {
+  instantClosedByCash,
+  latestCutoff,
+  openMovements,
+  settledInWindow,
+  snapshotLine,
+  sumReais,
+  totalsInWindow,
+  windowFor,
+} from './cashClose';
+import { format } from 'date-fns';
+import { isValidPhone, maskPhone } from './freelancerSchedule';
 
 const TENANT_ID = 'marquinhos';
 const OPS_COLLECTION = ['tenants', TENANT_ID, 'data', 'ops'];
@@ -31,6 +85,7 @@ const USER_FIELDS = [
   'company',
   'photoURL',
   'permissions',
+  'disabled',
   'createdAt',
   'updatedAt',
   'uid',
@@ -43,6 +98,7 @@ const DOCS = {
   freelancers: 'dashboard/freelancers',
   suppliers: 'dashboard/suppliers',
   staff: 'dashboard/staff',
+  customers: 'dashboard/customers',
 };
 
 const DEFAULT_PRODUCT_IMAGE =
@@ -89,34 +145,8 @@ function staffAsPeople(staff) {
   return {
     people: source.map((item, index) => {
       const { password: _ignored, ...safe } = item;
-      return {
-        id: safe.id || index + 1,
-        uid: safe.uid || null,
-        name: safe.name,
-        email: safe.email,
-        title: safe.title || 'Equipe',
-        permissions: Array.isArray(safe.permissions)
-          ? safe.permissions
-          : safe.role === 'admin' || safe.barRole === 'admin'
-            ? ['overview', 'caixa', 'estoque', 'fornecedores', 'equipe']
-            : ['estoque'],
-        barRole: safe.barRole || safe.role || 'stock',
-        createdAt: safe.createdAt || new Date().toISOString(),
-      };
+      return normalizeStaffPerson(safe, index);
     }),
-  };
-}
-
-function staffAsMembers(staff) {
-  return {
-    members: staffAsPeople(staff).people.map((item) => ({
-      uid: item.uid,
-      email: item.email,
-      name: item.name,
-      title: item.title,
-      role: item.barRole === 'admin' ? 'admin' : 'stock',
-      createdAt: item.createdAt,
-    })),
   };
 }
 
@@ -162,18 +192,52 @@ async function readOps() {
   return opsCache;
 }
 
+function omitUndefined(value) {
+  if (Array.isArray(value)) return value.map(omitUndefined);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, entry]) => entry !== undefined)
+        .map(([key, entry]) => [key, omitUndefined(entry)])
+    );
+  }
+  return value;
+}
+
 async function writeOps(next) {
   requireDb();
-  opsCache = next;
-  await setDoc(doc(db, ...OPS_COLLECTION), next);
-  return next;
+  const payload = omitUndefined(next);
+  opsCache = payload;
+  await setDoc(doc(db, ...OPS_COLLECTION), payload);
+  return payload;
+}
+
+async function commitOps(mutator) {
+  requireDb();
+  const ref = doc(db, ...OPS_COLLECTION);
+  const outcome = await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(ref);
+    const ops = snap.exists() ? snap.data() : emptyOps();
+    const produced = mutator(ops);
+    const payload = omitUndefined(produced.ops);
+    transaction.set(ref, payload);
+    return { payload, value: produced.value };
+  });
+  opsCache = outcome.payload;
+  return outcome.value;
 }
 
 async function writeEmailLock(email, uid) {
   requireDb();
   const id = String(email || '').trim().toLowerCase();
   if (!id) return;
-  await setDoc(doc(db, 'emails', id), { uid, email: id });
+  const ref = doc(db, 'emails', id);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    if (snap.data()?.uid === uid) return;
+    throw new Error('E-mail já cadastrado.');
+  }
+  await setDoc(ref, { uid, email: id });
 }
 
 async function emailTaken(email) {
@@ -190,9 +254,9 @@ async function readDocument(path) {
     return snap.exists() ? snap.data() : null;
   }
   const key = sectionKey(path);
-  if (key) {
+    if (key) {
     const ops = await readOps();
-    if (key === 'staff') return staffAsMembers(ops.staff);
+    if (key === 'staff') return staffAsPeople(ops.staff);
     return ops[key] || null;
   }
   const snap = await getDoc(toDocRef(path));
@@ -217,7 +281,7 @@ async function writeDocument(path, data, merge = false) {
           ? { ...current, ...data }
           : data;
     await writeOps({ ...ops, [key]: nextSection });
-    return key === 'staff' ? staffAsMembers(nextSection) : nextSection;
+    return key === 'staff' ? staffAsPeople(nextSection) : nextSection;
   }
   await setDoc(toDocRef(path), data, { merge });
   return data;
@@ -236,17 +300,95 @@ async function patchDocument(path, data) {
   return data;
 }
 
+function cloneExpenseType(seed) {
+  return {
+    ...seed,
+    subtypes: (seed.subtypes || []).map((item) => ({ ...item })),
+  };
+}
+
+function allowsSubtypesOf(item, seed) {
+  if (typeof item?.allowsSubtypes === 'boolean') return item.allowsSubtypes;
+  if ((item?.subtypes || []).length > 0) return true;
+  if (typeof seed?.allowsSubtypes === 'boolean') return seed.allowsSubtypes;
+  return false;
+}
+
+function ensureExpenseCategories(categories, restoreSeeds = false) {
+  const list = categories?.length
+    ? categories.map((item) => cloneExpenseType(item))
+    : EXPENSE_TYPES.map(cloneExpenseType);
+  if (restoreSeeds) {
+    EXPENSE_TYPES.forEach((seed) => {
+      const found = list.find((item) => item.id === seed.id);
+      if (!found) {
+        list.push(cloneExpenseType(seed));
+        return;
+      }
+      if (!found.party) found.party = seed.party;
+      if (seed.id === 'funcionarios') found.defaultNature = 'variable';
+      found.allowsSubtypes = allowsSubtypesOf(found, seed);
+      seed.subtypes.forEach((sub) => {
+        if (!(found.subtypes || []).some((item) => item.id === sub.id)) {
+          found.subtypes = [...(found.subtypes || []), { ...sub }];
+        }
+      });
+    });
+  } else {
+    list.forEach((item) => {
+      const seed = EXPENSE_TYPES.find((row) => row.id === item.id);
+      if (seed && !item.party) item.party = seed.party;
+      if (seed?.id === 'funcionarios') item.defaultNature = 'variable';
+      item.allowsSubtypes = allowsSubtypesOf(item, seed);
+    });
+  }
+  list.forEach((item) => {
+    if (RETIRED_EXPENSE_IDS.includes(item.id)) item.retired = true;
+    if (typeof item.allowsSubtypes !== 'boolean') item.allowsSubtypes = allowsSubtypesOf(item, null);
+  });
+  return list;
+}
+
+function ensurePayees(source, expenses) {
+  const stored = Array.isArray(source.payees) ? source.payees : [];
+  const list = [];
+  const seen = new Set();
+  stored.forEach((item) => {
+    const name = String(item?.name || '').trim().replace(/\s+/g, ' ');
+    const id = String(item?.id || '').trim();
+    if (!name || !id || seen.has(name.toLowerCase())) return;
+    seen.add(name.toLowerCase());
+    list.push({ id, name });
+  });
+  (expenses || []).forEach((row) => {
+    if (expensePartyKind(row.categoryId) !== 'staff') return;
+    const name = String(row.supplier || '').trim().replace(/\s+/g, ' ');
+    if (!name || seen.has(name.toLowerCase())) return;
+    seen.add(name.toLowerCase());
+    list.push({ id: taxonomyId(name, new Set(list.map((item) => item.id))), name });
+  });
+  return list;
+}
+
+function samePayees(left, right) {
+  const a = Array.isArray(left) ? left : [];
+  const b = Array.isArray(right) ? right : [];
+  if (a.length !== b.length) return false;
+  return a.every((item, index) => item?.id === b[index]?.id && item?.name === b[index]?.name);
+}
+
 function migrateCashFlow(raw) {
   if (!raw) return cashFlowFallback;
+  const { movements: _movements, ...source } = raw;
 
-  const categories = raw.categories?.length ? raw.categories : expenseCategories;
-  const incomes = (raw.incomes || []).map((row, index) => ({
+  const categories = ensureExpenseCategories(source.categories, source.catalogReady !== true);
+  const incomes = (source.incomes || []).map((row, index) => ({
     ...row,
     id: row.id || `inc-${index + 1}`,
     amount: row.amount ?? parseMoneyToCents(row.value),
   }));
 
-  const expenses = (raw.expenses || []).map((row, index) => {
+  const expenses = (source.expenses || []).map((row, index) => {
     const categoryMeta = categories.find(
       (item) => item.id === row.categoryId || item.name === row.category
     );
@@ -262,6 +404,8 @@ function migrateCashFlow(raw) {
       categoryId: row.categoryId || categoryMeta?.id || row.category?.toLowerCase(),
       categoryIcon: row.categoryIcon || categoryMeta?.icon || 'payments',
       nature,
+      supplierId: row.supplierId || null,
+      freelancerId: row.freelancerId || null,
       amount: row.amount ?? parseMoneyToCents(row.value),
       recurrence: row.recurrence ?? null,
       source: row.source || 'manual',
@@ -269,21 +413,30 @@ function migrateCashFlow(raw) {
   });
 
   const summary = buildCashFlowSummary(incomes, expenses, {
-    revenueDelta: raw.summary?.revenueDelta,
-    expensesDelta: raw.summary?.expensesDelta,
+    revenueDelta: source.summary?.revenueDelta,
+    expensesDelta: source.summary?.expensesDelta,
   });
+  const payees = ensurePayees(source, expenses);
 
   return {
-    ...raw,
-    period: raw.period || cashFlowFallback.period,
+    ...source,
+    period: source.period || cashFlowFallback.period,
+    catalogReady: true,
     categories,
     incomes,
     expenses,
+    payees,
     summary: {
-      ...raw.summary,
+      ...source.summary,
       ...summary,
     },
   };
+}
+
+function cashFlowDocument(cash) {
+  if (!cash || typeof cash !== 'object') return cash;
+  const { movements: _movements, ...rest } = cash;
+  return rest;
 }
 
 export async function ensureDashboardSeed() {
@@ -292,115 +445,98 @@ export async function ensureDashboardSeed() {
   if (!cashFlow) return;
   const migrated = migrateCashFlow(cashFlow);
   const needsWrite =
-    !cashFlow.categories?.length ||
-    (cashFlow.expenses || []).some((row) => !row.nature || row.amount == null);
+    cashFlow.catalogReady !== true ||
+    (cashFlow.categories || []).find((item) => item.id === 'funcionarios')?.defaultNature === 'fixed' ||
+    (cashFlow.expenses || []).some((row) => !row.nature || row.amount == null) ||
+    !samePayees(cashFlow.payees, migrated.payees);
   if (needsWrite) {
     await writeDocument(DOCS.cashFlow, migrated);
   }
 }
 
-function unwrapOverview(raw) {
-  if (!raw || typeof raw !== 'object') return {};
-  if (Array.isArray(raw.metrics) || Array.isArray(raw.weeklyPerformance) || 'topSold' in raw) {
-    return raw;
-  }
-  if (raw.overview && typeof raw.overview === 'object') {
-    return raw.overview;
-  }
-  return raw;
-}
-
-function buildOverview(rawOverview, rawCash, rawInventory, rawFreelancers) {
-  const source = unwrapOverview(rawOverview);
-  const cash = migrateCashFlow(rawCash || cashFlowFallback);
-  const items = Array.isArray(rawInventory?.items) ? rawInventory.items : [];
-  const people = Array.isArray(rawFreelancers?.people) ? rawFreelancers.people : [];
-  const low = items.filter((item) => item.status === 'low').length;
-  const freelaCents = (cash.expenses || [])
-    .filter(
-      (row) =>
-        row.categoryId === 'freelancer' ||
-        row.source === 'freelancer_daily' ||
-        row.source === 'platform_daily'
-    )
-    .reduce((sum, row) => sum + (row.amount || 0), 0);
-
-  return {
-    ...overviewFallback,
-    ...source,
-    metrics: [
-      {
-        id: 'revenue',
-        label: 'Faturamento Diário',
-        value: cash.summary?.totalRevenue || 'R$ 0',
-        badge: cash.summary?.revenueDelta || '',
-        badgeTone: 'positive',
-        icon: 'payments',
-      },
-      {
-        id: 'freela-cost',
-        label: 'Custo de Freelas Hoje',
-        value: formatCents(freelaCents),
-        badge: `${people.filter((p) => p.status === 'on_shift').length} em turno`,
-        badgeTone: 'neutral',
-        icon: 'engineering',
-      },
-      {
-        id: 'stock-alert',
-        label: 'Alerta de Estoque',
-        value: `${low} ${low === 1 ? 'Item' : 'Itens'}`,
-        badge: low ? 'ATENÇÃO' : '',
-        badgeTone: low ? 'critical' : 'neutral',
-        icon: 'warning',
-      },
-    ],
-    weeklyPerformance: Array.isArray(source.weeklyPerformance)
-      ? source.weeklyPerformance
-      : overviewFallback.weeklyPerformance,
-    topSold: Array.isArray(source.topSold) ? source.topSold : [],
-    suggestion: source.suggestion ?? overviewFallback.suggestion,
-  };
-}
-
 function normalizeInventory(raw) {
-  const current = raw && typeof raw === 'object' ? raw : inventoryFallback;
-  const items = Array.isArray(current.items) ? current.items : [];
+  const sourceDoc = raw && typeof raw === 'object' ? raw : inventoryFallback;
+  const { metrics: _metrics, ...current } = sourceDoc;
+  const source = Array.isArray(current.items) ? current.items : [];
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  const formats = mergeFormats(current.formats);
+  let max = maxProductCode(source);
+  const items = source.map((item) => {
+    const codigo = item.codigo || formatProductCode(max + 1);
+    if (!item.codigo) max += 1;
+    return presentProduct(item, codigo, groups);
+  });
   return {
     ...inventoryFallback,
     ...current,
     filters: current.filters?.length ? current.filters : inventoryFallback.filters,
+    groups,
+    formats,
     items,
-    metrics: Array.isArray(current.metrics) && current.metrics.length
-      ? current.metrics
-      : recomputeInventoryMetrics(items),
+    entries: Array.isArray(current.entries) ? current.entries : [],
+    productions: Array.isArray(current.productions) ? current.productions : [],
+    promotions: Array.isArray(current.promotions) ? current.promotions : [],
+    comboItems: Array.isArray(current.comboItems) ? current.comboItems : [],
+    sales: (Array.isArray(current.sales) ? current.sales : []).map(normalizeSale),
+    closings: Array.isArray(current.closings) ? current.closings : [],
+    purchases: Array.isArray(current.purchases) ? current.purchases : [],
   };
 }
 
-export async function getOverview() {
+export async function getOverview(period = 'mes') {
   await ensureDashboardSeed();
-  const [overview, cashFlow, inventory, freelancers] = await Promise.all([
-    readDocument(DOCS.overview),
+  const [cashFlow, inventory] = await Promise.all([
     readDocument(DOCS.cashFlow),
     readDocument(DOCS.inventory),
-    readDocument(DOCS.freelancers),
   ]);
-  return buildOverview(overview, cashFlow, inventory, freelancers);
+  return aggregateOverview(period, {
+    cash: migrateCashFlow(cashFlow || cashFlowFallback),
+    inventory: normalizeInventory(inventory),
+  });
 }
 
 export async function getCashFlow() {
   await ensureDashboardSeed();
   const raw = (await readDocument(DOCS.cashFlow)) || cashFlowFallback;
-  return migrateCashFlow(raw);
+  const cash = migrateCashFlow(raw);
+  return {
+    ...cash,
+    movements: unifyCashMovements(cash.incomes, cash.expenses),
+  };
 }
 
 export async function getInventory() {
   await ensureDashboardSeed();
-  return normalizeInventory((await readDocument(DOCS.inventory)) || inventoryFallback);
+  const now = await readServerNow();
+  const inventory = normalizeInventory((await readDocument(DOCS.inventory)) || inventoryFallback);
+  return {
+    ...inventory,
+    promotions: (inventory.promotions || []).map((row) => {
+      const recorded = promotionRecord(row);
+      return {
+        ...recorded,
+        status: promotionStatus(recorded, now),
+      };
+    }),
+    serverNow: now.toISOString(),
+  };
+}
+
+function normalizeFreelancers(raw) {
+  const current = raw && typeof raw === 'object' ? raw : freelancersFallback;
+  return {
+    ...freelancersFallback,
+    ...current,
+    roles: current.roles?.length ? current.roles : freelancersFallback.roles,
+    people: Array.isArray(current.people) ? current.people : [],
+    dailies: Array.isArray(current.dailies) ? current.dailies : [],
+    summary: current.summary || freelancersFallback.summary,
+  };
 }
 
 export async function getFreelancers() {
   await ensureDashboardSeed();
-  return (await readDocument(DOCS.freelancers)) || freelancersFallback;
+  return normalizeFreelancers((await readDocument(DOCS.freelancers)) || freelancersFallback);
 }
 
 export async function getSuppliers() {
@@ -426,25 +562,92 @@ function formatExpenseDate(isoDate) {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 }
 
+async function partyFromSupplier(supplierId, missingMessage) {
+  const current = await getSuppliers();
+  const supplier = (current.suppliers || []).find((item) => String(item.id) === String(supplierId));
+  if (!supplier) throw new Error(missingMessage);
+  return { supplier: supplier.name, supplierId: supplier.id, freelancerId: null };
+}
+
+async function partyFromFreelancer(freelancerId, missingMessage) {
+  const current = await getFreelancers();
+  const person = (current.people || []).find((item) => String(item.id) === String(freelancerId));
+  if (!person) throw new Error(missingMessage);
+  return { supplier: person.name, supplierId: null, freelancerId: person.id };
+}
+
+function subtypeOf(category, subtypeId) {
+  if (!subtypeId) return null;
+  return (category?.subtypes || []).find((item) => item.id === subtypeId) || null;
+}
+
+function expenseNarrative(payload, category, parties, productNames = []) {
+  const subtype = subtypeOf(category, payload.subtypeId);
+  return describeExpense({
+    party: expensePartyOf(category),
+    categoryName: category.name,
+    subtypeName: subtype?.name || payload.subtype || '',
+    supplier: parties.supplier,
+    date: payload.date,
+    productNames,
+    note: payload.description,
+  });
+}
+
+async function resolveExpenseParties(payload, category) {
+  const kind = expensePartyOf(category);
+  if (kind === 'freelancer') {
+    if (!payload.freelancerId) throw new Error('Selecione o freelancer.');
+    return partyFromFreelancer(payload.freelancerId, 'Freelancer não encontrado.');
+  }
+  if (kind === 'staff') {
+    if (payload.staffId) {
+      const staff = await getStaff();
+      const person = (staff.people || []).find((item) => String(item.id) === String(payload.staffId));
+      if (!person) throw new Error('Funcionário não encontrado.');
+      return {
+        supplier: person.name || 'Funcionário',
+        supplierId: null,
+        freelancerId: null,
+        staffId: String(person.id),
+      };
+    }
+    const label = String(payload.supplier || '').trim();
+    if (!label) throw new Error('Informe o funcionário.');
+    return { supplier: label, supplierId: null, freelancerId: null, staffId: null };
+  }
+  if (payload.supplierId) return partyFromSupplier(payload.supplierId, 'Fornecedor não encontrado.');
+  if (payload.freelancerId) return partyFromFreelancer(payload.freelancerId, 'Freelancer não encontrado.');
+  const label = String(payload.supplier || '').trim();
+  return { supplier: label, supplierId: null, freelancerId: null };
+}
+
 export async function createExpense(payload) {
   const current = await getCashFlow();
-  const category =
-    (current.categories || expenseCategories).find(
-      (item) => item.id === payload.categoryId
-    ) || expenseCategories[0];
+  const categories = current.categories?.length ? current.categories : expenseCategories;
+  const category = categories.find((item) => item.id === payload.categoryId);
+  if (!category) throw new Error('Selecione a categoria.');
 
+  const parties = await resolveExpenseParties(payload, category);
+  const subtype = subtypeOf(category, payload.subtypeId);
   const amountCents =
     payload.amount ?? parseMoneyToCents(payload.value ?? payload.dailyRate);
-  const nature = payload.nature || category.defaultNature || 'variable';
+  const nature = payload.nature || subtype?.defaultNature || category.defaultNature || 'variable';
 
   const expense = {
     id: payload.id || `exp-${Date.now()}`,
     date: formatExpenseDate(payload.date),
-    supplier: payload.supplier.trim(),
-    supplierId: payload.supplierId || null,
+    supplier: parties.supplier,
+    supplierId: parties.supplierId,
+    freelancerId: parties.freelancerId,
+    staffId: expensePartyOf(category) === 'staff' ? parties.staffId || payload.staffId || null : null,
+    payeeId: payload.payeeId || null,
     category: category.name,
     categoryId: category.id,
     categoryIcon: category.icon,
+    subtypeId: subtype?.id || null,
+    subtype: subtype?.name || '',
+    description: expenseNarrative(payload, category, parties, payload.productNames),
     nature,
     value: formatCents(amountCents),
     amount: amountCents,
@@ -460,20 +663,20 @@ export async function createExpense(payload) {
     expensesDelta: current.summary?.expensesDelta,
   });
 
-  const next = {
+  const next = cashFlowDocument({
     ...current,
     expenses,
     summary: {
       ...current.summary,
       ...summary,
     },
-  };
+  });
 
   await writeDocument(DOCS.cashFlow, next);
 
-  if (payload.supplierId) {
+  if (parties.supplierId) {
     await recordSupplierPurchase({
-      supplierId: payload.supplierId,
+      supplierId: parties.supplierId,
       date: expense.date,
       category: category.name,
       value: expense.value,
@@ -485,8 +688,197 @@ export async function createExpense(payload) {
   return expense;
 }
 
+function expenseCategoryId(name, taken) {
+  const base =
+    name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'categoria';
+  if (!taken.has(base)) return base;
+  let suffix = 2;
+  while (taken.has(`${base}-${suffix}`)) suffix += 1;
+  return `${base}-${suffix}`;
+}
+
+export async function addExpenseCategory(name, options) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o nome da categoria.');
+  const categories = current.categories?.length ? [...current.categories] : [...expenseCategories];
+  if (categories.some((item) => item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Essa categoria já existe.');
+  }
+  const category = {
+    id: expenseCategoryId(label, new Set(categories.map((item) => item.id))),
+    name: label,
+    type: 'expense',
+    defaultNature: 'variable',
+    party: 'none',
+    icon: cleanIcon(options?.icon),
+    allowsSubtypes: Boolean(options?.allowsSubtypes),
+    description: cleanNote(options?.description),
+    subtypes: [],
+  };
+  await saveCashFlow(current, { categories: [...categories, category] });
+  return category;
+}
+
+export async function renameExpenseCategory(categoryId, name, options) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o nome da categoria.');
+  if (FIXED_EXPENSE_IDS.includes(categoryId)) throw new Error('Essa categoria é fixa.');
+  const categories = ensureExpenseCategories(current.categories);
+  const category = categories.find((item) => item.id === categoryId && !item.retired);
+  if (!category) throw new Error('Categoria não encontrada.');
+  if (categories.some((item) => item.id !== categoryId && item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Essa categoria já existe.');
+  }
+  let allowsSubtypes = category.allowsSubtypes;
+  if (options && Object.prototype.hasOwnProperty.call(options, 'allowsSubtypes')) {
+    allowsSubtypes = Boolean(options.allowsSubtypes);
+    if (!allowsSubtypes && (category.subtypes || []).length) {
+      throw new Error('Essa categoria tem subcategoria.');
+    }
+  }
+  const description = options && Object.prototype.hasOwnProperty.call(options, 'description')
+    ? cleanNote(options.description)
+    : category.description || '';
+  const icon = options?.icon ? cleanIcon(options.icon, category.icon || 'category') : category.icon;
+  const nextCategories = categories.map((item) =>
+    item.id === categoryId ? { ...item, name: label, allowsSubtypes, description, icon } : item
+  );
+  const expenses = (current.expenses || []).map((row) =>
+    row.categoryId === categoryId ? { ...row, category: label } : row
+  );
+  await saveCashFlow(current, { categories: nextCategories, expenses });
+  return nextCategories.find((item) => item.id === categoryId);
+}
+
+export async function createExpenseSubtype(categoryId, name) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o nome da subcategoria.');
+  const categories = ensureExpenseCategories(current.categories);
+  const category = categories.find((item) => item.id === categoryId && !item.retired);
+  if (!category) throw new Error('Categoria não encontrada.');
+  if (!category.allowsSubtypes) throw new Error('Essa categoria não tem subcategoria.');
+  const subtypes = category.subtypes || [];
+  if (subtypes.some((item) => item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Essa subcategoria já existe.');
+  }
+  const subtype = {
+    id: taxonomyId(label, new Set(subtypes.map((item) => item.id))),
+    name: label,
+    defaultNature: 'variable',
+  };
+  const nextCategories = categories.map((item) =>
+    item.id === categoryId ? { ...item, subtypes: [...subtypes, subtype] } : item
+  );
+  await saveCashFlow(current, { categories: nextCategories });
+  return subtype;
+}
+
+export async function renameExpenseSubtype(categoryId, subtypeId, name) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o nome da subcategoria.');
+  const categories = ensureExpenseCategories(current.categories);
+  const category = categories.find((item) => item.id === categoryId && !item.retired);
+  if (!category || !(category.subtypes || []).some((item) => item.id === subtypeId)) {
+    throw new Error('Subcategoria não encontrada.');
+  }
+  if ((category.subtypes || []).some((item) => item.id !== subtypeId && item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Essa subcategoria já existe.');
+  }
+  const nextCategories = categories.map((item) =>
+    item.id === categoryId
+      ? { ...item, subtypes: item.subtypes.map((sub) => (sub.id === subtypeId ? { ...sub, name: label } : sub)) }
+      : item
+  );
+  const expenses = (current.expenses || []).map((row) =>
+    row.categoryId === categoryId && row.subtypeId === subtypeId ? { ...row, subtype: label } : row
+  );
+  await saveCashFlow(current, { categories: nextCategories, expenses });
+  return { id: subtypeId, name: label };
+}
+
+export async function removeExpenseCategory(categoryId) {
+  const current = await getCashFlow();
+  if (FIXED_EXPENSE_IDS.includes(categoryId)) throw new Error('Essa categoria é fixa.');
+  const categories = ensureExpenseCategories(current.categories);
+  if (!categories.some((item) => item.id === categoryId && !item.retired)) throw new Error('Categoria não encontrada.');
+  if ((current.expenses || []).some((row) => row.categoryId === categoryId)) {
+    throw new Error('Essa categoria está em compras.');
+  }
+  await saveCashFlow(current, { categories: categories.filter((item) => item.id !== categoryId) });
+}
+
+export async function removeExpenseSubtype(categoryId, subtypeId) {
+  const current = await getCashFlow();
+  const categories = ensureExpenseCategories(current.categories);
+  const category = categories.find((item) => item.id === categoryId && !item.retired);
+  if (!category || !(category.subtypes || []).some((item) => item.id === subtypeId)) {
+    throw new Error('Subcategoria não encontrada.');
+  }
+  const nextCategories = categories.map((item) =>
+    item.id === categoryId ? { ...item, subtypes: item.subtypes.filter((sub) => sub.id !== subtypeId) } : item
+  );
+  await saveCashFlow(current, { categories: nextCategories });
+}
+
+function payeeList(current) {
+  return (current.payees || []).map((item) => ({
+    id: item.id,
+    name: String(item.name || '').trim(),
+  })).filter((item) => item.id && item.name);
+}
+
+export async function createPayee(name) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o funcionário.');
+  const payees = payeeList(current);
+  const existing = payees.find((item) => item.name.toLowerCase() === label.toLowerCase());
+  if (existing) return existing;
+  const payee = { id: taxonomyId(label, new Set(payees.map((item) => item.id))), name: label };
+  await saveCashFlow(current, { payees: [...payees, payee] });
+  return payee;
+}
+
+export async function renamePayee(payeeId, name) {
+  const current = await getCashFlow();
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o funcionário.');
+  const payees = payeeList(current);
+  const currentPayee = payees.find((item) => item.id === payeeId);
+  if (!currentPayee) throw new Error('Funcionário não encontrado.');
+  if (payees.some((item) => item.id !== payeeId && item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Esse funcionário já existe.');
+  }
+  const nextPayees = payees.map((item) => (item.id === payeeId ? { ...item, name: label } : item));
+  const expenses = (current.expenses || []).map((row) => {
+    if (row.payeeId !== payeeId && row.supplier !== currentPayee.name) return row;
+    const description =
+      row.description === `Pagamento de ${currentPayee.name}` ? `Pagamento de ${label}` : row.description;
+    return { ...row, supplier: label, payeeId, description };
+  });
+  await saveCashFlow(current, { payees: nextPayees, expenses });
+  return { id: payeeId, name: label };
+}
+
+export async function removePayee(payeeId) {
+  const current = await getCashFlow();
+  const payees = payeeList(current);
+  if (!payees.some((item) => item.id === payeeId)) throw new Error('Funcionário não encontrado.');
+  await saveCashFlow(current, { payees: payees.filter((item) => item.id !== payeeId) });
+}
+
 async function saveCashFlow(current, patch) {
-  const nextBase = { ...current, ...patch };
+  const nextBase = { ...cashFlowDocument(current), ...cashFlowDocument(patch) };
   const summary = buildCashFlowSummary(nextBase.incomes || [], nextBase.expenses || [], {
     revenueDelta: current.summary?.revenueDelta,
     expensesDelta: current.summary?.expensesDelta,
@@ -508,6 +900,63 @@ export async function deleteExpense(expenseId) {
   return saveCashFlow(current, { expenses });
 }
 
+function shiftCreatedAt(createdAt, isoDate) {
+  if (!isoDate) return createdAt || new Date().toISOString();
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const base = createdAt ? new Date(createdAt) : new Date();
+  if (Number.isNaN(base.getTime())) return new Date(year, month - 1, day, 12, 0, 0).toISOString();
+  base.setFullYear(year, month - 1, day);
+  return base.toISOString();
+}
+
+export async function updateExpense(expenseId, payload) {
+  const current = await getCashFlow();
+  const existing = (current.expenses || []).find((row) => String(row.id) === String(expenseId));
+  if (!existing) throw new Error('Despesa não encontrada.');
+  const categories = current.categories?.length ? current.categories : expenseCategories;
+  const category = categories.find((item) => item.id === payload.categoryId);
+  if (!category) throw new Error('Selecione a categoria.');
+  const parties = await resolveExpenseParties(payload, category);
+  const subtype = subtypeOf(category, payload.subtypeId);
+  const amountCents = payload.amount ?? parseMoneyToCents(payload.value);
+  const nature = payload.nature || subtype?.defaultNature || category.defaultNature || existing.nature || 'variable';
+  const expense = {
+    ...existing,
+    date: formatExpenseDate(payload.date),
+    createdAt: shiftCreatedAt(existing.createdAt, payload.date),
+    supplier: parties.supplier,
+    supplierId: parties.supplierId,
+    freelancerId: parties.freelancerId,
+    staffId: expensePartyOf(category) === 'staff' ? parties.staffId || payload.staffId || existing.staffId || null : null,
+    payeeId: payload.payeeId || null,
+    category: category.name,
+    categoryId: category.id,
+    categoryIcon: category.icon,
+    subtypeId: subtype?.id || null,
+    subtype: subtype?.name || '',
+    description: expenseNarrative(payload, category, parties, payload.productNames),
+    nature,
+    value: formatCents(amountCents),
+    amount: amountCents,
+    recurrence: payload.recurrence || null,
+  };
+  const expenses = (current.expenses || []).map((row) =>
+    String(row.id) === String(expenseId) ? expense : row
+  );
+  await saveCashFlow(current, { expenses });
+  if (parties.supplierId && String(parties.supplierId) !== String(existing.supplierId || '')) {
+    await recordSupplierPurchase({
+      supplierId: parties.supplierId,
+      date: expense.date,
+      category: category.name,
+      value: expense.value,
+      amount: amountCents,
+      expenseId: expense.id,
+    });
+  }
+  return expense;
+}
+
 export async function createIncome(payload) {
   const current = await getCashFlow();
   const amountCents =
@@ -516,7 +965,7 @@ export async function createIncome(payload) {
     id: payload.id || `inc-${Date.now()}`,
     date: formatExpenseDate(payload.date),
     description: payload.description.trim(),
-    category: payload.category || 'Varejo',
+    category: payload.category || 'Venda',
     categoryIcon: payload.categoryIcon || 'payments',
     categoryTone: payload.categoryTone || 'secondary',
     value: formatCents(amountCents),
@@ -528,6 +977,35 @@ export async function createIncome(payload) {
   return saveCashFlow(current, {
     incomes: [income, ...(current.incomes || [])],
   }).then(() => income);
+}
+
+export async function updateIncome(incomeId, payload) {
+  const current = await getCashFlow();
+  const existing = (current.incomes || []).find((row) => String(row.id) === String(incomeId));
+  if (!existing) throw new Error('Entrada não encontrada.');
+  const amountCents = payload.amount ?? parseMoneyToCents(payload.value);
+  const income = {
+    ...existing,
+    date: formatExpenseDate(payload.date),
+    createdAt: shiftCreatedAt(existing.createdAt, payload.date),
+    description: String(payload.description || '').trim(),
+    category: payload.category || existing.category || 'Venda',
+    categoryIcon: payload.categoryIcon || existing.categoryIcon || 'payments',
+    categoryTone: payload.categoryTone || existing.categoryTone || 'secondary',
+    value: formatCents(amountCents),
+    amount: amountCents,
+  };
+  const incomes = (current.incomes || []).map((row) =>
+    String(row.id) === String(incomeId) ? income : row
+  );
+  await saveCashFlow(current, { incomes });
+  return income;
+}
+
+export async function deleteIncome(incomeId) {
+  const current = await getCashFlow();
+  const incomes = (current.incomes || []).filter((row) => String(row.id) !== String(incomeId));
+  return saveCashFlow(current, { incomes });
 }
 
 function parseStockLabel(label) {
@@ -545,112 +1023,513 @@ function formatStockLabel(qty, unit) {
   return `${qty} ${unit}`.trim();
 }
 
-function recomputeInventoryMetrics(items) {
-  const lowCount = items.filter((item) => item.status === 'low').length;
-  const totalValueCents = items.reduce((sum, item) => {
-    const { qty } = parseStockLabel(item.stock);
-    return sum + qty * parseMoneyToCents(item.cost);
-  }, 0);
-
-  return [
-    {
-      id: 'low-stock',
-      tone: 'error',
-      badge: 'Ação Necessária',
-      icon: 'warning',
-      label: 'Itens em Estoque Baixo',
-      value: String(lowCount),
-      progress: Math.min(100, lowCount * 10),
-    },
-    {
-      id: 'inventory-value',
-      tone: 'secondary',
-      badge: 'Ativo',
-      icon: 'inventory',
-      label: 'Valor Total do Inventário',
-      value: formatCents(totalValueCents),
-      progress: 45,
-    },
-    {
-      id: 'turnover',
-      tone: 'tertiary',
-      badge: 'Eficiência',
-      icon: 'trending_up',
-      label: 'Giro de Estoque (Mês)',
-      value: '4.2x',
-      progress: 80,
-    },
-  ];
+function promotionRecord(row) {
+  const weekday = row.vigencia === 'semana';
+  const days = weekday ? promotionDays(row) : [];
+  return {
+    id: row.id,
+    produto_id: row.produto_id,
+    preco_promocional: row.preco_promocional,
+    vigencia: weekday ? 'semana' : 'periodo',
+    dia_semana: days[0] ?? null,
+    dias_semana: days,
+    data_inicio: weekday ? null : row.data_inicio,
+    data_termino: row.data_termino || null,
+    inativa: Boolean(row.inativa),
+  };
 }
 
 async function saveInventory(current, items) {
+  const { serverNow: _serverNow, ...rest } = current || {};
   const next = {
-    ...current,
+    ...rest,
     items,
-    metrics: recomputeInventoryMetrics(items),
+    promotions: (rest.promotions || []).map(promotionRecord),
   };
   await writeDocument(DOCS.inventory, next);
   return next;
 }
 
+const CLOCK_DOC = ['tenants', TENANT_ID, 'data', 'clock'];
+let clockOffsetMs = null;
+let clockSampledAt = 0;
+
+async function readServerNow() {
+  requireDb();
+  if (clockOffsetMs != null && Date.now() - clockSampledAt < 60_000) {
+    return new Date(Date.now() + clockOffsetMs);
+  }
+  const ref = doc(db, ...CLOCK_DOC);
+  await setDoc(ref, { at: serverTimestamp() });
+  const snap = await getDoc(ref);
+  const at = snap.data()?.at;
+  if (!at || typeof at.toDate !== 'function') {
+    throw new Error('Não foi possível ler o horário do servidor.');
+  }
+  const serverDate = at.toDate();
+  clockOffsetMs = serverDate.getTime() - Date.now();
+  clockSampledAt = Date.now();
+  return serverDate;
+}
+
+function presentProduct(item, codigo, groups = []) {
+  const parsed = parseStockLabel(item.stock);
+  const minParsed = parseStockLabel(item.minStock);
+  const medida = normalizeMedida(item.medida) || normalizeMedida(item.unidade) || 'UN';
+  const volumeNumber = Number(item.volume_peso);
+  const volumePeso = Number.isFinite(volumeNumber) ? volumeNumber : 0;
+  const stockUnit = item.stock ? parsed.unit || 'un' : 'un';
+  const estoqueAtual = item.stock ? parsed.qty : Number(item.estoque_atual) || 0;
+  const estoqueSugerido =
+    item.estoque_sugerido != null && item.estoque_sugerido !== ''
+      ? Number(item.estoque_sugerido)
+      : minParsed.qty;
+  const lowStock = isLowStock(estoqueAtual, estoqueSugerido);
+  const nome = String(item.nome || item.name || '').trim();
+  let taxonomy = resolveProductTaxonomy(item);
+  if (!taxonomy.grupoId && taxonomy.grupo && item.tipo !== 'combo') {
+    const group = (groups || []).find((row) => row.name.toLowerCase() === taxonomy.grupo.toLowerCase());
+    if (group) taxonomy = { ...taxonomy, grupoId: group.id, grupo: group.name };
+  }
+  const categoria =
+    item.tipo === 'combo'
+      ? String(item.categoria || item.category || 'Combos').trim() || 'Combos'
+      : taxonomy.subgrupo || taxonomy.grupo || 'Insumos';
+  const descricao = String(item.descricao || item.subtitle || '').trim();
+  const rawFoto = item.foto || item.image || '';
+  const foto = item.tipo === 'combo' ? rawFoto : rawFoto || DEFAULT_PRODUCT_IMAGE;
+  const valor =
+    item.valor_unitario != null && item.valor_unitario !== ''
+      ? item.valor_unitario
+      : item.cost || formatCents(0);
+  const cost = String(valor).includes('R$') ? String(valor) : formatCents(parseMoneyToCents(valor));
+  const custoCompra =
+    item.custo_compra == null || String(item.custo_compra).trim() === ''
+      ? ''
+      : formatCents(parseMoneyToCents(item.custo_compra));
+  const rest = { ...item };
+  delete rest.unidade;
+  return {
+    ...rest,
+    codigo: formatProductCode(item.codigo || codigo),
+    nome,
+    name: nome,
+    marca: String(item.marca || '').trim(),
+    descricao,
+    subtitle: descricao,
+    categoria,
+    category: categoria,
+    grupoId: taxonomy.grupoId,
+    grupo: taxonomy.grupo,
+    subgrupoId: taxonomy.subgrupoId,
+    subgrupo: taxonomy.subgrupo,
+    formato: taxonomy.formato,
+    familia: taxonomy.familia,
+    volume_peso: volumePeso,
+    medida,
+    tipo: item.tipo === 'combo' ? 'combo' : 'simples',
+    produzido: Boolean(item.produzido),
+    estoque_atual: estoqueAtual,
+    estoque_sugerido: estoqueSugerido,
+    valor_unitario: cost,
+    cost,
+    custo_compra: custoCompra,
+    foto,
+    image: foto,
+    stock: formatStockLabel(estoqueAtual, stockUnit),
+    minStock: formatStockLabel(estoqueSugerido, item.minStock ? minParsed.unit || stockUnit : stockUnit),
+    lowStock,
+    status: lowStock ? 'low' : 'stable',
+    statusLabel: lowStock ? 'Estoque Baixo' : 'Estável',
+  };
+}
+
+async function actorId() {
+  const { getCurrentUser } = await import('./authService');
+  return getCurrentUser()?.uid || null;
+}
+
+function taxonomyFromPayload(payload, groups, fallbackItem) {
+  const group =
+    (groups || []).find((item) => item.id === payload.grupoId) ||
+    (groups || []).find((item) => item.name === payload.grupo) ||
+    null;
+  const subgroup = group
+    ? (group.subgroups || []).find((item) => item.id === payload.subgrupoId) ||
+      (group.subgroups || []).find((item) => item.name === payload.subgrupo) ||
+      null
+    : null;
+  const grupo = group?.name || String(payload.grupo || fallbackItem?.grupo || '').trim();
+  const grupoId = group?.id || (grupo && fallbackItem?.grupo === grupo ? fallbackItem.grupoId : '') || '';
+  return {
+    grupoId: group?.id || grupoId,
+    grupo,
+    subgrupoId: subgroup?.id || '',
+    subgrupo: subgroup?.name || '',
+    formato: String(payload.formato ?? fallbackItem?.formato ?? '').trim(),
+    familia: String(payload.familia ?? fallbackItem?.familia ?? '').trim(),
+  };
+}
+
+function persistProduct(item) {
+  const nome = item.nome || '';
+  const descricao = item.descricao || '';
+  const categoria = item.categoria || '';
+  const taxonomy = resolveProductTaxonomy(item);
+  const foto = item.foto || '';
+  const valor = item.valor_unitario ?? '';
+  return {
+    id: item.id,
+    codigo: item.codigo || '',
+    nome,
+    name: nome,
+    marca: item.marca || '',
+    descricao,
+    subtitle: descricao,
+    categoria,
+    category: categoria,
+    grupoId: item.tipo === 'combo' ? '' : taxonomy.grupoId,
+    grupo: item.tipo === 'combo' ? '' : taxonomy.grupo,
+    subgrupoId: item.tipo === 'combo' ? '' : taxonomy.subgrupoId,
+    subgrupo: item.tipo === 'combo' ? '' : taxonomy.subgrupo,
+    formato: item.tipo === 'combo' ? '' : taxonomy.formato,
+    familia: item.tipo === 'combo' ? '' : taxonomy.familia,
+    volume_peso: Number.isFinite(Number(item.volume_peso)) ? Number(item.volume_peso) : 0,
+    medida: normalizeMedida(item.medida) || 'UN',
+    tipo: item.tipo === 'combo' ? 'combo' : 'simples',
+    produzido: Boolean(item.produzido),
+    estoque_atual: Number.isFinite(Number(item.estoque_atual)) ? Number(item.estoque_atual) : 0,
+    estoque_sugerido: Number.isFinite(Number(item.estoque_sugerido)) ? Number(item.estoque_sugerido) : 0,
+    valor_unitario: valor,
+    cost: valor,
+    custo_compra: item.custo_compra || '',
+    foto,
+    image: foto,
+    stock: item.stock || '',
+    minStock: item.minStock || '',
+    status: item.status || 'stable',
+    statusLabel: item.statusLabel || 'Estável',
+    created_at: item.created_at || null,
+    updated_at: item.updated_at || null,
+    created_by: item.created_by || null,
+    updated_by: item.updated_by || null,
+  };
+}
+
+export async function peekNextProductCode() {
+  const current = await getInventory();
+  return nextProductCode(current.items || []);
+}
+
+export async function addInventoryCategory(name) {
+  await ensureDashboardSeed();
+  const raw = (await readDocument(DOCS.inventory)) || inventoryFallback;
+  const current = normalizeInventory(raw);
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Informe o nome da categoria.');
+  if (label.toLowerCase() === 'todos') throw new Error('Use outro nome para a categoria.');
+  const filters = current.filters?.length ? [...current.filters] : [...inventoryFallback.filters];
+  if (filters.some((item) => item.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Essa categoria já existe.');
+  }
+  const next = {
+    ...raw,
+    filters: [...filters, label],
+    items: Array.isArray(raw.items) ? raw.items : [],
+  };
+  await writeDocument(DOCS.inventory, next);
+  return { name: label, inventory: normalizeInventory(next) };
+}
+
+function cleanLabel(name, emptyMessage) {
+  const label = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error(emptyMessage);
+  if (label.toLowerCase() === 'todos') throw new Error('Use outro nome.');
+  return label;
+}
+
+function cleanNote(value) {
+  return String(value || '').trim().slice(0, 240);
+}
+
+export async function createMenuGroup(name, description = '', icon = '') {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o nome do grupo.');
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  if (groups.some((group) => group.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Esse grupo já existe.');
+  }
+  const group = {
+    id: taxonomyId(label, new Set(groups.map((item) => item.id))),
+    name: label,
+    description: cleanNote(description),
+    icon: cleanIcon(icon),
+    subgroups: [],
+  };
+  await saveInventory({ ...current, groups: [...groups, group] }, current.items || []);
+  return group;
+}
+
+export async function renameMenuGroup(groupId, name, description = '', icon = '') {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o nome do grupo.');
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  if (!groups.some((group) => group.id === groupId)) throw new Error('Grupo não encontrado.');
+  if (groups.some((group) => group.id !== groupId && group.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Esse grupo já existe.');
+  }
+  const nextGroups = groups.map((group) =>
+    group.id === groupId
+      ? {
+          ...group,
+          name: label,
+          description: cleanNote(description),
+          ...(icon ? { icon: cleanIcon(icon, group.icon || 'category') } : {}),
+        }
+      : group
+  );
+  const items = (current.items || []).map((item) =>
+    item.grupoId === groupId ? persistProduct(presentProduct({ ...item, grupo: label }, item.codigo)) : persistProduct(presentProduct(item, item.codigo))
+  );
+  await saveInventory({ ...current, groups: nextGroups }, items);
+  return nextGroups.find((group) => group.id === groupId);
+}
+
+export async function createMenuSubgroup(groupId, name) {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o nome do subgrupo.');
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  const group = groups.find((item) => item.id === groupId);
+  if (!group) throw new Error('Grupo não encontrado.');
+  if ((group.subgroups || []).some((item) => item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Esse subgrupo já existe.');
+  }
+  const subgroup = {
+    id: taxonomyId(label, new Set((group.subgroups || []).map((item) => item.id))),
+    name: label,
+  };
+  const nextGroups = groups.map((item) =>
+    item.id === groupId ? { ...item, subgroups: [...(item.subgroups || []), subgroup] } : item
+  );
+  await saveInventory({ ...current, groups: nextGroups }, current.items || []);
+  return subgroup;
+}
+
+export async function renameMenuSubgroup(groupId, subgroupId, name) {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o nome do subgrupo.');
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  const group = groups.find((item) => item.id === groupId);
+  if (!group || !(group.subgroups || []).some((item) => item.id === subgroupId)) {
+    throw new Error('Subgrupo não encontrado.');
+  }
+  if ((group.subgroups || []).some((item) => item.id !== subgroupId && item.name.toLowerCase() === label.toLowerCase())) {
+    throw new Error('Esse subgrupo já existe.');
+  }
+  const nextGroups = groups.map((item) =>
+    item.id === groupId
+      ? {
+          ...item,
+          subgroups: item.subgroups.map((sub) => (sub.id === subgroupId ? { ...sub, name: label } : sub)),
+        }
+      : item
+  );
+  const items = (current.items || []).map((item) =>
+    item.subgrupoId === subgroupId
+      ? persistProduct(presentProduct({ ...item, subgrupo: label, categoria: label }, item.codigo))
+      : persistProduct(presentProduct(item, item.codigo))
+  );
+  await saveInventory({ ...current, groups: nextGroups }, items);
+  return { id: subgroupId, name: label };
+}
+
+export async function createProductFormat(name) {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o formato.');
+  const formats = mergeFormats(current.formats);
+  if (formats.some((item) => item.toLowerCase() === label.toLowerCase())) throw new Error('Esse formato já existe.');
+  await saveInventory({ ...current, formats: [...formats, label] }, current.items || []);
+  return label;
+}
+
+export async function renameProductFormat(currentName, name) {
+  const current = await getInventory();
+  const label = cleanLabel(name, 'Informe o formato.');
+  const formats = mergeFormats(current.formats);
+  if (!formats.some((item) => item.toLowerCase() === String(currentName || '').toLowerCase())) {
+    throw new Error('Formato não encontrado.');
+  }
+  if (formats.some((item) => item.toLowerCase() === label.toLowerCase() && item.toLowerCase() !== String(currentName).toLowerCase())) {
+    throw new Error('Esse formato já existe.');
+  }
+  const nextFormats = formats.map((item) => (item.toLowerCase() === String(currentName).toLowerCase() ? label : item));
+  const items = (current.items || []).map((item) =>
+    String(item.formato || '').toLowerCase() === String(currentName).toLowerCase()
+      ? persistProduct(presentProduct({ ...item, formato: label }, item.codigo))
+      : persistProduct(presentProduct(item, item.codigo))
+  );
+  await saveInventory({ ...current, formats: nextFormats }, items);
+  return label;
+}
+
+export async function removeMenuGroup(groupId) {
+  const current = await getInventory();
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  if (!groups.some((group) => group.id === groupId)) throw new Error('Grupo não encontrado.');
+  if ((current.items || []).some((item) => item.grupoId === groupId)) {
+    throw new Error('Esse grupo está em produtos.');
+  }
+  await saveInventory(
+    { ...current, groups: groups.filter((group) => group.id !== groupId) },
+    current.items || []
+  );
+}
+
+export async function removeMenuSubgroup(groupId, subgroupId) {
+  const current = await getInventory();
+  const groups = mergeMenuGroups(current.groups, current.filters);
+  const group = groups.find((item) => item.id === groupId);
+  if (!group || !(group.subgroups || []).some((item) => item.id === subgroupId)) {
+    throw new Error('Subgrupo não encontrado.');
+  }
+  if ((current.items || []).some((item) => item.subgrupoId === subgroupId)) {
+    throw new Error('Esse subgrupo está em produtos.');
+  }
+  const nextGroups = groups.map((item) =>
+    item.id === groupId ? { ...item, subgroups: item.subgroups.filter((sub) => sub.id !== subgroupId) } : item
+  );
+  await saveInventory({ ...current, groups: nextGroups }, current.items || []);
+}
+
+export async function removeProductFormat(name) {
+  const current = await getInventory();
+  const formats = mergeFormats(current.formats);
+  if (!formats.some((item) => item.toLowerCase() === String(name || '').toLowerCase())) {
+    throw new Error('Formato não encontrado.');
+  }
+  if ((current.items || []).some((item) => String(item.formato || '').toLowerCase() === String(name).toLowerCase())) {
+    throw new Error('Esse formato está em produtos.');
+  }
+  await saveInventory(
+    { ...current, formats: formats.filter((item) => item.toLowerCase() !== String(name).toLowerCase()) },
+    current.items || []
+  );
+}
+
 export async function createInventoryItem(payload) {
   const current = await getInventory();
-  const name = String(payload.name || '').trim();
-  if (!name) throw new Error('Informe o nome do produto.');
+  const nome = String(payload.nome || payload.name || '').trim();
+  if (!nome) throw new Error('Informe o nome do produto.');
 
-  const unit = String(payload.unit || 'un').trim() || 'un';
-  const qty = Number(payload.qty);
-  const minQty = Number(payload.minQty);
-  if (!Number.isFinite(qty) || qty < 0) throw new Error('Quantidade inválida.');
-  if (!Number.isFinite(minQty) || minQty < 0) throw new Error('Estoque mínimo inválido.');
+  const estoqueAtual = Number(payload.estoque_atual ?? payload.qty);
+  const estoqueSugerido = Number(payload.estoque_sugerido ?? payload.minQty);
+  if (!Number.isFinite(estoqueAtual) || estoqueAtual < 0) throw new Error('Estoque atual inválido.');
+  if (!Number.isFinite(estoqueSugerido) || estoqueSugerido < 0) {
+    throw new Error('Estoque sugerido inválido.');
+  }
 
-  const category = String(payload.category || 'Insumos').trim() || 'Insumos';
-  const costCents = payload.cost ? parseMoneyToCents(payload.cost) : 0;
-  const status = qty < minQty ? 'low' : 'stable';
-  const item = {
-    id: `inv-${Date.now()}`,
-    name,
-    subtitle: String(payload.subtitle || '').trim(),
-    category,
-    stock: formatStockLabel(qty, unit),
-    minStock: formatStockLabel(minQty, unit),
-    cost: formatCents(costCents),
-    status,
-    statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
-    image: payload.image || DEFAULT_PRODUCT_IMAGE,
-  };
+  const placed = taxonomyFromPayload(payload, current.groups);
+  if (!placed.grupo) throw new Error('Selecione o grupo.');
+  const categoria = placed.subgrupo || placed.grupo;
+  const medida = assertMedida(payload.medida);
+  const volumePeso = assertVolumePeso(payload.volume_peso);
+  const now = new Date().toISOString();
+  const actor = await actorId();
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  let max = maxProductCode(stored);
+  const coded = stored.map((item) => {
+    if (item.codigo) return item;
+    max += 1;
+    return { ...item, codigo: formatProductCode(max) };
+  });
+  const codigo = formatProductCode(max + 1);
+  const draft = presentProduct(
+    {
+      id: `inv-${Date.now()}`,
+      codigo,
+      nome,
+      marca: payload.marca,
+      descricao: payload.descricao,
+      categoria,
+      ...placed,
+      volume_peso: volumePeso,
+      medida,
+      estoque_atual: estoqueAtual,
+      estoque_sugerido: estoqueSugerido,
+      valor_unitario: payload.valor_unitario ?? payload.cost,
+      custo_compra: payload.custo_compra,
+      produzido: Boolean(payload.produzido),
+      foto: payload.foto || payload.image || '',
+      stock: formatStockLabel(estoqueAtual, 'un'),
+      minStock: formatStockLabel(estoqueSugerido, 'un'),
+      created_at: now,
+      updated_at: now,
+      created_by: actor,
+      updated_by: actor,
+    },
+    codigo
+  );
 
-  const filters = current.filters?.includes(category)
+  const filters = current.filters?.includes(categoria)
     ? current.filters
-    : [...(current.filters || ['Todos']), category];
-  const next = await saveInventory({ ...current, filters }, [...(current.items || []), item]);
-  return { item, inventory: next };
+    : [...(current.filters || ['Todos']), categoria];
+  const next = await saveInventory({ ...current, filters }, [...coded, persistProduct(draft)]);
+  return { item: presentProduct(draft, codigo), inventory: next };
 }
 
 export async function updateInventoryItem(itemId, payload) {
   const current = await getInventory();
-  const items = [...(current.items || [])];
+  const items = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
   const index = items.findIndex((item) => String(item.id) === String(itemId));
   if (index < 0) throw new Error('Item não encontrado.');
 
   const currentItem = items[index];
-  const parsed = parseStockLabel(payload.stock || currentItem.stock);
-  const minParsed = parseStockLabel(payload.minStock || currentItem.minStock);
-  const status = parsed.qty < minParsed.qty ? 'low' : 'stable';
-  items[index] = {
-    ...currentItem,
-    name: String(payload.name || currentItem.name).trim(),
-    subtitle: String(payload.subtitle ?? currentItem.subtitle).trim(),
-    category: String(payload.category || currentItem.category).trim(),
-    stock: formatStockLabel(parsed.qty, parsed.unit),
-    minStock: formatStockLabel(minParsed.qty, minParsed.unit || parsed.unit),
-    cost: payload.cost ? formatCents(parseMoneyToCents(payload.cost)) : currentItem.cost,
-    status,
-    statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
-    image: payload.image || currentItem.image,
-  };
+  const nome = String(payload.nome || payload.name || currentItem.nome).trim();
+  if (!nome) throw new Error('Informe o nome do produto.');
+  const medida = assertMedida(payload.medida);
+  const volumePeso = assertVolumePeso(payload.volume_peso);
+  const estoqueAtual = Number(payload.estoque_atual ?? payload.qty ?? currentItem.estoque_atual);
+  const estoqueSugerido = Number(
+    payload.estoque_sugerido ?? payload.minQty ?? currentItem.estoque_sugerido
+  );
+  if (!Number.isFinite(estoqueAtual) || estoqueAtual < 0) throw new Error('Estoque atual inválido.');
+  if (!Number.isFinite(estoqueSugerido) || estoqueSugerido < 0) {
+    throw new Error('Estoque sugerido inválido.');
+  }
+
+  const placed = taxonomyFromPayload(payload, current.groups, currentItem);
+  if (!placed.grupo && currentItem.tipo !== 'combo') throw new Error('Selecione o grupo.');
+  const now = new Date().toISOString();
+  const actor = await actorId();
+  const draft = presentProduct(
+    {
+      ...currentItem,
+      nome,
+      marca: payload.marca ?? currentItem.marca,
+      descricao: payload.descricao ?? currentItem.descricao,
+      ...placed,
+      categoria: placed.subgrupo || placed.grupo || currentItem.categoria,
+      volume_peso: volumePeso,
+      medida,
+      estoque_atual: estoqueAtual,
+      estoque_sugerido: estoqueSugerido,
+      valor_unitario: payload.valor_unitario ?? payload.cost ?? currentItem.valor_unitario,
+      custo_compra: payload.custo_compra != null ? payload.custo_compra : currentItem.custo_compra,
+      produzido: payload.produzido == null ? Boolean(currentItem.produzido) : Boolean(payload.produzido),
+      foto: payload.foto || payload.image || currentItem.foto,
+      stock: formatStockLabel(estoqueAtual, parseStockLabel(currentItem.stock).unit || 'un'),
+      minStock: formatStockLabel(estoqueSugerido, parseStockLabel(currentItem.minStock).unit || 'un'),
+      codigo: currentItem.codigo,
+      created_at: currentItem.created_at || now,
+      created_by: currentItem.created_by || actor,
+      updated_at: now,
+      updated_by: actor,
+    },
+    currentItem.codigo
+  );
+  items[index] = persistProduct(draft);
   const next = await saveInventory(current, items);
-  return { item: items[index], inventory: next };
+  return { item: draft, inventory: next };
 }
 
 export async function registerStockEntry(payload) {
@@ -668,6 +1547,7 @@ export async function registerStockEntry(payload) {
   if (!Number.isFinite(addQty) || addQty <= 0) {
     throw new Error('Quantidade inválida.');
   }
+  const formaPagamento = assertPaymentMethod(payload.forma_pagamento);
 
   const linkCash = payload.linkCash !== false;
   let amountCents = 0;
@@ -690,11 +1570,24 @@ export async function registerStockEntry(payload) {
   items[index] = {
     ...item,
     stock: formatStockLabel(nextQty, unit),
+    estoque_atual: nextQty,
     status,
     statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
   };
 
-  await saveInventory(current, items);
+  const entry = {
+    id: `buy-${Date.now()}`,
+    itemId: String(item.id),
+    quantity: addQty,
+    forma_pagamento: formaPagamento,
+    date: payload.date || new Date().toISOString().slice(0, 10),
+    created_at: new Date().toISOString(),
+  };
+
+  await saveInventory(
+    { ...current, entries: [entry, ...(current.entries || [])] },
+    items
+  );
 
   if (linkCash) {
     await createExpense({
@@ -709,6 +1602,1250 @@ export async function registerStockEntry(payload) {
   }
 
   return items[index];
+}
+
+export async function registerPurchase(payload) {
+  await ensureDashboardSeed();
+  const date = String(payload.date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Informe a data.');
+  const linhas = Array.isArray(payload.itens) ? payload.itens : [];
+  if (!linhas.length) throw new Error('Adicione ao menos um produto.');
+
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const cash = migrateCashFlow(ops.cashFlow || cashFlowFallback);
+    const suppliersWrap =
+      ops.suppliers && Array.isArray(ops.suppliers.suppliers) ? ops.suppliers : { suppliers: [] };
+    const supplier = (suppliersWrap.suppliers || []).find(
+      (item) => String(item.id) === String(payload.supplierId)
+    );
+    if (!supplier) throw new Error('Selecione o fornecedor.');
+    const categories = cash.categories?.length ? cash.categories : expenseCategories;
+    const category = categories.find((item) => item.id === payload.categoryId);
+    if (!category) throw new Error('Selecione a categoria.');
+    const party = expensePartyKind(category.id);
+    if (party === 'freelancer') throw new Error('Compra de estoque não usa a categoria Freelancer.');
+    if (party === 'staff') throw new Error('Compra de estoque não usa a categoria Funcionários.');
+
+    const grouped = new Map();
+    linhas.forEach((linha) => {
+      const produtoId = String(linha.produto_id || '').trim();
+      const quantidade = Number(linha.quantidade);
+      if (!produtoId) throw new Error('Selecione o produto.');
+      if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+      const produto = (inventory.items || []).find(
+        (item) => String(item.id) === produtoId && item.tipo !== 'combo'
+      );
+      if (!produto) throw new Error('Produto não encontrado.');
+      const prev = grouped.get(produtoId);
+      if (prev) prev.quantidade += quantidade;
+      else {
+        grouped.set(produtoId, {
+          produto_id: produtoId,
+          nome: produto.nome || produto.name,
+          quantidade,
+          valor_unitario: parseMoneyToCents(produto.valor_unitario || produto.cost || 0) / 100,
+        });
+      }
+    });
+    const itens = [...grouped.values()].map((linha) => ({
+      ...linha,
+      valor_total: Math.round(linha.valor_unitario * linha.quantidade * 100) / 100,
+    }));
+    const calculado = Math.round(itens.reduce((sum, linha) => sum + linha.valor_total, 0) * 100) / 100;
+    const total =
+      payload.valor_total == null || payload.valor_total === ''
+        ? calculado
+        : assertPrice(payload.valor_total);
+    if (!Number.isFinite(total) || total <= 0) throw new Error('Informe o valor total.');
+
+    let items = [...(inventory.items || [])];
+    itens.forEach((linha) => {
+      const item = items.find((row) => String(row.id) === linha.produto_id);
+      if (!item) throw new Error('Produto não encontrado.');
+      items = replaceItem(items, linha.produto_id, applyStockDelta(item, linha.quantidade));
+    });
+    const stored = items.map((item) => persistProduct(presentProduct(item, item.codigo)));
+
+    const now = new Date().toISOString();
+    const purchaseId = `purchase-${Date.now()}`;
+    const expenseId = `exp-${purchaseId}`;
+    const purchase = {
+      id: purchaseId,
+      date,
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      categoryId: category.id,
+      categoryName: category.name,
+      total,
+      itens,
+      expenseId,
+      created_at: now,
+    };
+    const entries = itens.map((linha, index) => ({
+      id: `buy-${purchaseId}-${index}`,
+      itemId: linha.produto_id,
+      quantity: linha.quantidade,
+      purchaseId,
+      date,
+      created_at: now,
+    }));
+    const amountCents = Math.round(total * 100);
+    const expense = {
+      id: expenseId,
+      date: formatExpenseDate(date),
+      supplier: supplier.name,
+      supplierId: supplier.id,
+      freelancerId: null,
+      category: category.name,
+      categoryId: category.id,
+      categoryIcon: category.icon,
+      nature:
+        payload.nature === 'fixed' || payload.nature === 'variable'
+          ? payload.nature
+          : category.defaultNature || 'variable',
+      description: describeExpense({
+        party: 'supplier',
+        categoryName: category.name,
+        supplier: supplier.name,
+        date,
+        productNames: itens.map((linha) => linha.nome),
+        note: payload.description,
+      }),
+      value: formatCents(amountCents),
+      amount: amountCents,
+      recurrence: payload.recurrence === 'monthly' ? 'monthly' : null,
+      source: 'purchase',
+      importKey: null,
+      createdAt: now,
+    };
+    const expenses = [expense, ...(cash.expenses || [])];
+    const summary = buildCashFlowSummary(cash.incomes || [], expenses, {
+      revenueDelta: cash.summary?.revenueDelta,
+      expensesDelta: cash.summary?.expensesDelta,
+    });
+    const displayDate = expense.date;
+    const suppliers = (suppliersWrap.suppliers || []).map((item) => {
+      if (String(item.id) !== String(supplier.id)) return item;
+      return {
+        ...item,
+        lastPurchase: displayDate,
+        lastValue: expense.value,
+        lastAmount: amountCents,
+        history: [
+          {
+            id: expenseId,
+            date: displayDate,
+            category: category.name,
+            value: expense.value,
+            amount: amountCents,
+            purchaseId,
+          },
+          ...(item.history || []),
+        ],
+      };
+    });
+
+    return {
+      ops: {
+        ...ops,
+        inventory: {
+          ...inventory,
+          items: stored,
+          entries: [...entries, ...(inventory.entries || [])],
+          purchases: [purchase, ...(inventory.purchases || [])],
+        },
+        cashFlow: {
+          ...cash,
+          expenses,
+          summary: { ...cash.summary, ...summary },
+        },
+        suppliers: { ...suppliersWrap, suppliers },
+      },
+      value: purchase,
+    };
+  });
+}
+
+export async function cancelPurchase(purchaseId) {
+  await ensureDashboardSeed();
+  const id = String(purchaseId || '').trim();
+  if (!id) throw new Error('Compra não encontrada.');
+
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const purchase = (inventory.purchases || []).find((row) => String(row.id) === id);
+    if (!purchase) throw new Error('Compra não encontrada.');
+    if (purchase.status === 'cancelada') throw new Error('Esta compra já foi cancelada.');
+
+    const cash = migrateCashFlow(ops.cashFlow || cashFlowFallback);
+    const suppliersWrap =
+      ops.suppliers && Array.isArray(ops.suppliers.suppliers) ? ops.suppliers : { suppliers: [] };
+    let items = [...(inventory.items || [])];
+
+    (purchase.itens || []).forEach((linha) => {
+      const item = items.find((row) => String(row.id) === String(linha.produto_id));
+      if (!item) throw new Error('Produto não encontrado.');
+      const parsed = parseStockLabel(item.stock);
+      const quantidade = Number(linha.quantidade);
+      if (parsed.qty - quantidade < 0) {
+        throw new Error(`Produto já consumido: ${linha.nome || item.nome || item.name}.`);
+      }
+    });
+
+    (purchase.itens || []).forEach((linha) => {
+      const item = items.find((row) => String(row.id) === String(linha.produto_id));
+      items = replaceItem(items, linha.produto_id, applyStockDelta(item, -Number(linha.quantidade)));
+    });
+    const stored = items.map((item) => persistProduct(presentProduct(item, item.codigo)));
+
+    const now = new Date().toISOString();
+    const purchases = inventory.purchases.map((row) =>
+      String(row.id) === id
+        ? {
+            ...row,
+            status: 'cancelada',
+            cancelled_at: now,
+          }
+        : row
+    );
+    const expenses = (cash.expenses || []).filter((row) => String(row.id) !== String(purchase.expenseId));
+    const summary = buildCashFlowSummary(cash.incomes || [], expenses, {
+      revenueDelta: cash.summary?.revenueDelta,
+      expensesDelta: cash.summary?.expensesDelta,
+    });
+    const suppliers = (suppliersWrap.suppliers || []).map((item) => {
+      if (String(item.id) !== String(purchase.supplierId)) return item;
+      const history = (item.history || []).filter(
+        (row) =>
+          String(row.purchaseId) !== id && String(row.id) !== String(purchase.expenseId)
+      );
+      const latest = history[0];
+      return {
+        ...item,
+        history,
+        lastPurchase: latest?.date || '',
+        lastValue: latest?.value || '',
+        lastAmount: latest?.amount || 0,
+      };
+    });
+
+    return {
+      ops: {
+        ...ops,
+        inventory: {
+          ...inventory,
+          items: stored,
+          entries: (inventory.entries || []).filter((row) => String(row.purchaseId) !== id),
+          purchases,
+        },
+        cashFlow: {
+          ...cash,
+          expenses,
+          summary: { ...cash.summary, ...summary },
+        },
+        suppliers: { ...suppliersWrap, suppliers },
+      },
+      value: purchases.find((row) => String(row.id) === id),
+    };
+  });
+}
+
+export async function createProduction(payload) {
+  const current = await getInventory();
+  const produtoId = String(payload.produto_id || '').trim();
+  const quantidade = Number(payload.quantidade);
+  if (!produtoId) throw new Error('Selecione o produto.');
+  if (!Number.isInteger(quantidade) || quantidade <= 0) {
+    throw new Error('Quantidade inválida.');
+  }
+
+  const usuarioId = await actorId();
+  if (!usuarioId) throw new Error('Sessão inválida.');
+
+  const items = [...(current.items || [])];
+  const index = items.findIndex((item) => String(item.id) === produtoId);
+  if (index < 0) throw new Error('Item não encontrado.');
+
+  const item = items[index];
+  if (item.tipo === 'combo' || !item.produzido) {
+    throw new Error('Selecione um produto feito no bar.');
+  }
+  const parsed = parseStockLabel(item.stock);
+  const minParsed = parseStockLabel(item.minStock);
+  const nextQty = parsed.qty + quantidade;
+  const unit = parsed.unit || minParsed.unit || 'un';
+  const status = nextQty < minParsed.qty ? 'low' : 'stable';
+
+  items[index] = {
+    ...item,
+    estoque_atual: nextQty,
+    stock: formatStockLabel(nextQty, unit),
+    status,
+    statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
+  };
+
+  const production = {
+    id: `prod-${Date.now()}`,
+    produto_id: produtoId,
+    quantidade,
+    data_producao: new Date().toISOString(),
+    usuario_id: usuarioId,
+  };
+
+  const next = await saveInventory(
+    { ...current, productions: [production, ...(current.productions || [])] },
+    items
+  );
+  return { production, inventory: next };
+}
+
+function replaceItem(items, produtoId, nextItem) {
+  const index = items.findIndex((item) => String(item.id) === String(produtoId));
+  if (index < 0) throw new Error('Item não encontrado.');
+  const copy = [...items];
+  copy[index] = nextItem;
+  return copy;
+}
+
+export async function updateProduction(productionId, payload) {
+  const current = await getInventory();
+  const existing = (current.productions || []).find((row) => String(row.id) === String(productionId));
+  if (!existing) throw new Error('Produção não encontrada.');
+  if (instantClosedByCash(existing.data_producao, current.closings)) {
+    throw new Error('Essa produção já entrou no fechamento do caixa.');
+  }
+  const produtoId = String(payload.produto_id || '').trim();
+  const quantidade = Number(payload.quantidade);
+  if (!produtoId) throw new Error('Selecione o produto.');
+  if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+
+  let items = [...(current.items || [])];
+  if (produtoId === String(existing.produto_id)) {
+    const item = items.find((row) => String(row.id) === produtoId);
+    if (!item) throw new Error('Item não encontrado.');
+    items = replaceItem(items, produtoId, applyStockDelta(item, quantidade - Number(existing.quantidade)));
+  } else {
+    const previous = items.find((row) => String(row.id) === String(existing.produto_id));
+    if (!previous) throw new Error('Item não encontrado.');
+    items = replaceItem(items, existing.produto_id, applyStockDelta(previous, -Number(existing.quantidade)));
+    const nextItem = items.find((row) => String(row.id) === produtoId);
+    if (!nextItem) throw new Error('Item não encontrado.');
+    if (nextItem.tipo === 'combo' || !nextItem.produzido) {
+      throw new Error('Selecione um produto feito no bar.');
+    }
+    items = replaceItem(items, produtoId, applyStockDelta(nextItem, quantidade));
+  }
+
+  const production = {
+    ...existing,
+    produto_id: produtoId,
+    quantidade,
+  };
+  const productions = current.productions.map((row) => (row.id === existing.id ? production : row));
+  const next = await saveInventory({ ...current, productions }, items);
+  return { production, inventory: next };
+}
+
+export async function deleteProduction(productionId) {
+  const current = await getInventory();
+  const existing = (current.productions || []).find((row) => String(row.id) === String(productionId));
+  if (!existing) throw new Error('Produção não encontrada.');
+  if (instantClosedByCash(existing.data_producao, current.closings)) {
+    throw new Error('Essa produção já entrou no fechamento do caixa.');
+  }
+  const item = (current.items || []).find((row) => String(row.id) === String(existing.produto_id));
+  if (!item) throw new Error('Item não encontrado.');
+  const items = replaceItem(
+    current.items || [],
+    existing.produto_id,
+    applyStockDelta(item, -Number(existing.quantidade))
+  );
+  const productions = current.productions.filter((row) => row.id !== existing.id);
+  const next = await saveInventory({ ...current, productions }, items);
+  return next;
+}
+
+export async function createPromotion(payload) {
+  const current = await getInventory();
+  const produtoId = String(payload.produto_id || '').trim();
+  const produto = (current.items || []).find((item) => String(item.id) === produtoId);
+  if (!produto) throw new Error('Produto não encontrado. Cadastre em Estoque.');
+
+  const preco = assertPrice(payload.preco_promocional);
+  const agenda = promotionSchedule(payload);
+  const promotion = {
+    id: `promo-${Date.now()}`,
+    produto_id: produtoId,
+    preco_promocional: preco,
+    inativa: false,
+    ...agenda,
+  };
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  const next = await saveInventory(
+    { ...current, promotions: [promotion, ...(current.promotions || [])] },
+    stored
+  );
+  return { promotion, inventory: next };
+}
+
+export async function updatePromotion(promotionId, payload) {
+  const current = await getInventory();
+  const existing = (current.promotions || []).find((row) => String(row.id) === String(promotionId));
+  if (!existing) throw new Error('Promoção não encontrada.');
+  const produtoId = String(payload.produto_id || '').trim();
+  const produto = (current.items || []).find((item) => String(item.id) === produtoId);
+  if (!produto) throw new Error('Produto não encontrado. Cadastre em Estoque.');
+  const preco = assertPrice(payload.preco_promocional);
+  const agenda = promotionSchedule(payload);
+  const promotion = {
+    id: existing.id,
+    produto_id: produtoId,
+    preco_promocional: preco,
+    inativa: false,
+    ...agenda,
+  };
+  const promotions = current.promotions.map((row) => (row.id === existing.id ? promotion : row));
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  const next = await saveInventory({ ...current, promotions }, stored);
+  return { promotion, inventory: next };
+}
+
+export async function deactivatePromotion(promotionId) {
+  const current = await getInventory();
+  const existing = (current.promotions || []).find((row) => String(row.id) === String(promotionId));
+  if (!existing) throw new Error('Promoção não encontrada.');
+  const promotions = current.promotions.map((row) =>
+    String(row.id) === String(existing.id) ? { ...promotionRecord(row), inativa: true } : row
+  );
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  await saveInventory({ ...current, promotions }, stored);
+  return promotions.find((row) => String(row.id) === String(existing.id));
+}
+
+export async function deletePromotion(promotionId) {
+  const current = await getInventory();
+  const existing = (current.promotions || []).find((row) => String(row.id) === String(promotionId));
+  if (!existing) throw new Error('Promoção não encontrada.');
+  const promotions = current.promotions.filter((row) => row.id !== existing.id);
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  return saveInventory({ ...current, promotions }, stored);
+}
+
+export async function createCombo(payload) {
+  const current = await getInventory();
+  const nome = String(payload.nome || '').trim();
+  if (!nome) throw new Error('Informe o nome do combo.');
+  const preco = assertPrice(payload.valor ?? payload.valor_unitario);
+  const linhas = Array.isArray(payload.itens) ? payload.itens : [];
+  if (!linhas.length) throw new Error('Adicione ao menos um produto ao combo.');
+
+  const simples = (current.items || []).filter((item) => item.tipo !== 'combo');
+  const seen = new Set();
+  const linhasOk = linhas.map((linha) => {
+    const produtoId = String(linha.produto_associado_id || '').trim();
+    if (!simples.some((item) => String(item.id) === produtoId)) {
+      throw new Error('Produto não encontrado. Cadastre em Estoque.');
+    }
+    if (seen.has(produtoId)) throw new Error('Produto repetido no combo.');
+    seen.add(produtoId);
+    const quantidade = Number(linha.quantidade);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+    if (typeof linha.deduz_estoque_integral !== 'boolean') {
+      throw new Error('Informe se o item deduz o estoque integral.');
+    }
+    return {
+      produto_associado_id: produtoId,
+      quantidade,
+      deduz_estoque_integral: linha.deduz_estoque_integral,
+    };
+  });
+
+  const now = new Date().toISOString();
+  const actor = await actorId();
+  const stored = (current.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  let max = maxProductCode(stored);
+  const coded = stored.map((item) => {
+    if (item.codigo) return item;
+    max += 1;
+    return { ...item, codigo: formatProductCode(max) };
+  });
+  const codigo = formatProductCode(max + 1);
+  const comboId = `combo-${Date.now()}`;
+  const primeiro = simples.find((item) => String(item.id) === linhasOk[0].produto_associado_id);
+  const draft = presentProduct(
+    {
+      id: comboId,
+      codigo,
+      nome,
+      marca: '',
+      descricao: '',
+      categoria: 'Combos',
+      volume_peso: 1,
+      medida: 'UN',
+      tipo: 'combo',
+      estoque_atual: 0,
+      estoque_sugerido: 0,
+      valor_unitario: preco,
+      foto: String(payload.foto || '').trim() || primeiro?.foto || primeiro?.image || '',
+      stock: formatStockLabel(0, 'un'),
+      minStock: formatStockLabel(0, 'un'),
+      created_at: now,
+      updated_at: now,
+      created_by: actor,
+      updated_by: actor,
+    },
+    codigo
+  );
+  const rows = linhasOk.map((linha, index) => ({
+    id: `combo-item-${comboId}-${index}`,
+    combo_id: comboId,
+    produto_associado_id: linha.produto_associado_id,
+    quantidade: linha.quantidade,
+    deduz_estoque_integral: linha.deduz_estoque_integral,
+  }));
+  const filters = current.filters?.includes('Combos')
+    ? current.filters
+    : [...(current.filters || ['Todos']), 'Combos'];
+  const next = await saveInventory(
+    { ...current, filters, comboItems: [...rows, ...(current.comboItems || [])] },
+    [...coded, persistProduct(draft)]
+  );
+  return { item: presentProduct(draft, codigo), inventory: next };
+}
+
+function comboLines(current, linhas, comboId) {
+  const pool = (current.items || []).filter((item) => item.tipo !== 'combo');
+  const seen = new Set();
+  return linhas.map((linha, index) => {
+    const produtoId = String(linha.produto_associado_id || '').trim();
+    if (!pool.some((item) => String(item.id) === produtoId)) {
+      throw new Error('Produto não encontrado. Cadastre em Estoque.');
+    }
+    if (seen.has(produtoId)) throw new Error('Produto repetido no combo.');
+    seen.add(produtoId);
+    const quantidade = Number(linha.quantidade);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+    if (typeof linha.deduz_estoque_integral !== 'boolean') {
+      throw new Error('Informe se o item deduz o estoque integral.');
+    }
+    return {
+      id: `combo-item-${comboId}-${index}`,
+      combo_id: comboId,
+      produto_associado_id: produtoId,
+      quantidade,
+      deduz_estoque_integral: linha.deduz_estoque_integral,
+    };
+  });
+}
+
+export async function updateCombo(comboId, payload) {
+  const current = await getInventory();
+  const existing = (current.items || []).find((item) => String(item.id) === String(comboId));
+  if (!existing || existing.tipo !== 'combo') throw new Error('Combo não encontrado.');
+  const nome = String(payload.nome || '').trim();
+  if (!nome) throw new Error('Informe o nome do combo.');
+  const preco = assertPrice(payload.valor ?? payload.valor_unitario);
+  const linhas = Array.isArray(payload.itens) ? payload.itens : [];
+  if (!linhas.length) throw new Error('Adicione ao menos um produto ao combo.');
+  const rows = comboLines(current, linhas, existing.id);
+  const actor = await actorId();
+  const draft = presentProduct(
+    {
+      ...existing,
+      nome,
+      name: nome,
+      valor_unitario: preco,
+      cost: preco,
+      foto: payload.foto != null ? String(payload.foto) : existing.foto || existing.image || '',
+      image: payload.foto != null ? String(payload.foto) : existing.foto || existing.image || '',
+      updated_at: new Date().toISOString(),
+      updated_by: actor,
+    },
+    existing.codigo
+  );
+  const items = (current.items || []).map((item) =>
+    String(item.id) === String(existing.id)
+      ? persistProduct(draft)
+      : persistProduct(presentProduct(item, item.codigo))
+  );
+  const comboItems = [
+    ...rows,
+    ...(current.comboItems || []).filter((row) => String(row.combo_id) !== String(existing.id)),
+  ];
+  const next = await saveInventory({ ...current, comboItems }, items);
+  return { item: presentProduct(draft, existing.codigo), inventory: next };
+}
+
+export async function deleteCombo(comboId) {
+  const current = await getInventory();
+  const existing = (current.items || []).find((item) => String(item.id) === String(comboId));
+  if (!existing || existing.tipo !== 'combo') throw new Error('Combo não encontrado.');
+  const items = (current.items || [])
+    .filter((item) => String(item.id) !== String(existing.id))
+    .map((item) => persistProduct(presentProduct(item, item.codigo)));
+  const comboItems = (current.comboItems || []).filter((row) => String(row.combo_id) !== String(existing.id));
+  return saveInventory({ ...current, comboItems }, items);
+}
+
+function applyStockDelta(item, delta) {
+  const parsed = parseStockLabel(item.stock);
+  const minParsed = parseStockLabel(item.minStock);
+  const nextQty = parsed.qty + delta;
+  if (nextQty < 0) throw new Error(`Estoque insuficiente de ${item.nome || item.name}.`);
+  const unit = parsed.unit || minParsed.unit || 'un';
+  const status = nextQty < minParsed.qty ? 'low' : 'stable';
+  return {
+    ...item,
+    estoque_atual: nextQty,
+    stock: formatStockLabel(nextQty, unit),
+    status,
+    statusLabel: status === 'low' ? 'Estoque Baixo' : 'Estável',
+  };
+}
+
+export async function getCustomers() {
+  await ensureDashboardSeed();
+  const raw = (await readDocument(DOCS.customers)) || {};
+  return { customers: Array.isArray(raw.customers) ? raw.customers : [] };
+}
+
+export async function createCustomer(payload) {
+  const current = await getCustomers();
+  const nome = String(payload.nome || '').trim();
+  if (!nome) throw new Error('Informe o nome.');
+  if (!isValidPhone(payload.contato)) throw new Error('Contato inválido.');
+  const customer = {
+    id: `cli-${Date.now()}`,
+    nome,
+    contato: maskPhone(payload.contato),
+    created_at: new Date().toISOString(),
+  };
+  await writeDocument(DOCS.customers, { customers: [customer, ...current.customers] });
+  return customer;
+}
+
+export async function updateCustomer(customerId, payload) {
+  const current = await getCustomers();
+  const existing = current.customers.find((item) => String(item.id) === String(customerId));
+  if (!existing) throw new Error('Cliente não encontrado.');
+  const nome = String(payload.nome || '').trim();
+  if (!nome) throw new Error('Informe o nome.');
+  if (!isValidPhone(payload.contato)) throw new Error('Contato inválido.');
+  const customer = { ...existing, nome, contato: maskPhone(payload.contato) };
+  await writeDocument(DOCS.customers, {
+    customers: current.customers.map((item) => (item.id === existing.id ? customer : item)),
+  });
+  return customer;
+}
+
+function moneyLabel(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function buildPayments(payload, due, now) {
+  if (due <= 0.001) return [];
+  const raw =
+    Array.isArray(payload.pagamentos) && payload.pagamentos.length
+      ? payload.pagamentos
+      : [
+          {
+            forma_pagamento: payload.forma_pagamento,
+            valor: due,
+            valor_recebido: payload.valor_recebido,
+            parcelas: payload.parcelas,
+          },
+        ];
+  const payments = raw.map((row, index) => {
+    const forma = assertPaymentMethod(row.forma_pagamento);
+    const valor = assertPrice(row.valor);
+    if (valor <= 0) throw new Error('Informe o valor do pagamento.');
+    let valorRecebido = null;
+    let troco = null;
+    let parcelas = null;
+    if (forma === 'dinheiro') {
+      valorRecebido = assertPrice(row.valor_recebido);
+      if (valorRecebido < valor) throw new Error('O dinheiro entregue precisa cobrir o pagamento.');
+      troco = Math.round((valorRecebido - valor) * 100) / 100;
+    }
+    if (forma === 'cartao_credito') parcelas = assertInstallments(row.parcelas);
+    return {
+      id: `pay-${Date.now()}-${index}`,
+      valor,
+      forma_pagamento: forma,
+      valor_recebido: valorRecebido,
+      troco,
+      parcelas,
+      created_at: now.toISOString(),
+    };
+  });
+  const sum = Math.round(payments.reduce((acc, row) => acc + row.valor, 0) * 100) / 100;
+  if (Math.abs(sum - due) > 0.001) throw new Error('A soma dos pagamentos precisa fechar o saldo.');
+  return payments;
+}
+
+function withoutComandaBalance(expenses, saleId) {
+  return (expenses || []).filter(
+    (row) => !(row.source === 'comanda_saldo' && String(row.saleId) === String(saleId))
+  );
+}
+
+function withComandaBalance(expenses, sale, now) {
+  const rest = withoutComandaBalance(expenses, sale.id);
+  const falta = Math.max(saleBalance(sale), 0);
+  if (sale.status !== 'aberta' || falta <= 0.001) return rest;
+  const cents = Math.round(falta * 100);
+  const paid = salePaidAmount(sale);
+  const faltaLabel = moneyLabel(falta);
+  return [
+    {
+      id: `exp-comanda-${sale.id}`,
+      date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
+      description:
+        paid > 0.001
+          ? `Comanda ${sale.numero_comanda} · falta ${faltaLabel}`
+          : `Comanda ${sale.numero_comanda} · produtos servidos, falta ${faltaLabel}`,
+      category: 'Comanda',
+      categoryId: 'comanda_aberta',
+      categoryIcon: 'receipt_long',
+      nature: 'variable',
+      supplier: sale.cliente_nome || '',
+      supplierId: null,
+      amount: cents,
+      value: formatCents(cents),
+      source: 'comanda_saldo',
+      saleId: sale.id,
+      createdAt: now.toISOString(),
+    },
+    ...rest,
+  ];
+}
+
+function cashWithComanda(cash, sale, now, income) {
+  const expenses = withComandaBalance(cash.expenses, sale, now);
+  const incomes = income ? [income, ...(cash.incomes || [])] : cash.incomes || [];
+  const summary = buildCashFlowSummary(incomes, expenses, {
+    revenueDelta: cash.summary?.revenueDelta,
+    expensesDelta: cash.summary?.expensesDelta,
+  });
+  return {
+    ...cash,
+    incomes,
+    expenses,
+    summary: { ...cash.summary, ...summary },
+  };
+}
+
+function adjustSaleStock(inventory, previousItens, nextResolved, alreadyDeducted) {
+  if (!alreadyDeducted) return deductSaleStock(inventory, nextResolved);
+  const prev = new Map();
+  (previousItens || []).forEach((item) => {
+    const id = String(item.produto_id);
+    prev.set(id, (prev.get(id) || 0) + Number(item.quantidade || 0));
+  });
+  const deltas = [];
+  nextResolved.forEach((line) => {
+    const id = String(line.produto.id);
+    const before = prev.get(id) || 0;
+    prev.delete(id);
+    const delta = line.quantidade - before;
+    if (delta !== 0) deltas.push({ ...line, quantidade: delta });
+  });
+  prev.forEach((qty, id) => {
+    const produto = (inventory.items || []).find((item) => String(item.id) === id);
+    if (!produto || !qty) return;
+    deltas.push({ produto, quantidade: -qty });
+  });
+  if (!deltas.length) {
+    return (inventory.items || []).map((item) => persistProduct(presentProduct(item, item.codigo)));
+  }
+  return deductSaleStock(inventory, deltas);
+}
+
+function resolveSaleLines(inventory, linhas, now) {
+  if (!Array.isArray(linhas) || !linhas.length) throw new Error('O carrinho está vazio.');
+  return linhas.map((linha) => {
+    const produto = (inventory.items || []).find((item) => String(item.id) === String(linha.produto_id));
+    if (!produto) throw new Error('Produto não encontrado.');
+    const quantidade = Number(linha.quantidade);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+    const promo = promotionPriceAt(inventory.promotions, produto.id, now);
+    const valorUnitario =
+      promo != null ? promo : parseMoneyToCents(produto.valor_unitario || produto.cost || 0) / 100;
+    const valorTotal = Math.round(valorUnitario * quantidade * 100) / 100;
+    return { produto, quantidade, valor_unitario: valorUnitario, valor_total: valorTotal, promocao: promo != null };
+  });
+}
+
+function saleItems(resolved) {
+  return resolved.map((line) => ({
+    produto_id: line.produto.id,
+    nome: line.produto.nome || line.produto.name,
+    quantidade: line.quantidade,
+    valor_unitario: line.valor_unitario,
+    valor_total: line.valor_total,
+    promocao: Boolean(line.promocao),
+  }));
+}
+
+function customerFromOps(ops, clienteId) {
+  if (!clienteId) return { id: null, nome: 'Consumidor' };
+  const found = (ops.customers?.customers || []).find((item) => String(item.id) === String(clienteId));
+  if (!found) throw new Error('Cliente não encontrado.');
+  return { id: found.id, nome: found.nome };
+}
+
+function deductSaleStock(inventory, resolved) {
+  let items = [...(inventory.items || [])];
+  function take(produtoId, qty) {
+    const index = items.findIndex((item) => String(item.id) === String(produtoId));
+    if (index < 0) throw new Error('Produto do combo não encontrado.');
+    items[index] = applyStockDelta(items[index], -qty);
+  }
+  resolved.forEach((line) => {
+    if (line.produto.tipo === 'combo') {
+      (inventory.comboItems || [])
+        .filter(
+          (row) =>
+            String(row.combo_id) === String(line.produto.id) && row.deduz_estoque_integral === true
+        )
+        .forEach((row) => take(row.produto_associado_id, row.quantidade * line.quantidade));
+      return;
+    }
+    take(line.produto.id, line.quantidade);
+  });
+  return items.map((item) => persistProduct(presentProduct(item, item.codigo)));
+}
+
+function assertOpenComandaFree(sales, numero, saleId) {
+  const clash = (sales || []).find(
+    (sale) =>
+      sale.status === 'aberta' &&
+      sale.numero_comanda === numero &&
+      String(sale.id) !== String(saleId || '')
+  );
+  if (clash) throw new Error('Essa comanda já está aberta.');
+}
+
+export async function createOpenComanda(payload) {
+  const numero = assertComanda(payload.numero_comanda);
+  const usuarioId = await actorId();
+  await ensureDashboardSeed();
+  const now = await readServerNow();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    assertOpenComandaFree(inventory.sales, numero);
+    const cliente = customerFromOps(ops, payload.cliente_id);
+    const sale = normalizeSale({
+      id: `sale-${Date.now()}`,
+      numero_comanda: numero,
+      status: 'aberta',
+      cliente_id: cliente.id,
+      cliente_nome: cliente.nome,
+      forma_pagamento: null,
+      total: 0,
+      itens: [],
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      usuario_id: usuarioId,
+    });
+    return {
+      ops: { ...ops, inventory: { ...inventory, sales: [sale, ...(inventory.sales || [])] } },
+      value: sale,
+    };
+  });
+}
+
+export async function saveOpenSale(payload) {
+  const numero = assertComanda(payload.numero_comanda);
+  const usuarioId = await actorId();
+  await ensureDashboardSeed();
+  const now = await readServerNow();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const resolved = resolveSaleLines(inventory, payload.itens, now);
+    const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
+    const cliente = customerFromOps(ops, payload.cliente_id);
+    assertOpenComandaFree(inventory.sales, numero, payload.sale_id);
+    const existing = payload.sale_id
+      ? (inventory.sales || []).find((sale) => String(sale.id) === String(payload.sale_id))
+      : null;
+    if (payload.sale_id && (!existing || existing.status !== 'aberta')) {
+      throw new Error('Comanda não encontrada.');
+    }
+    if (existing && salePaidAmount(existing) - total > 0.001) {
+      throw new Error('O total não pode ficar menor que o já pago.');
+    }
+    const sale = normalizeSale({
+      id: existing?.id || `sale-${Date.now()}`,
+      numero_comanda: numero,
+      status: 'aberta',
+      cliente_id: cliente.id,
+      cliente_nome: cliente.nome,
+      forma_pagamento: null,
+      total,
+      observacao: optionalNote(payload.observacao, existing?.observacao),
+      pagamentos: existing?.pagamentos || [],
+      historico: existing?.historico || [],
+      itens: saleItems(resolved),
+      estoque_baixado: true,
+      created_at: existing?.created_at || now.toISOString(),
+      updated_at: now.toISOString(),
+      usuario_id: existing?.usuario_id || usuarioId,
+    });
+    const sales = existing
+      ? inventory.sales.map((item) => (item.id === sale.id ? sale : item))
+      : [sale, ...(inventory.sales || [])];
+    const stored = adjustSaleStock(inventory, existing?.itens, resolved, Boolean(existing?.estoque_baixado));
+    const cash = ops.cashFlow || cashFlowFallback;
+    return {
+      ops: {
+        ...ops,
+        inventory: { ...inventory, items: stored, sales },
+        cashFlow: cashWithComanda(cash, sale, now, null),
+      },
+      value: sale,
+    };
+  });
+}
+
+export async function registerSale(payload) {
+  const numero = optionalComanda(payload.numero_comanda);
+  const usuarioId = await actorId();
+  await ensureDashboardSeed();
+  const now = await readServerNow();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const resolved = resolveSaleLines(inventory, payload.itens, now);
+    const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
+    const cliente = customerFromOps(ops, payload.cliente_id);
+    if (numero != null) assertOpenComandaFree(inventory.sales, numero, payload.sale_id);
+    const existing = payload.sale_id
+      ? (inventory.sales || []).find((sale) => String(sale.id) === String(payload.sale_id))
+      : null;
+    if (payload.sale_id && (!existing || existing.status !== 'aberta')) {
+      throw new Error('Comanda não encontrada.');
+    }
+    const already = salePaidAmount(existing);
+    if (already - total > 0.001) throw new Error('O total não pode ficar menor que o já pago.');
+    const due = Math.round((total - already) * 100) / 100;
+    const payments = buildPayments(payload, due, now);
+    const payment = payments[0] || null;
+    const stored = adjustSaleStock(inventory, existing?.itens, resolved, Boolean(existing?.estoque_baixado));
+    const sale = normalizeSale({
+      id: existing?.id || `sale-${Date.now()}`,
+      numero_comanda: numero,
+      status: 'paga',
+      cliente_id: cliente.id,
+      cliente_nome: cliente.nome,
+      forma_pagamento: payments.length === 1 ? payments[0].forma_pagamento : null,
+      valor_recebido: payments.length === 1 ? payments[0].valor_recebido : null,
+      troco: payments.length === 1 ? payments[0].troco : null,
+      parcelas: payments.length === 1 ? payments[0].parcelas : null,
+      total,
+      observacao: optionalNote(payload.observacao, existing?.observacao),
+      pagamentos: [...(existing?.pagamentos || []), ...payments],
+      historico: existing?.historico || [],
+      itens: saleItems(resolved),
+      estoque_baixado: true,
+      created_at: existing?.created_at || now.toISOString(),
+      updated_at: now.toISOString(),
+      usuario_id: usuarioId,
+    });
+    const sales = existing
+      ? inventory.sales.map((item) => (item.id === sale.id ? sale : item))
+      : [sale, ...(inventory.sales || [])];
+    const cash = ops.cashFlow || cashFlowFallback;
+    const amountCents = Math.round(due * 100);
+    const income = payment
+      ? {
+          id: `inc-${payment.id}`,
+          date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
+          description: saleDescription(sale),
+          category: saleGroupLabel(sale, inventory.items),
+          categoryIcon: 'payments',
+          categoryTone: 'secondary',
+          value: formatCents(amountCents),
+          amount: amountCents,
+          source: 'pdv',
+          saleId: sale.id,
+          cliente: cliente.nome,
+          importKey: null,
+          createdAt: now.toISOString(),
+        }
+      : null;
+    return {
+      ops: {
+        ...ops,
+        inventory: {
+          ...inventory,
+          items: stored,
+          sales,
+        },
+        cashFlow: cashWithComanda(cash, sale, now, income),
+      },
+      value: sale,
+    };
+  });
+}
+
+export async function updateRecordedSale(saleId, payload) {
+  const id = String(saleId || '').trim();
+  if (!id) throw new Error('Venda não encontrada.');
+  await ensureDashboardSeed();
+  const now = await readServerNow();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const existing = (inventory.sales || []).find((sale) => String(sale.id) === id);
+    if (!existing) throw new Error('Venda não encontrada.');
+    const resolved = resolveSaleLines(inventory, payload.itens, now);
+    const total = Math.round(resolved.reduce((sum, line) => sum + line.valor_total, 0) * 100) / 100;
+    const formPayments = (Array.isArray(payload.pagamentos) ? payload.pagamentos : []).filter(
+      (row) => Number(row?.valor) > 0
+    );
+    const declared = Math.round(formPayments.reduce((acc, row) => acc + Number(row.valor || 0), 0) * 100) / 100;
+    const openSale = existing.status === 'aberta';
+    if (declared - total > 0.001 || (!openSale && Math.abs(declared - total) > 0.001)) {
+      throw new Error('A soma dos pagamentos precisa fechar o saldo.');
+    }
+    const payments = declared > 0.001 ? buildPayments({ pagamentos: formPayments }, declared, now) : [];
+    const covers = total <= 0.001 || total - declared <= 0.001;
+    const status = !openSale || covers ? 'paga' : 'aberta';
+    const stored = adjustSaleStock(inventory, existing.itens, resolved, Boolean(existing.estoque_baixado));
+    const sale = normalizeSale({
+      ...existing,
+      status,
+      forma_pagamento: payments.length === 1 ? payments[0].forma_pagamento : null,
+      valor_recebido: payments.length === 1 ? payments[0].valor_recebido : null,
+      troco: payments.length === 1 ? payments[0].troco : null,
+      parcelas: payments.length === 1 ? payments[0].parcelas : null,
+      total,
+      observacao: optionalNote(payload.observacao, ''),
+      pagamentos: payments,
+      itens: saleItems(resolved),
+      estoque_baixado: true,
+      updated_at: now.toISOString(),
+    });
+    const sales = inventory.sales.map((item) => (item.id === sale.id ? sale : item));
+    const cash = ops.cashFlow || cashFlowFallback;
+    const historyPayIds = new Set();
+    (existing.historico || []).forEach((cycle) => {
+      (cycle.pagamentos || []).forEach((pay) => historyPayIds.add(`inc-${pay.id}`));
+    });
+    const currentPayIds = new Set((existing.pagamentos || []).map((pay) => `inc-${pay.id}`));
+    const kept = [];
+    const removed = [];
+    (cash.incomes || []).forEach((row) => {
+      const rowId = String(row.id || '');
+      if (historyPayIds.has(rowId)) {
+        kept.push(row);
+        return;
+      }
+      if (String(row.saleId) === id || currentPayIds.has(rowId)) {
+        removed.push(row);
+        return;
+      }
+      kept.push(row);
+    });
+    const original = [...removed].sort((left, right) =>
+      String(left.createdAt || '').localeCompare(String(right.createdAt || ''))
+    )[0];
+    const paidCents = Math.round(declared * 100);
+    const falta = Math.max(Math.round((total - declared) * 100) / 100, 0);
+    const description =
+      status === 'aberta' && declared > 0.001 && falta > 0.001
+        ? `${saleDescription(sale)} · pago ${moneyLabel(declared)} · falta ${moneyLabel(falta)}`
+        : saleDescription(sale);
+    const income =
+      paidCents > 0
+        ? {
+            id: original?.id || `inc-${payments[0].id}`,
+            date: original?.date || formatExpenseDate(format(now, 'yyyy-MM-dd')),
+            description,
+            category: saleGroupLabel(sale, stored),
+            categoryIcon: 'payments',
+            categoryTone: 'secondary',
+            value: formatCents(paidCents),
+            amount: paidCents,
+            source: 'pdv',
+            saleId: sale.id,
+            cliente: existing.cliente_nome || '',
+            importKey: null,
+            createdAt: original?.createdAt || now.toISOString(),
+          }
+        : null;
+    return {
+      ops: {
+        ...ops,
+        inventory: { ...inventory, items: stored, sales },
+        cashFlow: cashWithComanda({ ...cash, incomes: kept }, sale, now, income),
+      },
+      value: sale,
+    };
+  });
+}
+
+function storedSaleLines(inventory, itens) {
+  return (itens || []).map((item) => {
+    const produto = (inventory.items || []).find((row) => String(row.id) === String(item.produto_id));
+    if (!produto) throw new Error('Produto não encontrado.');
+    const quantidade = Number(item.quantidade);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error('Quantidade inválida.');
+    return { produto, quantidade };
+  });
+}
+
+export async function registerPartialPayment(payload) {
+  const forma = assertPaymentMethod(payload.forma_pagamento);
+  const saleId = String(payload.sale_id || '').trim();
+  if (!saleId) throw new Error('Comanda não encontrada.');
+  const valor = assertPrice(payload.valor);
+  if (valor <= 0) throw new Error('Informe o valor do pagamento.');
+  const usuarioId = await actorId();
+  await ensureDashboardSeed();
+  const now = await readServerNow();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const existing = (inventory.sales || []).find((sale) => String(sale.id) === saleId);
+    if (!existing || existing.status !== 'aberta') throw new Error('Comanda não encontrada.');
+    const saldo = saleBalance(existing);
+    if (saldo <= 0) throw new Error('Essa comanda não tem saldo.');
+    if (valor - saldo > 0.001) throw new Error('O valor passa do saldo.');
+    let valorRecebido = null;
+    let troco = null;
+    let parcelas = null;
+    if (forma === 'dinheiro') {
+      valorRecebido = assertPrice(payload.valor_recebido);
+      if (valorRecebido < valor) throw new Error('O dinheiro entregue precisa cobrir o pagamento.');
+      troco = Math.round((valorRecebido - valor) * 100) / 100;
+    }
+    if (forma === 'cartao_credito') parcelas = assertInstallments(payload.parcelas);
+    const covers = saldo - valor <= 0.001;
+    const destino = payload.destino === 'ativa' || payload.destino === 'fechar' ? payload.destino : 'parcial';
+    if (covers && destino === 'parcial') throw new Error('Escolha fechar a comanda ou deixá-la ativa.');
+    if (!covers && destino !== 'parcial') throw new Error('Ainda há saldo nesta comanda.');
+    const payment = {
+      id: `pay-${Date.now()}`,
+      valor,
+      forma_pagamento: forma,
+      valor_recebido: valorRecebido,
+      troco,
+      parcelas,
+      created_at: now.toISOString(),
+    };
+    const keepOpen = destino === 'ativa';
+    const cycle = keepOpen
+      ? {
+          id: `hist-${Date.now()}`,
+          quitado_em: now.toISOString(),
+          total: existing.total,
+          itens: existing.itens || [],
+          pagamentos: [...(existing.pagamentos || []), payment],
+        }
+      : null;
+    const sale = normalizeSale({
+      ...existing,
+      status: destino === 'fechar' ? 'paga' : 'aberta',
+      forma_pagamento: destino === 'fechar' ? forma : null,
+      valor_recebido: destino === 'fechar' ? valorRecebido : null,
+      troco: destino === 'fechar' ? troco : null,
+      parcelas: destino === 'fechar' ? parcelas : null,
+      total: keepOpen ? 0 : existing.total,
+      itens: keepOpen ? [] : existing.itens,
+      pagamentos: keepOpen ? [] : [...(existing.pagamentos || []), payment],
+      historico: cycle ? [...(existing.historico || []), cycle] : existing.historico || [],
+      estoque_baixado: Boolean(existing.estoque_baixado) || covers,
+      updated_at: now.toISOString(),
+      usuario_id: existing.usuario_id || usuarioId,
+    });
+    const sales = inventory.sales.map((item) => (item.id === existing.id ? sale : item));
+    const stored =
+      covers && !existing.estoque_baixado
+        ? deductSaleStock(inventory, storedSaleLines(inventory, existing.itens))
+        : inventory.items;
+    const cash = ops.cashFlow || cashFlowFallback;
+    const amountCents = Math.round(valor * 100);
+    const falta = Math.max(saleBalance(sale), 0);
+    const income = {
+      id: `inc-${payment.id}`,
+      date: formatExpenseDate(format(now, 'yyyy-MM-dd')),
+      description:
+        falta > 0.001
+          ? `${saleDescription(existing)} · pago ${moneyLabel(valor)} · falta ${moneyLabel(falta)}`
+          : saleDescription(existing),
+      category: saleGroupLabel(existing, inventory.items),
+      categoryIcon: 'payments',
+      categoryTone: 'secondary',
+      value: formatCents(amountCents),
+      amount: amountCents,
+      source: 'pdv',
+      saleId: sale.id,
+      cliente: sale.cliente_nome,
+      importKey: null,
+      createdAt: now.toISOString(),
+    };
+    return {
+      ops: {
+        ...ops,
+        inventory: {
+          ...inventory,
+          items: stored,
+          sales,
+        },
+        cashFlow: cashWithComanda(cash, sale, now, income),
+      },
+      value: sale,
+    };
+  });
+}
+
+export async function closeShift(input = {}) {
+  const usuarioId = await actorId();
+  await ensureDashboardSeed();
+  return commitOps((ops) => {
+    const inventory = normalizeInventory(ops.inventory);
+    const cash = ops.cashFlow || cashFlowFallback;
+    const now = new Date();
+    const open = openMovements(cash.incomes, cash.expenses, inventory.closings);
+    const span = windowFor({
+      modo: input.modo,
+      day: input.day || format(now, 'yyyy-MM-dd'),
+      time: input.time || format(now, 'HH:mm'),
+      openIncomes: open.incomes,
+      openExpenses: open.expenses,
+      now,
+    });
+    if (span.error) throw new Error(span.error);
+    const entradas = sumReais(span.incomes);
+    const saidas = sumReais(span.expenses);
+    const range = { from: latestCutoff(inventory.closings), until: span.until, day: span.day };
+    const totais = totalsInWindow(inventory.sales, range);
+    const closing = {
+      id: `close-${Date.now()}`,
+      from: span.from ? span.from.toISOString() : null,
+      until: span.until.toISOString(),
+      closed_at: now.toISOString(),
+      modo: span.modo,
+      income_ids: span.incomes.map((row) => row.id),
+      expense_ids: span.expenses.map((row) => row.id),
+      entradas_linhas: span.incomes.map(snapshotLine),
+      saidas_linhas: span.expenses.map(snapshotLine),
+      entradas,
+      saidas,
+      saldo: Math.round((entradas - saidas) * 100) / 100,
+      vendas: span.incomes.filter((row) => row.source === 'pdv' || String(row.description || '').startsWith('PDV')).length,
+      produtos: settledInWindow(inventory.sales, range),
+      totais,
+      usuario_id: usuarioId,
+    };
+    return {
+      ops: {
+        ...ops,
+        inventory: { ...inventory, closings: [closing, ...(inventory.closings || [])] },
+      },
+      value: closing,
+    };
+  });
 }
 
 export async function importStatementRows(rows) {
@@ -778,10 +2915,10 @@ function stockCategoryToExpense(category) {
 export async function deleteInventoryItem(itemId) {
   const current = await getInventory();
   const items = (current.items || []).filter((item) => String(item.id) !== String(itemId));
+  const { metrics: _metrics, serverNow: _serverNow, ...rest } = current;
   const next = {
-    ...current,
+    ...rest,
     items,
-    metrics: recomputeInventoryMetrics(items),
   };
   await writeDocument(DOCS.inventory, next);
   return next;
@@ -812,32 +2949,195 @@ export async function deleteFreelancer(freelancerId) {
   return next;
 }
 
+function dailyAmountCents(value, fallbackRate) {
+  if (value != null && value !== '') return Math.round(Number(value) * 100);
+  return parseMoneyToCents(fallbackRate);
+}
+
+function sameDaily(row, target) {
+  if (!row || !target) return false;
+  if (target.id && row.id) return String(row.id) === String(target.id);
+  if (target.id || row.id) return false;
+  return (
+    String(row.freelancerId) === String(target.freelancerId) &&
+    row.date === target.date &&
+    row.createdAt === target.createdAt &&
+    String(row.value) === String(target.value)
+  );
+}
+
 export async function registerDaily(payload) {
   const current = await getFreelancers();
-  const next = {
-    ...current,
-    dailies: [...(current.dailies || []), { ...payload, createdAt: new Date().toISOString() }],
-  };
-  await writeDocument(DOCS.freelancers, next);
-
   const person = (current.people || []).find(
     (item) => String(item.id) === String(payload.freelancerId)
   );
-  const amountCents =
-    payload.value != null
-      ? Math.round(Number(payload.value) * 100)
-      : parseMoneyToCents(person?.dailyRate);
-
-  await createExpense({
+  if (!person) throw new Error('Selecione o freelancer.');
+  const amountCents = dailyAmountCents(payload.value, person?.dailyRate);
+  const expense = await createExpense({
     date: payload.date,
-    supplier: person?.name || `Freelancer #${payload.freelancerId}`,
+    supplier: person.name,
+    freelancerId: person.id,
     categoryId: 'freelancer',
     nature: 'variable',
     amount: amountCents,
     source: 'freelancer_daily',
   });
-
+  const entry = {
+    id: payload.id || `daily-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    freelancerId: payload.freelancerId,
+    date: payload.date,
+    role: payload.role,
+    value: payload.value,
+    status: payload.status || 'pending_payment',
+    expenseId: expense.id,
+    createdAt: new Date().toISOString(),
+  };
+  const next = {
+    ...current,
+    dailies: [...(current.dailies || []), entry],
+  };
+  await writeDocument(DOCS.freelancers, next);
   return next;
+}
+
+export async function updateDaily(target, payload) {
+  const current = await getFreelancers();
+  const existing = (current.dailies || []).find((row) => sameDaily(row, target));
+  if (!existing) throw new Error('Diária não encontrada.');
+
+  const person = (current.people || []).find(
+    (item) => String(item.id) === String(payload.freelancerId)
+  );
+  if (!person) throw new Error('Selecione o freelancer.');
+  const previousPerson = (current.people || []).find(
+    (item) => String(item.id) === String(existing.freelancerId)
+  );
+  const amountCents = dailyAmountCents(payload.value, person?.dailyRate);
+  const previousCents = dailyAmountCents(existing.value, previousPerson?.dailyRate);
+  const cash = await getCashFlow();
+  const expenses = [...(cash.expenses || [])];
+  let matchIndex = expenses.findIndex(
+    (row) => existing.expenseId && String(row.id) === String(existing.expenseId)
+  );
+  if (matchIndex < 0) {
+    const previousName = previousPerson?.name || '';
+    const previousDate = formatExpenseDate(existing.date);
+    matchIndex = expenses.findIndex(
+      (row) =>
+        row.source === 'freelancer_daily' &&
+        row.supplier === previousName &&
+        row.date === previousDate &&
+        row.amount === previousCents
+    );
+  }
+
+  let expenseId = existing.expenseId;
+  if (matchIndex >= 0) {
+    const row = expenses[matchIndex];
+    expenseId = row.id;
+    const dailyCategory =
+      (cash.categories || expenseCategories).find((item) => item.id === 'freelancer') ||
+      expenseCategories.find((item) => item.id === 'freelancer');
+    expenses[matchIndex] = {
+      ...row,
+      date: formatExpenseDate(payload.date),
+      supplier: person.name,
+      supplierId: null,
+      freelancerId: person.id,
+      category: dailyCategory?.name || 'Freelancer',
+      categoryId: 'freelancer',
+      categoryIcon: dailyCategory?.icon || 'person',
+      value: formatCents(amountCents),
+      amount: amountCents,
+      description: describeExpense({
+        party: 'freelancer',
+        categoryName: dailyCategory?.name || 'Freelancer',
+        supplier: person.name,
+        date: payload.date,
+      }),
+      source: 'freelancer_daily',
+    };
+    await saveCashFlow(cash, { expenses });
+  } else {
+    const expense = await createExpense({
+      date: payload.date,
+      supplier: person.name,
+      freelancerId: person.id,
+      categoryId: 'freelancer',
+      nature: 'variable',
+      amount: amountCents,
+      source: 'freelancer_daily',
+    });
+    expenseId = expense.id;
+  }
+
+  const updated = {
+    ...existing,
+    id: existing.id || target?.id || `daily-${Date.now()}`,
+    freelancerId: payload.freelancerId,
+    date: payload.date,
+    role: payload.role,
+    value: payload.value,
+    status: payload.status || existing.status || 'pending_payment',
+    expenseId,
+  };
+  const next = {
+    ...current,
+    dailies: (current.dailies || []).map((row) => (sameDaily(row, existing) ? updated : row)),
+  };
+  await writeDocument(DOCS.freelancers, next);
+  return updated;
+}
+
+export async function deleteDaily(target) {
+  await ensureDashboardSeed();
+  return commitOps((ops) => {
+    const current = normalizeFreelancers(ops.freelancers);
+    const existing = (current.dailies || []).find((row) => sameDaily(row, target));
+    if (!existing) throw new Error('Diária não encontrada.');
+
+    const person = (current.people || []).find(
+      (item) => String(item.id) === String(existing.freelancerId)
+    );
+    const previousCents = dailyAmountCents(existing.value, person?.dailyRate);
+    const cash = migrateCashFlow(ops.cashFlow || cashFlowFallback);
+    const expenses = [...(cash.expenses || [])];
+    let matchIndex = expenses.findIndex(
+      (row) => existing.expenseId && String(row.id) === String(existing.expenseId)
+    );
+    if (matchIndex < 0) {
+      const previousDate = formatExpenseDate(existing.date);
+      matchIndex = expenses.findIndex(
+        (row) =>
+          row.source === 'freelancer_daily' &&
+          row.supplier === (person?.name || '') &&
+          row.date === previousDate &&
+          row.amount === previousCents
+      );
+    }
+    const nextExpenses =
+      matchIndex >= 0 ? expenses.filter((_, index) => index !== matchIndex) : expenses;
+    const summary = buildCashFlowSummary(cash.incomes || [], nextExpenses, {
+      revenueDelta: cash.summary?.revenueDelta,
+      expensesDelta: cash.summary?.expensesDelta,
+    });
+
+    return {
+      ops: {
+        ...ops,
+        freelancers: {
+          ...current,
+          dailies: (current.dailies || []).filter((row) => !sameDaily(row, existing)),
+        },
+        cashFlow: {
+          ...cash,
+          expenses: nextExpenses,
+          summary: { ...cash.summary, ...summary },
+        },
+      },
+      value: existing,
+    };
+  });
 }
 
 export async function addFreelancer(payload) {
@@ -850,14 +3150,10 @@ export async function addFreelancer(payload) {
     id: nextId,
     name: payload.name.trim(),
     role: payload.role.trim(),
+    contact: String(payload.contact || '').trim(),
     status,
     statusLabel: STATUS_MAP[status] || STATUS_MAP.available,
-    dailyRate: String(payload.dailyRate).startsWith('R$')
-      ? String(payload.dailyRate)
-      : `R$ ${Number(payload.dailyRate).toLocaleString('pt-BR', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`,
+    dailyRate: formatDailyRate(payload.dailyRate),
     image: payload.image?.trim() || DEFAULT_AVATAR,
   };
 
@@ -869,6 +3165,38 @@ export async function addFreelancer(payload) {
   return person;
 }
 
+function formatDailyRate(value) {
+  if (value == null || value === '') return 'R$ 0,00';
+  const text = String(value).trim();
+  if (text.startsWith('R$')) return text;
+  const amount = Number(text);
+  if (!Number.isFinite(amount)) return 'R$ 0,00';
+  return `R$ ${amount.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export async function updateFreelancer(freelancerId, payload) {
+  const current = await getFreelancers();
+  const people = (current.people || []).map((person) => {
+    if (String(person.id) !== String(freelancerId)) return person;
+    const status = payload.status || person.status;
+    return {
+      ...person,
+      name: payload.name.trim(),
+      role: payload.role.trim(),
+      contact: String(payload.contact || '').trim(),
+      status,
+      statusLabel: STATUS_MAP[status] || person.statusLabel,
+      image: payload.image === undefined ? person.image : payload.image?.trim() || DEFAULT_AVATAR,
+    };
+  });
+  const next = { ...current, people };
+  await writeDocument(DOCS.freelancers, next);
+  return people.find((person) => String(person.id) === String(freelancerId));
+}
+
 export async function addSupplier(payload) {
   const current = await getSuppliers();
   const nextId =
@@ -878,7 +3206,7 @@ export async function addSupplier(payload) {
     id: nextId,
     name: payload.name.trim(),
     contact: payload.contact.trim(),
-    cnpj: payload.cnpj.trim(),
+    cnpj: String(payload.cnpj || '').trim(),
     lastPurchase: '',
     lastValue: '',
     lastAmount: 0,
@@ -891,6 +3219,23 @@ export async function addSupplier(payload) {
   };
   await writeDocument(DOCS.suppliers, next);
   return supplier;
+}
+
+export async function updateSupplier(supplierId, payload) {
+  const current = await getSuppliers();
+  const name = String(payload.name || '').trim();
+  const contact = String(payload.contact || '').trim();
+  const cnpj = String(payload.cnpj || '').trim();
+  if (!name || !contact) throw new Error('Informe nome e contato.');
+  let found = false;
+  const suppliers = (current.suppliers || []).map((item) => {
+    if (String(item.id) !== String(supplierId)) return item;
+    found = true;
+    return { ...item, name, contact, cnpj };
+  });
+  if (!found) throw new Error('Fornecedor não encontrado.');
+  await writeDocument(DOCS.suppliers, { ...current, suppliers });
+  return suppliers.find((item) => String(item.id) === String(supplierId));
 }
 
 export async function recordSupplierPurchase({
@@ -936,7 +3281,79 @@ export async function deleteSupplier(supplierId) {
 
 export async function getStaff() {
   await ensureDashboardSeed();
-  return (await readDocument(DOCS.staff)) || staffFallback;
+  const ops = await readOps();
+  return staffAsPeople(ops.staff);
+}
+
+async function syncPeoplePayroll(people) {
+  const current = await getCashFlow();
+  const category =
+    (current.categories || expenseCategories).find((item) => item.id === 'funcionarios') ||
+    expenseCategories.find((item) => item.id === 'funcionarios');
+  const expenses = syncStaffPayrollExpenses(
+    people,
+    current.expenses || [],
+    ({ person, iso, amount, key, prev }) => ({
+      ...prev,
+      id: prev?.id || key,
+      payrollKey: key,
+      staffId: String(person.id),
+      date: formatExpenseDate(iso),
+      isoDate: iso,
+      supplier: person.name || 'Funcionário',
+      supplierId: null,
+      category: category?.name || 'Funcionários',
+      categoryId: category?.id || 'funcionarios',
+      categoryIcon: category?.icon || 'badge',
+      description: `Pagamento de ${person.name || 'funcionário'}`,
+      nature: 'variable',
+      value: formatCents(amount),
+      amount,
+      recurrence: 'monthly',
+      source: 'staff_payroll',
+      createdAt: prev?.createdAt || new Date().toISOString(),
+    })
+  );
+  await saveCashFlow(current, { expenses });
+}
+
+async function storeStaffPeople(people) {
+  const ops = await readOps();
+  const next = staffAsPeople({ people });
+  await writeOps({ ...ops, staff: next });
+  await syncPeoplePayroll(next.people);
+  return next;
+}
+
+const STOCK_ACCESS = ['estoque', 'catalogo', 'pdv', 'perfil'];
+const ADMIN_ACCESS = ['overview', 'caixa', 'estoque', 'catalogo', 'pdv', 'fornecedores', 'equipe', 'perfil'];
+
+function accessForRole(role) {
+  const admin = role === 'admin';
+  return {
+    role: admin ? 'admin' : 'stock',
+    permissions: admin ? ADMIN_ACCESS : STOCK_ACCESS,
+  };
+}
+
+function memberFromPerson(person) {
+  const permissions = person.permissions || [];
+  return {
+    id: person.id,
+    uid: person.uid || null,
+    email: person.email || '',
+    name: person.name,
+    title: person.title || '',
+    role: permissions.includes('caixa') ? 'admin' : 'stock',
+    disabled: Boolean(person.disabled),
+    accountStatus: person.accountStatus || (person.uid ? 'active' : ''),
+    createdAt: person.createdAt,
+  };
+}
+
+export async function listStaff() {
+  const staff = await getStaff();
+  return (staff.people || []).map(memberFromPerson);
 }
 
 export async function createStaffMember(payload) {
@@ -955,38 +3372,378 @@ export async function createStaffMember(payload) {
   }
 
   const staff = await getStaff();
-  if ((staff.members || []).some((item) => item.email === email)) {
+  if ((staff.people || []).some((item) => item.email === email)) {
     throw new Error('Já existe um usuário com este e-mail.');
   }
 
   const created = await createAuthUserRest({ email, password });
   const member = {
-    uid: created.uid,
     email,
     name,
     title: String(payload.title || (role === 'stock' ? 'Estoquista' : 'Administrador')).trim(),
     role,
+    uid: created.uid,
     createdAt: new Date().toISOString(),
   };
-  const next = { members: [...(staff.members || []), member] };
-  await writeDocument(DOCS.staff, next);
-  await upsertUserProfile(member.uid, {
+  const nextId =
+    (staff.people || []).reduce((max, person) => Math.max(max, Number(person.id) || 0), 0) + 1;
+  await storeStaffPeople([...(staff.people || []), { id: nextId, ...member }]);
+  await upsertUserProfile(created.uid, {
     ...member,
     roles: ['staff'],
     tenantId: TENANT_ID,
     barRole: role,
   });
-  return { member, staff: { members: next.members } };
+  return { member: memberFromPerson({ ...member, permissions: role === 'admin' ? ['caixa'] : [] }), staff };
 }
 
-function stripStaffPassword(member) {
-  const { password: _ignored, ...safe } = member;
-  return safe;
+export async function saveStaffPerson(payload) {
+  const name = String(payload.name || '').trim();
+  const title = String(payload.title || '').trim();
+  const access = accessForRole(payload.role);
+  if (!name) throw new Error('Informe o nome.');
+  if (!title) throw new Error('Informe o cargo.');
+  const current = await getStaff();
+  const nextId =
+    (current.people || []).reduce((max, person) => Math.max(max, Number(person.id) || 0), 0) + 1;
+  const person = normalizeStaffPerson({
+    id: nextId,
+    name,
+    title,
+    role: access.role,
+    permissions: access.permissions,
+    createdAt: new Date().toISOString(),
+  });
+  await storeStaffPeople([...(current.people || []), person]);
+  return memberFromPerson(person);
 }
 
-export async function listStaff() {
+function staffExpenseRow(row) {
+  return (
+    expensePartyKind(row?.categoryId) === 'staff' ||
+    row?.categoryId === 'funcionarios' ||
+    row?.categoryId === 'salarios'
+  );
+}
+
+async function renameStaffExpenses(staffId, previousName, nextName) {
+  const current = await getCashFlow();
+  const previous = String(previousName || '').trim().toLowerCase();
+  let changed = false;
+  const expenses = (current.expenses || []).map((row) => {
+    if (!staffExpenseRow(row) || row.source === 'comanda_saldo') return row;
+    const linked =
+      String(row.staffId || '') === String(staffId) ||
+      (!row.staffId && previous && String(row.supplier || '').trim().toLowerCase() === previous);
+    if (!linked) return row;
+    changed = true;
+    const description =
+      row.description === `Pagamento de ${previousName}` ? `Pagamento de ${nextName}` : row.description;
+    return { ...row, supplier: nextName, staffId: String(staffId), description };
+  });
+  if (changed) await saveCashFlow(current, { expenses });
+}
+
+export async function updateStaffPerson(staffId, payload) {
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing) throw new Error('Funcionário não encontrado.');
+  const name = String(payload.name ?? existing.name).trim();
+  const title = String(payload.title ?? existing.title).trim();
+  const access = accessForRole(payload.role);
+  if (!name) throw new Error('Informe o nome.');
+  if (!title) throw new Error('Informe o cargo.');
+  const people = (current.people || []).map((person) => {
+    if (String(person.id) !== String(staffId)) return person;
+    return normalizeStaffPerson({ ...person, name, title, role: access.role, permissions: access.permissions });
+  });
+  const next = await storeStaffPeople(people);
+  const saved = next.people.find((person) => String(person.id) === String(staffId));
+  if (saved && existing.name !== saved.name) {
+    await renameStaffExpenses(saved.id, existing.name, saved.name);
+  }
+  if (saved?.uid) {
+    await patchStaffUser(saved.uid, {
+      name: saved.name,
+      title: saved.title || 'Equipe',
+      barRole: access.role,
+      permissions: access.permissions,
+    });
+  }
+  return memberFromPerson(saved);
+}
+
+export async function setStaffActive(staffId, active) {
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing) throw new Error('Funcionário não encontrado.');
+  if (existing.uid) await patchStaffUser(existing.uid, { disabled: !active });
+  const people = (current.people || []).map((person) => {
+    if (String(person.id) !== String(staffId)) return person;
+    return normalizeStaffPerson({ ...person, disabled: !active });
+  });
+  const next = await storeStaffPeople(people);
+  return memberFromPerson(next.people.find((person) => String(person.id) === String(staffId)));
+}
+
+export async function openStaffAccount(staffId, payload) {
+  const email = String(payload.email || '').trim().toLowerCase();
+  if (!email) throw new Error('Informe o e-mail.');
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing) throw new Error('Funcionário não encontrado.');
+  if (existing.disabled) throw new Error('Funcionário desativado.');
+  if ((current.people || []).some((person) => person.email === email && String(person.id) !== String(staffId))) {
+    throw new Error('E-mail já cadastrado.');
+  }
+  if (!existing.uid && (await emailTaken(email))) {
+    throw new Error('E-mail já cadastrado.');
+  }
+
+  const access = accessForRole(existing.permissions?.includes('caixa') ? 'admin' : 'stock');
+  let uid = existing.uid || null;
+  if (!uid) {
+    const created = await createAuthUserRest({ email, password: randomStaffPassword() });
+    uid = created.uid;
+  }
+  await writeStaffUser(uid, {
+    email,
+    name: existing.name || 'Funcionário',
+    title: existing.title || 'Equipe',
+    permissions: access.permissions,
+    barRole: access.role,
+    disabled: false,
+    createdAt: existing.createdAt || new Date().toISOString(),
+  });
+
+  const staged = await storeStaffPeople(
+    (await getStaff()).people.map((person) =>
+      String(person.id) === String(staffId)
+        ? normalizeStaffPerson({
+            ...person,
+            email,
+            uid,
+            permissions: access.permissions,
+            accountStatus: 'pending',
+            disabled: false,
+          })
+        : person
+    )
+  );
+  const stagedPerson = staged.people.find((person) => String(person.id) === String(staffId));
+
+  try {
+    await sendStaffPasswordReset(email);
+  } catch (error) {
+    const err = new Error(error?.message || 'Não foi possível enviar o e-mail.');
+    err.staff = memberFromPerson(stagedPerson);
+    throw err;
+  }
+
+  const latest = await getStaff();
+  const next = await storeStaffPeople(
+    (latest.people || []).map((person) =>
+      String(person.id) === String(staffId)
+        ? normalizeStaffPerson({
+            ...person,
+            email,
+            uid,
+            permissions: access.permissions,
+            accountStatus: 'invited',
+            disabled: false,
+          })
+        : person
+    )
+  );
+  return memberFromPerson(next.people.find((person) => String(person.id) === String(staffId)));
+}
+
+export async function listStaffPeople() {
   const staff = await getStaff();
-  return (staff.members || []).map(stripStaffPassword);
+  return staff.people || [];
+}
+
+export async function createHouseStaff(payload) {
+  const info = assertStaffInfo(payload);
+  if (String(payload.monthlyCost ?? '').trim() === '') {
+    throw new Error('Informe o custo mensal.');
+  }
+  const monthlyCostCents = parseMoneyToCents(payload.monthlyCost);
+  const current = await getStaff();
+  const nextId =
+    (current.people || []).reduce((max, person) => Math.max(max, Number(person.id) || 0), 0) + 1;
+  const person = normalizeStaffPerson({
+    id: nextId,
+    ...info,
+    monthlyCostCents,
+    permissions: [],
+    createdAt: new Date().toISOString(),
+  });
+  await storeStaffPeople([...(current.people || []), person]);
+  return person;
+}
+
+export async function updateHouseStaff(staffId, payload) {
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing) throw new Error('Funcionário não encontrado.');
+  const info = assertStaffInfo({
+    name: payload.name ?? existing.name,
+    title: payload.title ?? existing.title,
+    contractType: payload.contractType ?? existing.contractType,
+    contractStart: payload.contractStart ?? existing.contractStart,
+    contractEnd: payload.contractEnd ?? existing.contractEnd,
+  });
+  if (payload.monthlyCost != null && String(payload.monthlyCost).trim() === '') {
+    throw new Error('Informe o custo mensal.');
+  }
+  const monthlyCostCents =
+    payload.monthlyCost != null ? parseMoneyToCents(payload.monthlyCost) : existing.monthlyCostCents;
+  const people = (current.people || []).map((person) => {
+    if (String(person.id) !== String(staffId)) return person;
+    return normalizeStaffPerson({ ...person, ...info, monthlyCostCents });
+  });
+  const next = await storeStaffPeople(people);
+  return next.people.find((person) => String(person.id) === String(staffId));
+}
+
+async function writeStaffUser(uid, data) {
+  const payload = pickUserFields({
+    ...data,
+    uid,
+    tenantId: TENANT_ID,
+    roles: ['staff'],
+    updatedAt: new Date().toISOString(),
+  });
+  await setDoc(doc(db, 'users', uid), payload);
+  if (payload.email) await writeEmailLock(payload.email, uid);
+  return payload;
+}
+
+async function patchStaffUser(uid, data) {
+  const payload = pickUserFields({
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
+  delete payload.uid;
+  delete payload.roles;
+  delete payload.email;
+  delete payload.tenantId;
+  await setDoc(doc(db, 'users', uid), payload, { merge: true });
+  return payload;
+}
+
+export async function inviteHouseStaff(staffId, payload) {
+  const email = String(payload.email || '').trim().toLowerCase();
+  const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+  if (!email) throw new Error('Informe o e-mail.');
+  if (!permissions.length) throw new Error('Marque ao menos uma permissão.');
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing) throw new Error('Funcionário não encontrado.');
+  if ((current.people || []).some((person) => person.email === email && String(person.id) !== String(staffId))) {
+    throw new Error('E-mail já cadastrado.');
+  }
+  if (!existing.uid && (await emailTaken(email))) {
+    throw new Error('E-mail já cadastrado.');
+  }
+
+  let uid = existing.uid || null;
+  const stagedStatus = uid ? existing.accountStatus || 'active' : 'pending';
+  if (!uid) {
+    const created = await createAuthUserRest({ email, password: randomStaffPassword() });
+    uid = created.uid;
+    await writeStaffUser(uid, {
+      email,
+      name: existing.name || 'Funcionário',
+      title: existing.title || 'Equipe',
+      permissions,
+      barRole: 'staff',
+      disabled: false,
+      createdAt: new Date().toISOString(),
+    });
+  } else {
+    await patchStaffUser(uid, {
+      name: existing.name,
+      title: existing.title || 'Equipe',
+      permissions,
+      disabled: false,
+    });
+  }
+
+  const staged = await storeStaffPeople(
+    (await getStaff()).people.map((person) =>
+      String(person.id) === String(staffId)
+        ? normalizeStaffPerson({
+            ...person,
+            email,
+            uid,
+            permissions,
+            accountStatus: stagedStatus,
+            disabled: false,
+          })
+        : person
+    )
+  );
+  const stagedPerson = staged.people.find((person) => String(person.id) === String(staffId));
+
+  try {
+    await sendStaffPasswordReset(email);
+  } catch (error) {
+    const err = new Error(error?.message || 'Não foi possível enviar o e-mail.');
+    err.staff = stagedPerson;
+    throw err;
+  }
+
+  const latest = await getStaff();
+  const next = await storeStaffPeople(
+    (latest.people || []).map((person) =>
+      String(person.id) === String(staffId)
+        ? normalizeStaffPerson({
+            ...person,
+            email,
+            uid,
+            permissions,
+            accountStatus: 'invited',
+            disabled: false,
+          })
+        : person
+    )
+  );
+  return next.people.find((person) => String(person.id) === String(staffId));
+}
+
+export async function saveHouseStaffAccess(staffId, payload) {
+  const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+  if (!permissions.length) throw new Error('Marque ao menos uma permissão.');
+  const current = await getStaff();
+  const existing = (current.people || []).find((person) => String(person.id) === String(staffId));
+  if (!existing?.uid) throw new Error('Esta pessoa ainda não tem conta.');
+  await patchStaffUser(existing.uid, {
+    name: existing.name,
+    title: existing.title || 'Equipe',
+    permissions,
+    disabled: false,
+  });
+  const next = await storeStaffPeople(
+    (current.people || []).map((person) =>
+      String(person.id) === String(staffId)
+        ? normalizeStaffPerson({ ...person, permissions, disabled: false })
+        : person
+    )
+  );
+  return next.people.find((person) => String(person.id) === String(staffId));
+}
+
+export async function removeHouseStaff(staffId) {
+  const current = await getStaff();
+  const removed = (current.people || []).find((person) => String(person.id) === String(staffId)) || null;
+  if (removed?.uid) {
+    await patchStaffUser(removed.uid, { disabled: true });
+  }
+  const kept = (current.people || []).filter((person) => String(person.id) !== String(staffId));
+  await storeStaffPeople(kept);
+  return removed;
 }
 
 export async function getUserProfile(uid) {

@@ -1,100 +1,176 @@
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchFreelancers, removeDaily, removeFreelancer, settleFreelancer } from '../services/dashboardService';
 import {
-  createDaily,
-  fetchFreelancers,
-  removeFreelancer,
-  settleFreelancer,
-} from '../services/dashboardService';
+  filterShifts,
+  formatPeriodLabel,
+  parseIsoDate,
+  sameRole,
+  shiftAnchor,
+} from '../services/freelancerSchedule';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
+import { FilterBar } from '../components/ui/FilterBar';
+import { FilterSelect } from '../components/ui/FilterSelect';
+import { SearchField } from '../components/ui/SearchField';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { Tabs } from '../components/ui/Tabs';
+import { FreelancerCalendar } from '../components/freelancers/FreelancerCalendar';
+import { FreelancerProfile } from '../components/freelancers/FreelancerProfile';
+import { FreelancerRoster } from '../components/freelancers/FreelancerRoster';
+import { ShiftTable } from '../components/freelancers/ShiftTable';
+import { useViewMode } from '../components/ui/useViewMode';
 import { useModal } from '../contexts/ModalContext';
 import { useToast } from '../contexts/ToastContext';
-
-const timeFilters = ['Hoje', 'Semana', 'Mês'];
-
-function StatusBadge({ status, label }) {
-  if (status === 'on_shift') {
-    return (
-      <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-[11px] font-bold uppercase tracking-wider shrink-0">
-        <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-        {label}
-      </span>
-    );
-  }
-
-  if (status === 'pending_payment') {
-    return (
-      <span className="px-3 py-1 rounded-full bg-error-container/20 text-on-error-container text-[11px] font-bold uppercase tracking-wider shrink-0">
-        {label}
-      </span>
-    );
-  }
-
-  return (
-    <span className="px-3 py-1 rounded-full bg-tertiary-container/20 text-on-tertiary-container text-[11px] font-bold uppercase tracking-wider shrink-0">
-      {label}
-    </span>
-  );
-}
 
 export function FreelancersPage() {
   const queryClient = useQueryClient();
   const { openModal } = useModal();
   const toast = useToast();
-  const [timeFilter, setTimeFilter] = useState('Hoje');
+  const [anchor, setAnchor] = useState(() => new Date());
   const [roleFilter, setRoleFilter] = useState(null);
-  const [form, setForm] = useState({
-    freelancerId: '',
-    date: '',
-    role: 'Barman',
-    value: '',
-  });
+  const [query, setQuery] = useState('');
+  const [section, setSection] = useState('agenda');
+  const [panel, setPanel] = useState('calendar');
+  const [calendarView, setCalendarView] = useState('month');
+  const [profileId, setProfileId] = useState(null);
+  const [rosterView, setRosterView] = useViewMode('freelancers');
 
   const { data, isLoading } = useQuery({
     queryKey: ['freelancers'],
     queryFn: fetchFreelancers,
   });
 
-  const mutation = useMutation({
-    mutationFn: createDaily,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['freelancers'] });
-      queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
-      setForm({ freelancerId: '', date: '', role: 'Barman', value: '' });
-      toast.success('Diária registrada e despesa lançada.');
-    },
-    onError: () => {
-      toast.error('Falha ao registrar diária.');
-    },
-  });
-
-  const people = useMemo(() => {
-    if (!data?.people) return [];
-    if (!roleFilter) return data.people;
-    return data.people.filter((person) =>
-      person.role.toLowerCase().includes(roleFilter.toLowerCase())
-    );
-  }, [data, roleFilter]);
-
-  function refreshFreelancers() {
+  const refreshFreelancers = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['freelancers'] });
+    queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+    queryClient.invalidateQueries({ queryKey: ['overview'] });
+  }, [queryClient]);
+
+  const people = useMemo(() => data?.people || [], [data]);
+  const dailies = useMemo(() => data?.dailies || [], [data]);
+  const roles = useMemo(
+    () => (data?.roles?.length ? data.roles : ['Barman', 'Garçom', 'Cozinha']),
+    [data]
+  );
+  const roleOptions = useMemo(
+    () => [{ value: '', label: 'Todas' }, ...roles.map((role) => ({ value: role, label: role }))],
+    [roles]
+  );
+
+  const period = calendarView === 'week' ? 'Semana' : 'Mês';
+
+  const shifts = useMemo(
+    () =>
+      filterShifts(dailies, people, {
+        period,
+        anchor,
+        role: null,
+        query: '',
+      })
+        .slice()
+        .sort((left, right) => String(left.date).localeCompare(String(right.date))),
+    [dailies, people, period, anchor]
+  );
+
+  const roster = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return people.filter((person) => {
+      if (roleFilter && !sameRole(person.role, roleFilter)) return false;
+      if (needle && !String(person.name || '').toLowerCase().includes(needle)) return false;
+      return true;
+    });
+  }, [people, roleFilter, query]);
+
+  const events = useMemo(
+    () =>
+      shifts.flatMap((shift) => {
+        const start = parseIsoDate(shift.date);
+        if (!start) return [];
+        const end = new Date(start);
+        end.setDate(end.getDate() + 1);
+        const person = people.find((item) => String(item.id) === String(shift.freelancerId));
+        return [
+          {
+            id: shift.id || `${shift.freelancerId}-${shift.date}`,
+            title: person?.name || 'Freelancer',
+            start,
+            end,
+            allDay: true,
+            resource: { shift },
+          },
+        ];
+      }),
+    [shifts, people]
+  );
+
+  const profile = people.find((person) => String(person.id) === String(profileId)) || null;
+
+  const openProfile = useCallback((freelancerId) => {
+    setProfileId(freelancerId);
+  }, []);
+
+  const openShift = useCallback(
+    (shift) => {
+      openModal('shift-detail', {
+        shift,
+        people,
+        roles,
+        onSuccess: refreshFreelancers,
+      });
+    },
+    [openModal, people, roles, refreshFreelancers]
+  );
+
+  const movePeriod = useCallback(
+    (direction) => {
+      setAnchor((current) => shiftAnchor(current, period, direction));
+    },
+    [period]
+  );
+
+  function openCreate() {
+    openModal('new-freelancer', { roles, onSuccess: refreshFreelancers });
   }
 
-  function settlePayment(person) {
+  function openDaily() {
+    openModal('new-daily', { people, roles, onSuccess: refreshFreelancers });
+  }
+
+  function openEdit() {
+    if (!profile) return;
+    openModal('new-freelancer', { person: profile, roles, onSuccess: refreshFreelancers });
+  }
+
+  function settlePayment() {
+    if (!profile) return;
     openModal('confirm', {
-      message: `Dar baixa no pagamento de ${person.name} (${person.dailyRate})?`,
+      message: `Dar baixa no pagamento de ${profile.name}?`,
       confirmLabel: 'Dar baixa',
       successMessage: 'Pagamento baixado. Freelancer disponível.',
       errorMessage: 'Falha ao dar baixa.',
       onConfirm: async () => {
-        await settleFreelancer(person.id);
+        await settleFreelancer(profile.id);
         refreshFreelancers();
       },
     });
   }
 
-  function confirmDelete(person) {
+  async function deleteShift(shift) {
+    if (!confirm('Excluir este agendamento?')) return;
+    try {
+      await removeDaily(shift);
+      toast.success('Agendamento excluído.');
+      refreshFreelancers();
+    } catch (err) {
+      toast.error(err?.message || 'Não foi possível excluir o agendamento.');
+    }
+  }
+
+  function confirmDelete() {
+    if (!profile) return;
+    const person = profile;
     openModal('confirm', {
       message: `Excluir o freelancer ${person.name}?`,
       confirmLabel: 'Excluir',
@@ -103,6 +179,7 @@ export function FreelancersPage() {
       onConfirm: async () => {
         await removeFreelancer(person.id);
         refreshFreelancers();
+        setProfileId(null);
       },
     });
   }
@@ -111,276 +188,125 @@ export function FreelancersPage() {
     return <div className="p-4 md:p-8 text-on-surface-variant">Carregando freelancers...</div>;
   }
 
-  function handleSubmit(event) {
-    event.preventDefault();
-    mutation.mutate({
-      freelancerId: Number(form.freelancerId) || form.freelancerId,
-      date: form.date,
-      role: form.role,
-      value: Number(form.value),
-    });
-  }
-
   return (
-    <div className="p-4 md:p-8 lg:p-12 relative">
-      <div className="fixed top-0 right-0 w-1/3 h-1/2 bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10" />
-      <div className="fixed bottom-0 left-0 w-1/4 h-1/3 bg-secondary/5 blur-[100px] rounded-full pointer-events-none -z-10" />
+    <div className="p-4 md:p-8 relative space-y-6">
+      <PageHeader
+        title="Gestão de freelancers"
+        description="Coordene turnos, pagamentos e disponibilidade em tempo real."
+      />
 
-      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 md:mb-12">
-        <div>
-          <h2 className="font-headline text-3xl font-extrabold text-on-surface tracking-tight">
-            Gestão de Freelancers
-          </h2>
-          <p className="text-on-surface-variant mt-1 font-body">
-            Coordene turnos, pagamentos e disponibilidade em tempo real.
+      <Tabs
+        label="Freelancers"
+        items={[
+          { id: 'agenda', label: 'Agendamentos' },
+          { id: 'freelancers', label: 'Freelancers' },
+        ]}
+        value={section}
+        onChange={setSection}
+      />
+
+      {section === 'agenda' ? (
+      <>
+      <FilterBar
+        actions={
+          <Button onClick={openDaily}>
+            <Icon name="add" />
+            Registrar diária
+          </Button>
+        }
+      >
+        <SegmentedControl
+          variant="primary"
+          label="Visualização da agenda"
+          items={[
+            { id: 'calendar', label: 'Calendário' },
+            { id: 'list', label: 'Lista' },
+          ]}
+          value={panel}
+          onChange={setPanel}
+        />
+        <SegmentedControl
+          variant="primary"
+          label="Período do calendário"
+          items={[
+            { id: 'month', label: 'Mensal' },
+            { id: 'week', label: 'Semanal' },
+          ]}
+          value={calendarView}
+          onChange={setCalendarView}
+        />
+        <div className="flex items-center gap-2">
+          <Button type="button" size="icon" variant="secondary" aria-label="Período anterior" onClick={() => movePeriod('prev')}>
+            <Icon name="chevron_left" />
+          </Button>
+          <p className="text-sm font-semibold leading-5 text-on-surface capitalize">
+            {formatPeriodLabel(period, anchor)}
           </p>
-        </div>
-        <div className="flex items-center gap-3 md:gap-4">
-          <button
-            type="button"
-            className="p-2 min-h-11 min-w-11 rounded-full hover:bg-surface-container-low transition-colors text-on-surface-variant relative"
-          >
-            <Icon name="notifications" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-surface" />
-          </button>
-          <Button
-            onClick={() =>
-              openModal('new-freelancer', {
-                onSuccess: refreshFreelancers,
-              })
-            }
-          >
-            <Icon name="person_add" />
-            + Novo freelancer
+          <Button type="button" size="icon" variant="secondary" aria-label="Próximo período" onClick={() => movePeriod('next')}>
+            <Icon name="chevron_right" />
           </Button>
         </div>
-      </header>
+      </FilterBar>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
-        <section className="col-span-1 lg:col-span-8 space-y-8">
-          <div className="flex flex-col md:flex-row md:flex-wrap md:items-center justify-between gap-4 md:gap-6 p-1 bg-surface-container-low rounded-2xl">
-            <div className="flex p-1 gap-1 overflow-x-auto">
-              {timeFilters.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setTimeFilter(item)}
-                  className={
-                    timeFilter === item
-                      ? 'px-4 md:px-6 py-2 min-h-11 rounded-xl bg-primary text-on-primary font-semibold transition-all shrink-0'
-                      : 'px-4 md:px-6 py-2 min-h-11 rounded-xl text-on-surface-variant hover:bg-surface-container-highest/50 transition-all shrink-0'
-                  }
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pr-2 md:pr-4">
-              <span className="text-xs font-label text-on-surface-variant uppercase tracking-widest sm:mr-2">
-                Função:
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {data.roles.map((role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => setRoleFilter(roleFilter === role ? null : role)}
-                    className={`px-4 py-1.5 min-h-11 rounded-full border border-outline-variant/20 text-sm font-medium hover:bg-surface-container-lowest transition-colors ${
-                      roleFilter === role ? 'bg-primary text-on-primary' : ''
-                    }`}
-                  >
-                    {role}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+      {panel === 'calendar' ? (
+        <FreelancerCalendar
+          events={events}
+          date={anchor}
+          view={calendarView}
+          onSelectShift={openShift}
+        />
+      ) : (
+        <ShiftTable shifts={shifts} people={people} onEdit={openShift} onDelete={deleteShift} />
+      )}
+      </>
+      ) : (
+      <section className="space-y-6">
+        <FilterBar
+          actions={
+            <Button onClick={openCreate}>
+              <Icon name="add" />
+              Novo freelancer
+            </Button>
+          }
+        >
+          <SegmentedControl
+            variant="primary"
+            label="Visualização dos freelancers"
+            items={[
+              { id: 'list', label: 'Lista' },
+              { id: 'cards', label: 'Cards' },
+            ]}
+            value={rosterView}
+            onChange={setRosterView}
+          />
+          <FilterSelect
+            id="freelancer-role-filter"
+            label="Função"
+            value={roleFilter || ''}
+            onChange={(role) => setRoleFilter(role || null)}
+            options={roleOptions}
+          />
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            placeholder="Buscar freelancer"
+            label="Buscar freelancer pelo nome"
+          />
+        </FilterBar>
+        <FreelancerRoster people={roster} onOpen={openProfile} view={rosterView} />
+      </section>
+      )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {people.map((person) => (
-              <div
-                key={person.id}
-                className={`bg-surface-container-lowest rounded-2xl p-6 transition-all hover:shadow-xl hover:shadow-on-surface/5 group ${
-                  person.status === 'pending_payment'
-                    ? 'border-l-4 border-error-container/40'
-                    : ''
-                }`}
-              >
-                <div className="flex justify-between items-start mb-6 gap-3">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <img
-                      alt={person.name}
-                      className="w-14 h-14 rounded-2xl object-cover shrink-0"
-                      src={person.image}
-                    />
-                    <div className="min-w-0">
-                      <h4 className="font-headline font-bold text-lg text-on-surface truncate">
-                        {person.name}
-                      </h4>
-                      <p className="text-sm text-on-surface-variant font-label">{person.role}</p>
-                    </div>
-                  </div>
-                  <StatusBadge status={person.status} label={person.statusLabel} />
-                </div>
-                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-                  <div>
-                    <p className="text-xs text-on-surface-variant font-label mb-1">Valor Diária</p>
-                    <p className="text-xl font-headline font-extrabold text-on-surface">
-                      {person.dailyRate}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {person.status === 'pending_payment' ? (
-                      <button
-                        type="button"
-                        onClick={() => settlePayment(person)}
-                        className="bg-primary text-on-primary px-4 py-2 min-h-11 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-primary-dim transition-all"
-                      >
-                        <Icon name="payments" className="text-sm" />
-                        Dar Baixa
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => confirmDelete(person)}
-                      className="p-3 min-h-11 min-w-11 rounded-xl bg-surface-container-low text-on-surface-variant opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-error/10 hover:text-error transition-all"
-                      aria-label={`Excluir ${person.name}`}
-                    >
-                      <Icon name="delete" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="col-span-1 lg:col-span-4">
-          <div className="bg-surface-container-lowest rounded-3xl p-5 md:p-8 sticky top-8 shadow-2xl shadow-on-surface/5 border border-white">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-on-surface">
-                <Icon name="assignment_add" />
-              </div>
-              <h3 className="font-headline font-bold text-xl text-on-surface">Registrar Diária</h3>
-            </div>
-            <form className="space-y-6" onSubmit={handleSubmit}>
-              <div className="space-y-2">
-                <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-                  Selecionar Freelancer
-                </label>
-                <div className="relative">
-                  <select
-                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-                    value={form.freelancerId}
-                    onChange={(e) => setForm((prev) => ({ ...prev, freelancerId: e.target.value }))}
-                    required
-                  >
-                    <option value="">Selecione um profissional</option>
-                    {data.people.map((person) => (
-                      <option key={person.id} value={person.id}>
-                        {person.name}
-                      </option>
-                    ))}
-                  </select>
-                  <Icon
-                    name="person_search"
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-                  Data do Turno
-                </label>
-                <div className="relative">
-                  <input
-                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all"
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
-                    required
-                  />
-                  <Icon
-                    name="calendar_month"
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-                    Função
-                  </label>
-                  <div className="relative">
-                    <select
-                      className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-4 pr-10 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-                      value={form.role}
-                      onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
-                    >
-                      {data.roles.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
-                    <Icon
-                      name="expand_more"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-                    Valor (R$)
-                  </label>
-                  <input
-                    className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all font-bold"
-                    placeholder="0,00"
-                    type="number"
-                    value={form.value}
-                    onChange={(e) => setForm((prev) => ({ ...prev, value: e.target.value }))}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4">
-                <button
-                  className="w-full py-4 min-h-11 bg-primary text-on-primary rounded-2xl font-headline font-bold text-lg hover:bg-primary-dim hover:scale-[1.02] active:scale-95 transition-all"
-                  type="submit"
-                  disabled={mutation.isPending}
-                >
-                  {mutation.isPending ? 'Confirmando...' : 'Confirmar Agendamento'}
-                </button>
-                <p className="text-center text-[11px] text-on-surface-variant mt-4 leading-relaxed px-4">
-                  Ao confirmar, o valor entra como despesa variável no fluxo de caixa.
-                </p>
-              </div>
-            </form>
-          </div>
-
-          <div className="mt-8 grid grid-cols-2 gap-4">
-            <div className="bg-primary rounded-2xl p-4">
-              <span className="text-[10px] font-bold text-on-surface uppercase tracking-wider block mb-1">
-                Custos Hoje
-              </span>
-              <p className="text-2xl font-headline font-extrabold text-on-surface">
-                {data.summary.costsToday}
-              </p>
-            </div>
-            <div className="bg-secondary/5 rounded-2xl p-4 border border-secondary/10">
-              <span className="text-[10px] font-bold text-secondary uppercase tracking-wider block mb-1">
-                Ativos Agora
-              </span>
-              <p className="text-2xl font-headline font-extrabold text-secondary">
-                {data.summary.activeNow}
-              </p>
-            </div>
-          </div>
-        </section>
-      </div>
+      {profile ? (
+        <FreelancerProfile
+          person={profile}
+          dailies={dailies}
+          onClose={() => setProfileId(null)}
+          onEdit={openEdit}
+          onDelete={confirmDelete}
+          onSettle={settlePayment}
+        />
+      ) : null}
     </div>
   );
 }

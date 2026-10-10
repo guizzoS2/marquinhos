@@ -16,6 +16,7 @@ service cloud.firestore {
     //   - barRole: string optional (<=20)
     //   - title, phone, company, photoURL: string optional
     //   - permissions: list optional (<=20)
+    //   - disabled: bool optional
     //   - createdAt, updatedAt: string optional
     //   - uid: string optional (immutable, must match doc id)
     //
@@ -117,7 +118,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.keys().hasOnly([
           'email', 'name', 'roles', 'role', 'tenantId', 'freelaId', 'barRole',
-          'title', 'phone', 'company', 'photoURL', 'permissions',
+          'title', 'phone', 'company', 'photoURL', 'permissions', 'disabled',
           'createdAt', 'updatedAt', 'uid'
         ])
         && isValidEmail(data.email)
@@ -132,15 +133,17 @@ service cloud.firestore {
         && optionalString(data, 'title', 80)
         && optionalString(data, 'phone', 40)
         && optionalString(data, 'company', 80)
-        && optionalString(data, 'photoURL', 2000)
+        && optionalString(data, 'photoURL', 100000)
         && optionalString(data, 'createdAt', 40)
         && optionalString(data, 'updatedAt', 40)
         && optionalString(data, 'uid', 128)
         && (!('permissions' in data)
           || data.permissions == null
           || (data.permissions is list && data.permissions.size() <= 20))
+        && (!('disabled' in data) || data.disabled == null || data.disabled is bool)
         && (!('uid' in data) || data.uid == null || data.uid == request.auth.uid
-          || isPlatformAdmin() || isBootstrapAdmin());
+          || isPlatformAdmin() || isBootstrapAdmin()
+          || (isBarUser() && data.roles.hasOnly(['staff'])));
     }
 
     function isSelfRoleCreate(data) {
@@ -211,6 +214,10 @@ service cloud.firestore {
         && request.resource.data.keys().size() <= 40;
     }
 
+    function isTenantOwner() {
+      return userExists() && userDoc().roles.hasAny(['owner']);
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId) || isPlatformAdmin() || isBootstrapAdmin();
 
@@ -220,7 +227,7 @@ service cloud.firestore {
           || isPlatformAdmin()
           || (isBootstrapAdmin() && isOwner(userId)
             && request.resource.data.roles.hasOnly(['admin', 'freela']))
-          || (isBarUser()
+          || (isTenantOwner()
             && request.resource.data.roles.hasOnly(['staff'])
             && request.resource.data.tenantId == userDoc().tenantId)
         );
@@ -231,6 +238,12 @@ service cloud.firestore {
             && areImmutableFieldsUnchanged(['roles', 'email', 'tenantId', 'freelaId', 'uid']))
           || isPlatformAdmin()
           || (isBootstrapAdmin() && isOwner(userId))
+          || (isTenantOwner()
+            && resource.data.roles.hasOnly(['staff'])
+            && request.resource.data.roles.hasOnly(['staff'])
+            && resource.data.tenantId == userDoc().tenantId
+            && request.resource.data.tenantId == userDoc().tenantId
+            && areImmutableFieldsUnchanged(['roles', 'email', 'tenantId', 'freelaId', 'uid']))
         );
 
       allow delete: if isPlatformAdmin();

@@ -1,45 +1,19 @@
 import { Link } from 'react-router-dom';
 import { Icon } from '../ui/Icon';
+import { Button } from '../ui/Button';
+import { UserAvatar } from '../ui/UserAvatar';
 import { useAuth } from '../../contexts/AuthContext';
 
-export function TopNavbar({
-  searchPlaceholder = 'Buscar análises, equipe ou estoque...',
-  onMenuClick,
-}) {
+export function TopNavbar({ onMenuClick }) {
   const { user } = useAuth();
 
   return (
-    <header className="w-full sticky top-0 z-40 bg-white border-b border-outline-variant font-headline antialiased tracking-tight flex justify-between items-center gap-3 px-4 md:px-8 h-16">
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={onMenuClick}
-          aria-label="Abrir menu"
-          className="md:hidden min-h-11 min-w-11 flex items-center justify-center text-on-surface-variant hover:bg-surface-container rounded-full transition-colors active:scale-95"
-        >
-          <Icon name="menu" />
-        </button>
-        <div className="relative w-full max-w-md md:w-96 group min-w-0">
-          <Icon
-            name="search"
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-xl"
-          />
-          <input
-            className="w-full pl-11 pr-4 py-2 min-h-11 bg-surface-container-low border-none rounded-full focus:ring-2 focus:ring-primary-container/30 transition-all text-sm font-body"
-            placeholder={searchPlaceholder}
-            type="text"
-          />
-        </div>
-      </div>
-      <div className="flex items-center gap-2 md:gap-4 shrink-0">
-        <button
-          type="button"
-          className="min-h-11 min-w-11 flex items-center justify-center text-on-surface-variant hover:bg-surface-container rounded-full transition-colors active:scale-95"
-        >
-          <Icon name="notifications" />
-        </button>
-        <div className="h-8 w-px bg-outline-variant/30 mx-1 hidden sm:block" />
-        <Link to="/perfil" className="flex items-center gap-3 pl-1 md:pl-2 min-h-11">
+    <header className="w-full sticky top-0 z-40 bg-white border-b border-outline-variant font-headline antialiased flex justify-between items-center gap-3 px-4 md:px-8 h-16">
+      <Button type="button" size="icon" variant="ghost" className="md:hidden" onClick={onMenuClick} aria-label="Abrir menu">
+        <Icon name="menu" />
+      </Button>
+      <div className="flex items-center gap-2 md:gap-4 shrink-0 ml-auto">
+        <Link to="/perfil" aria-label="Perfil do usuário" className="flex items-center gap-3 pl-1 md:pl-2 min-h-11">
           <div className="text-right hidden sm:block">
             <p className="text-xs font-bold text-on-surface">
               {user?.name || 'Fábio Santos'}
@@ -48,14 +22,7 @@ export function TopNavbar({
               {user?.title || 'Gerente Geral'}
             </p>
           </div>
-          <img
-            alt="Avatar do usuário"
-            className="w-9 h-9 rounded-full object-cover ring-2 ring-primary-container/20"
-            src={
-              user?.photoURL ||
-              'https://lh3.googleusercontent.com/aida-public/AB6AXuCnAiBdvbFHIU_AojuM_Cn4E75QDQoOBroox5x_mmIuyPtLglF2xWJGOozljzpOGnCppjIVxXHVKxzvLzjMBQDIQzU2T4ZQ0hQbmldgvmx_xCvZ6sH5tSpX1P0eJLMQFfWQFi1FrZuH_Bme_XWdML3-fLQtPDh8iTKJ6xBuCYGqTvbWusWjrl0pJhurURv6caCcWDYKtdzuJ-tzU2NGYfkNcSWFMSBXl_e0hR-l2RSs7YJQzTfKuZlNceLdZlSHJUUGUR0RKgDSGPi_'
-            }
-          />
+          <UserAvatar src={user?.photoURL} className="h-9 w-9" />
         </Link>
       </div>
     </header>

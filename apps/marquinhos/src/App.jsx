@@ -9,8 +9,9 @@ import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { CashFlowPage } from './pages/CashFlowPage';
 import { InventoryPage } from './pages/InventoryPage';
+import { PdvPage } from './pages/PdvPage';
 import { FreelancersPage } from './pages/FreelancersPage';
-import { SuppliersPage } from './pages/SuppliersPage';
+import { PurchasesPage } from './pages/PurchasesPage';
 import { StaffPage } from './pages/StaffPage';
 import { ProfilePage } from './pages/ProfilePage';
 
@@ -36,8 +37,12 @@ function App() {
                   <Route element={<DashboardLayout />}>
                     <Route index element={<OverviewPage />} />
                     <Route path="fluxo-caixa" element={<CashFlowPage />} />
+                    <Route path="vendas" element={<PurchasesPage hub="vendas" />} />
+                    <Route path="compras" element={<PurchasesPage hub="compras" />} />
                     <Route path="estoque" element={<InventoryPage />} />
-                    <Route path="fornecedores" element={<SuppliersPage />} />
+                    <Route path="catalogo" element={<Navigate to="/estoque?aba=promocoes" replace />} />
+                    <Route path="pdv" element={<PdvPage />} />
+                    <Route path="fornecedores" element={<Navigate to="/compras?aba=fornecedores" replace />} />
                     <Route path="freelancers" element={<FreelancersPage />} />
                     <Route path="equipe" element={<StaffPage />} />
                     <Route path="perfil" element={<ProfilePage />} />

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { Icon } from '../components/ui/Icon';
+import { Button } from '../components/ui/Button';
 
 const ToastContext = createContext(null);
 
@@ -65,13 +66,9 @@ export function ToastProvider({ children }) {
               />
             </div>
             <p className="text-sm font-medium flex-1 pt-1.5">{toast.message}</p>
-            <button
-              type="button"
-              className="p-1 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-surface-container-low flex items-center justify-center"
-              onClick={() => dismiss(toast.id)}
-            >
-              <Icon name="close" className="text-sm" />
-            </button>
+            <Button type="button" size="icon" variant="ghost" aria-label="Fechar aviso" onClick={() => dismiss(toast.id)}>
+              <Icon name="close" />
+            </Button>
           </div>
         ))}
       </div>

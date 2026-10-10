@@ -6,20 +6,24 @@ const rankToneClass = {
   muted: 'bg-surface-container text-on-surface',
 };
 
-export function TopSoldList({ items = [] }) {
+export function TopSoldList({ items = [], onOpen }) {
   return (
-    <section className="bg-surface-container-lowest p-4 md:p-8 rounded-xl shadow-sm">
-      <div className="flex items-center justify-between mb-6 md:mb-8">
-        <h2 className="text-xl font-extrabold tracking-tight">Top 5 Vendidos</h2>
-        <button type="button" className="text-xs font-bold text-on-surface hover:underline min-h-11 px-2">
-          Ver todos
-        </button>
+    <section className="flex h-full min-w-0 flex-col rounded-xl border border-outline bg-surface p-4 md:p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-extrabold">Top 5 vendidos</h2>
       </div>
-      <div className="space-y-6">
-        {items.map((item, index) => (
-          <div
+      {!items.length ? (
+        <p className="text-sm text-on-surface-variant">Nenhuma venda no período.</p>
+      ) : null}
+      <div className="divide-y divide-outline-variant">
+        {items.map((item, index) => {
+          const rank = index;
+          return (
+          <button
             key={item.id}
-            className={`flex items-center gap-4 ${index > 2 ? 'opacity-80' : ''}`}
+            type="button"
+            onClick={() => onOpen?.(item)}
+            className={`flex min-h-11 w-full items-center gap-4 py-3 text-left first:pt-0 last:pb-0 ${rank > 2 ? 'opacity-80' : ''}`}
           >
             {item.image ? (
               <div className="relative">
@@ -31,7 +35,7 @@ export function TopSoldList({ items = [] }) {
                 <span
                   className={`absolute -top-2 -right-2 text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full ${rankToneClass[item.rankTone] || 'bg-primary text-on-primary'}`}
                 >
-                  {index + 1}
+                  {rank + 1}
                 </span>
               </div>
             ) : (
@@ -46,11 +50,12 @@ export function TopSoldList({ items = [] }) {
             <div className="text-right">
               <p className="text-sm font-black">{item.orders}</p>
               <p className="text-[10px] text-on-surface-variant uppercase font-bold">
-                Pedidos
+                Unidades
               </p>
             </div>
-          </div>
-        ))}
+          </button>
+          );
+        })}
       </div>
     </section>
   );

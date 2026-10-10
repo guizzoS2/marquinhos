@@ -1,3 +1,5 @@
+import { describeExpense, expenseTypeLabel, partyForCategoryId } from './catalogTaxonomy';
+
 /** Parse "R$ 1.250,00" or number to cents */
 export function parseMoneyToCents(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -28,8 +30,43 @@ export function formatCompactCents(cents) {
   })}`;
 }
 
+export function expensePartyKind(categoryId) {
+  return partyForCategoryId(categoryId);
+}
+
 export function natureLabel(nature) {
   return nature === 'fixed' ? 'Fixa' : 'Variável';
+}
+
+function csvCell(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+export function movementCategoryText(row) {
+  const parts = [];
+  if (row?.tipo === 'entrada') {
+    (row.groupTags || []).forEach((tag) => {
+      if (tag?.label) parts.push(tag.label);
+    });
+    if (row.comanda) parts.push('Comanda');
+  } else if (row?.categoria) {
+    parts.push(row.categoria);
+  }
+  if (row?.promocao) parts.push('Promoção');
+  if (row?.tipo === 'saida' && row.nature) parts.push(natureLabel(row.nature));
+  return parts.join(' · ');
+}
+
+export function buildMovementCsv(rows = []) {
+  const lines = [['Data/Hora', 'Descrição', 'Origem', 'Categoria', 'Valor'].map(csvCell).join(';')];
+  rows.forEach((row) => {
+    lines.push(
+      [row.data_hora, row.descricao, row.entidade || '', movementCategoryText(row), row.valor]
+        .map(csvCell)
+        .join(';')
+    );
+  });
+  return `\uFEFF${lines.join('\n')}`;
 }
 
 const MONTH_INDEX = {
@@ -147,11 +184,8 @@ export function buildCashFlowSummary(incomes = [], expenses = [], deltas = {}) {
   };
 }
 
-export function buildCashFlowCsv(data, { natureFilter = 'all' } = {}) {
-  const expenses = (data.expenses || []).filter((row) => {
-    if (natureFilter === 'all') return true;
-    return row.nature === natureFilter;
-  });
+export function buildCashFlowCsv(data) {
+  const expenses = data.expenses || [];
 
   const lines = [
     ['Data', 'Tipo', 'Descrição', 'Categoria', 'Natureza', 'Valor'].join(';'),
@@ -193,6 +227,90 @@ export function buildCashFlowCsv(data, { natureFilter = 'all' } = {}) {
   lines.push(['Lucro estimado', '', '', '', '', summary.estimatedProfit].join(';'));
 
   return `\uFEFF${lines.join('\n')}`;
+}
+
+function movementTime(row) {
+  if (row?.createdAt) {
+    const time = new Date(row.createdAt).getTime();
+    if (!Number.isNaN(time)) return time;
+  }
+  const iso = parseCashFlowDate(row?.date);
+  if (!iso) return 0;
+  return new Date(`${iso}T00:00:00`).getTime();
+}
+
+function formatMovementStamp(row) {
+  if (row?.createdAt) {
+    const date = new Date(row.createdAt);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+  }
+  return row?.date || '—';
+}
+
+export function unifyCashMovements(incomes = [], expenses = []) {
+  const rows = [
+    ...incomes.map((row) => ({
+      id: row.id,
+      data_hora: formatMovementStamp(row),
+      date: row.date,
+      createdAt: row.createdAt || null,
+      descricao: row.description || '—',
+      description: row.description || '',
+      entidade: row.cliente || row.customer || null,
+      source: row.source || 'manual',
+      saleId: row.saleId || null,
+      categoria: row.category || '',
+      categoryIcon: row.categoryIcon || 'payments',
+      categoryTone: row.categoryTone || 'secondary',
+      valor: row.value || formatCents(row.amount),
+      amount: row.amount ?? parseMoneyToCents(row.value),
+      tipo: 'entrada',
+      nature: null,
+    })),
+    ...expenses.map((row) => {
+      const descricao =
+        row.description ||
+        describeExpense({
+          party: partyForCategoryId(row.categoryId),
+          categoryName: row.category,
+          subtypeName: row.subtype || '',
+          supplier: row.supplier || '',
+          date: row.date || '',
+        });
+      return {
+      id: row.id,
+      data_hora: formatMovementStamp(row),
+      date: row.date,
+      createdAt: row.createdAt || null,
+      descricao,
+      description: descricao,
+      entidade: row.supplier || null,
+      supplier: row.supplier || '',
+      supplierId: row.supplierId || '',
+      freelancerId: row.freelancerId || '',
+      source: row.source || 'manual',
+      saleId: row.saleId || null,
+      categoria: expenseTypeLabel(row),
+      categoryId: row.categoryId || '',
+      categoryIcon: row.categoryIcon || 'payments',
+      categoryTone: null,
+      valor: row.value || formatCents(row.amount),
+      amount: row.amount ?? parseMoneyToCents(row.value),
+      tipo: 'saida',
+      nature: row.nature || 'variable',
+      recurrence: row.recurrence || '',
+    };
+    }),
+  ];
+  return rows.sort((left, right) => movementTime(right) - movementTime(left) || String(right.id).localeCompare(String(left.id)));
 }
 
 export function downloadCsv(filename, content) {

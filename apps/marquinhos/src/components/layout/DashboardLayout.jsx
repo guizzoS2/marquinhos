@@ -1,23 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { AppFooter } from './AppFooter';
 import { Sidebar } from './Sidebar';
 import { TopNavbar } from './TopNavbar';
 import { AppModal } from '../ui/AppModal';
 
-const placeholders = {
-  '/': 'Buscar análises, equipe ou estoque...',
-  '/fluxo-caixa': 'Buscar transações, fornecedores...',
-  '/estoque': 'Buscar produto...',
-  '/fornecedores': 'Buscar fornecedores...',
-  '/freelancers': 'Buscar freelancers...',
-  '/equipe': 'Buscar equipe da casa...',
-  '/perfil': 'Buscar configurações do perfil...',
-};
-
 export function DashboardLayout() {
   const { pathname } = useLocation();
   const [navOpen, setNavOpen] = useState(false);
-  const searchPlaceholder = placeholders[pathname] || placeholders['/'];
 
   useEffect(() => {
     setNavOpen(false);
@@ -35,11 +25,9 @@ export function DashboardLayout() {
       ) : null}
       <Sidebar open={navOpen} onNavigate={() => setNavOpen(false)} />
       <main className="md:ml-64 min-h-screen flex flex-col min-w-0">
-        <TopNavbar
-          searchPlaceholder={searchPlaceholder}
-          onMenuClick={() => setNavOpen(true)}
-        />
+        <TopNavbar onMenuClick={() => setNavOpen(true)} />
         <Outlet />
+        <AppFooter />
       </main>
       <AppModal />
     </div>

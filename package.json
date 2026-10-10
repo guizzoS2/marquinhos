@@ -11,6 +11,7 @@
     "dev:marquinhos": "npm run dev -w @fnl/marquinhos",
     "dev:plataforma": "npm run dev -w @fnl/freelanoleste",
     "dev:api": "npm run dev -w @fnl/api",
+    "seed:bar": "node scripts/seed-bar.mjs",
     "build": "npm run build -w @fnl/marquinhos",
     "build:plataforma": "npm run build -w @fnl/freelanoleste"
   }

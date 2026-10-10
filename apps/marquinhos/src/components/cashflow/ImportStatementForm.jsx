@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
+import { FileField } from '../ui/FileField';
+import { Icon } from '../ui/Icon';
+import { Dropdown } from '../ui/Dropdown';
 import { useToast } from '../../contexts/ToastContext';
 import { formatCents } from '../../services/cashFlowUtils';
 import { parseStatementFile } from '../../services/statementImport';
@@ -63,18 +66,12 @@ export function ImportStatementForm({ onSuccess, onCancel }) {
         Envie o PDF ou CSV do banco. Nada entra no caixa até você revisar e confirmar. Diária de
         freela não passa por aqui.
       </p>
-      <label className="block space-y-2">
-        <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant pl-1">
-          Arquivo
-        </span>
-        <input
-          type="file"
-          accept=".pdf,.csv,.txt,.ofx,application/pdf,text/csv"
-          onChange={handleFile}
-          className="block w-full text-sm min-h-11"
-        />
-        {fileName ? <p className="text-xs text-on-surface-variant">{fileName}</p> : null}
-      </label>
+      <FileField
+        label="Arquivo"
+        accept=".pdf,.csv,.txt,.ofx,application/pdf,text/csv"
+        onChange={handleFile}
+        fileName={fileName}
+      />
 
       {rows.length ? (
         <div className="space-y-3 max-h-[50vh] overflow-y-auto">
@@ -96,16 +93,18 @@ export function ImportStatementForm({ onSuccess, onCancel }) {
               <input
                 value={row.description}
                 onChange={(event) => patchRow(row.id, { description: event.target.value })}
-                className="w-full bg-surface-container-lowest border-none rounded-xl py-2 px-3 min-h-11 text-sm"
+                className="w-full bg-surface-container-lowest border border-outline rounded-xl py-2 px-3 min-h-11 text-sm outline-none focus:border-primary focus:outline-none focus:ring-0"
               />
-              <select
+              <Dropdown
+                label="Tipo do lançamento"
+                muted
                 value={row.kind}
-                onChange={(event) => patchRow(row.id, { kind: event.target.value })}
-                className="w-full bg-surface-container-lowest border-none rounded-xl py-2 px-3 min-h-11 text-sm"
-              >
-                <option value="entrada">Entrada</option>
-                <option value="saida">Saída</option>
-              </select>
+                onChange={(kind) => patchRow(row.id, { kind })}
+                options={[
+                  { value: 'entrada', label: 'Entrada' },
+                  { value: 'saida', label: 'Saída' },
+                ]}
+              />
             </article>
           ))}
         </div>
@@ -115,9 +114,11 @@ export function ImportStatementForm({ onSuccess, onCancel }) {
 
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="button" onClick={handleConfirm} disabled={saving || !rows.length}>
+          <Icon name="check" />
           {saving ? 'Lançando...' : 'Confirmar lançamentos'}
         </Button>
       </div>

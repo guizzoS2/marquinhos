@@ -1,7 +1,7 @@
 export const ROLE_ADMIN = 'admin';
 export const ROLE_STOCK = 'stock';
 
-export const STOCK_PATHS = ['/estoque', '/perfil'];
+export const STOCK_PATHS = ['/estoque', '/catalogo', '/pdv', '/perfil'];
 
 export function isAdminRole(role) {
   return role === ROLE_ADMIN;
@@ -9,6 +9,10 @@ export function isAdminRole(role) {
 
 export function isStockRole(role) {
   return role === ROLE_STOCK;
+}
+
+export function isBarOwner(user) {
+  return (user?.roles || []).includes('owner');
 }
 
 export function homeForRole(role) {

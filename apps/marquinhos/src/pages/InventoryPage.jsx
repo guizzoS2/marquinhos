@@ -1,38 +1,61 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { format, isValid, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchInventory, removeInventoryItem } from '../services/dashboardService';
+import { fetchInventory, removeInventoryItem, removeProduction } from '../services/dashboardService';
 import { Icon } from '../components/ui/Icon';
 import { Button } from '../components/ui/Button';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Tabs } from '../components/ui/Tabs';
+import { DataTable, EmptyRow, StatusPill, TableActions, Tag, TBody, Td, Th, THead, Tr } from '../components/ui/DataTable';
+import { EntityCard, EntityCardGrid, TablePhoto } from '../components/ui/EntityCard';
+import { FilterSelect } from '../components/ui/FilterSelect';
+import { FilterBar } from '../components/ui/FilterBar';
+import { SearchField } from '../components/ui/SearchField';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { Pagination } from '../components/ui/Pagination';
+import { usePagedList } from '../components/ui/usePagedList';
+import { useViewMode } from '../components/ui/useViewMode';
 import { useModal } from '../contexts/ModalContext';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdminRole } from '../services/roles';
+import { toIsoDate } from '../services/cashFlowUtils';
+import { instantClosedByCash } from '../services/cashClose';
+import { DateRangeField } from '../components/ui/DateRangeField';
+import { CatalogPage } from './CatalogPage';
+import { GroupsPanel } from '../components/inventory/GroupsPanel';
+import { productGroupTag } from '../services/catalogTaxonomy';
 
-const progressWidth = {
-  45: 'w-[45%]',
-  65: 'w-[65%]',
-  80: 'w-[80%]',
-};
+function GroupTag({ item }) {
+  const tag = productGroupTag(item);
+  return (
+    <Tag tone={tag.tone} icon={tag.icon}>
+      {tag.label}
+    </Tag>
+  );
+}
 
-const metricTone = {
-  error: {
-    iconWrap: 'bg-error-container/10 text-error',
-    badge: 'text-error',
-    bar: 'bg-error',
-  },
-  secondary: {
-    iconWrap: 'bg-primary/20 text-on-surface',
-    badge: 'text-on-surface',
-    bar: 'bg-primary',
-  },
-  tertiary: {
-    iconWrap: 'bg-surface-container text-on-surface',
-    badge: 'text-on-surface-variant',
-    bar: 'bg-on-surface',
-  },
-};
+function productionStamp(value) {
+  const date = parseISO(String(value || ''));
+  if (!isValid(date)) return '—';
+  return format(date, 'dd/MM/yyyy HH:mm', { locale: ptBR });
+}
 
 export function InventoryPage() {
   const [filter, setFilter] = useState('Todos');
+  const [query, setQuery] = useState('');
+  const [productionQuery, setProductionQuery] = useState('');
+  const today = toIsoDate();
+  const [fromDate, setFromDate] = useState(today);
+  const [toDate, setToDate] = useState(today);
+  const [view, setView] = useViewMode('estoque');
+  const [params, setParams] = useSearchParams();
+  const requested = params.get('aba');
+  const section = ['stock', 'production', 'promocoes', 'combos', 'grupos'].includes(requested) ? requested : 'stock';
+  function setSection(next) {
+    setParams(next === 'stock' ? {} : { aba: next }, { replace: true });
+  }
   const { openModal } = useModal();
   const { user } = useAuth();
   const canAdmin = isAdminRole(user?.role);
@@ -42,11 +65,32 @@ export function InventoryPage() {
     queryFn: fetchInventory,
   });
 
+  const categoryOptions = useMemo(() => {
+    const options = [{ value: 'Todos', label: 'Todos' }];
+    (data?.groups || []).forEach((group) => {
+      options.push({ value: `g:${group.id}`, label: group.name });
+      (group.subgroups || []).forEach((sub) => {
+        options.push({ value: `s:${sub.id}`, label: `${group.name} · ${sub.name}` });
+      });
+    });
+    return options;
+  }, [data]);
+
   const items = useMemo(() => {
     if (!data?.items) return [];
-    if (filter === 'Todos') return data.items;
-    return data.items.filter((item) => item.category === filter);
-  }, [data, filter]);
+    const term = query.trim().toLowerCase();
+    return data.items.filter((item) => {
+      const categoryOk =
+        filter === 'Todos' ||
+        (filter.startsWith('g:') && item.grupoId === filter.slice(2)) ||
+        (filter.startsWith('s:') && item.subgrupoId === filter.slice(2));
+      if (!categoryOk) return false;
+      if (!term) return true;
+      const nome = String(item.nome || item.name || '').toLowerCase();
+      const codigo = String(item.codigo || '').toLowerCase();
+      return nome.includes(term) || codigo.includes(term);
+    });
+  }, [data, filter, query]);
 
   function refreshInventory() {
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -54,19 +98,92 @@ export function InventoryPage() {
     queryClient.invalidateQueries({ queryKey: ['suppliers'] });
   }
 
-  function openStockEntry() {
-    openModal('stock-entry', {
-      items: data?.items,
+  const rangedProductions = useMemo(() => {
+    const start = fromDate && toDate && fromDate > toDate ? toDate : fromDate;
+    const end = fromDate && toDate && fromDate > toDate ? fromDate : toDate;
+    return (data?.productions || [])
+      .filter((row) => {
+        const date = parseISO(String(row.data_producao || ''));
+        if (!isValid(date)) return false;
+        const key = format(date, 'yyyy-MM-dd');
+        if (start && key < start) return false;
+        if (end && key > end) return false;
+        return true;
+      })
+      .sort((left, right) => String(right.data_producao).localeCompare(String(left.data_producao)));
+  }, [data, fromDate, toDate]);
+  const filteredProductions = useMemo(() => {
+    const term = productionQuery.trim().toLowerCase();
+    if (!term) return rangedProductions;
+    return rangedProductions.filter((row) => {
+      const item = (data?.items || []).find((product) => String(product.id) === String(row.produto_id));
+      const name = String(item?.nome || item?.name || '').toLowerCase();
+      const stamp = productionStamp(row.data_producao).toLowerCase();
+      return name.includes(term) || String(row.quantidade).includes(term) || stamp.includes(term);
+    });
+  }, [rangedProductions, productionQuery, data]);
+  const stockPage = usePagedList(items, `${filter}|${query}`);
+  const productionPage = usePagedList(filteredProductions, `${section}|${productionQuery}|${fromDate}|${toDate}`);
+
+  function productOf(produtoId) {
+    return (data?.items || []).find((row) => String(row.id) === String(produtoId));
+  }
+
+  function productName(produtoId) {
+    const item = productOf(produtoId);
+    return item?.nome || item?.name || 'Produto';
+  }
+
+  function openNewProduct() {
+    openModal('new-product', { categories: data?.filters, onSuccess: refreshInventory });
+  }
+
+  function openProduction() {
+    openModal('new-production', {
+      items: data?.items || [],
       onSuccess: refreshInventory,
     });
   }
 
-  function openNewProduct() {
-    openModal('new-product', { onSuccess: refreshInventory });
+  function productStock(produtoId) {
+    const item = (data?.items || []).find((row) => String(row.id) === String(produtoId));
+    if (!item) return '—';
+    return item.estoque_atual;
   }
 
-  function openEditProduct(item) {
-    openModal('edit-product', { item, onSuccess: refreshInventory });
+  function openEditProduction(row) {
+    openModal('edit-production', {
+      production: row,
+      items: data?.items || [],
+      onSuccess: refreshInventory,
+    });
+  }
+
+  function confirmDeleteProduction(row) {
+    openModal('confirm', {
+      message: `Excluir a produção de ${row.quantidade} un? O estoque de ${productName(row.produto_id)} será reduzido.`,
+      confirmLabel: 'Excluir',
+      successMessage: 'Produção excluída.',
+      errorMessage: 'Não foi possível excluir a produção.',
+      onConfirm: async () => {
+        await removeProduction(row.id);
+        refreshInventory();
+      },
+    });
+  }
+
+  function openProduct(item) {
+    openModal('product-detail', {
+      item,
+      canDelete: canAdmin,
+      onEdit: () =>
+        openModal('edit-product', {
+          item,
+          categories: data?.filters,
+          onSuccess: refreshInventory,
+        }),
+      onDelete: () => confirmDeleteItem(item),
+    });
   }
 
   function confirmDeleteItem(item) {
@@ -88,193 +205,309 @@ export function InventoryPage() {
 
   return (
     <>
-      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8">
-        <section className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-2">
-            <h2 className="text-3xl font-extrabold text-on-background tracking-tight">
-              Controle de Estoque e Produtos
-            </h2>
-            <p className="text-on-surface-variant max-w-xl font-body">
-              Gerencie seu estoque, defina alertas de estoque mínimo e registre novas entradas
-              com precisão editorial.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button variant="secondary" onClick={openNewProduct}>
-              <Icon name="add" />
-              Novo produto
-            </Button>
-            <Button onClick={openStockEntry}>
-              <Icon name="add_circle" />
-              Registrar entrada
-            </Button>
-          </div>
-        </section>
+      <div className="p-4 md:p-8 space-y-6">
+        <PageHeader
+          title="Estoque"
+          description="Veja o que tem no bar, registre a produção e monte promoções e combos."
+        />
 
-        <section className="flex flex-wrap items-center gap-3">
-          {(data.filters || []).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setFilter(item)}
-              className={
-                filter === item
-                  ? 'px-5 py-2 min-h-11 bg-primary text-on-primary rounded-full text-sm font-semibold transition-all'
-                  : 'px-5 py-2 min-h-11 bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high rounded-full text-sm font-medium transition-all'
-              }
-            >
-              {item}
-            </button>
-          ))}
-        </section>
+        <Tabs
+          items={[
+            { id: 'stock', label: 'Estoque' },
+            { id: 'grupos', label: 'Grupos' },
+            { id: 'production', label: 'Produção' },
+            { id: 'promocoes', label: 'Promoções' },
+            { id: 'combos', label: 'Combos' },
+          ]}
+          value={section}
+          onChange={setSection}
+        />
 
-        <div className="bg-surface-container-low rounded-2xl overflow-hidden p-1 shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface-container-low text-on-surface-variant text-xs font-bold uppercase tracking-widest">
-                  <th className="px-6 py-4">Item</th>
-                  <th className="px-6 py-4">Categoria</th>
-                  <th className="px-6 py-4">Estoque Atual</th>
-                  <th className="px-6 py-4">Estoque Mínimo</th>
-                  <th className="px-6 py-4 text-right">Preço de Custo</th>
-                  <th className="px-6 py-4 text-center">Status</th>
-                  <th className="px-6 py-4 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-variant/30">
-                {items.map((item) => (
-                  <tr
+        {section === 'stock' ? (
+        <>
+        <FilterBar
+          actions={
+            <>
+              <Button onClick={openNewProduct}>
+                <Icon name="add" />
+                Novo produto
+              </Button>
+            </>
+          }
+        >
+          <SegmentedControl
+            variant="primary"
+            label="Visualização do estoque"
+            items={[
+              { id: 'list', label: 'Lista' },
+              { id: 'cards', label: 'Cards' },
+            ]}
+            value={view}
+            onChange={setView}
+          />
+          <FilterSelect
+            id="inventory-category-filter"
+            label="Grupo"
+            value={filter}
+            onChange={setFilter}
+            options={categoryOptions}
+          />
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            placeholder="Buscar por nome ou código"
+            label="Buscar produto por nome ou código"
+          />
+        </FilterBar>
+
+        {items.length === 0 ? (
+          <p className="text-on-surface-variant">Nenhum produto encontrado.</p>
+        ) : view === 'list' ? (
+          <div className="space-y-4">
+            <DataTable>
+              <THead>
+                <Th>Item</Th>
+                <Th>Código</Th>
+                <Th>Grupo</Th>
+                <Th>Estoque atual</Th>
+                <Th>Estoque sugerido</Th>
+                <Th align="right">Valor unitário</Th>
+                <Th>Status</Th>
+              </THead>
+              <TBody>
+                {stockPage.rows.map((item) => (
+                  <Tr
                     key={item.id}
-                    className="bg-surface-container-lowest hover:bg-surface-bright transition-colors"
+                    tabIndex={0}
+                    onClick={() => openProduct(item)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openProduct(item);
+                      }
+                    }}
                   >
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-lg bg-surface flex items-center justify-center overflow-hidden">
-                          <img
-                            className="w-full h-full object-cover"
-                            alt={item.name}
-                            src={item.image}
-                          />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-on-surface">{item.name}</span>
-                          <span className="text-xs text-on-surface-variant">{item.subtitle}</span>
+                    <Td>
+                      <div className="flex items-center gap-3">
+                        <TablePhoto src={item.image || item.foto} />
+                        <div className="flex min-w-0 flex-col">
+                          <span className="font-semibold text-on-surface">{item.nome || item.name}</span>
+                          <span className="text-xs text-on-surface-variant">{item.marca}</span>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-container text-on-secondary-container">
-                        {item.category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span
-                        className={`font-semibold ${item.status === 'low' ? 'text-error' : 'text-on-surface'}`}
-                      >
-                        {item.stock}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="text-on-surface-variant">{item.minStock}</span>
-                    </td>
-                    <td className="px-6 py-5 text-right font-medium">{item.cost}</td>
-                    <td className="px-6 py-5 text-center">
-                      {item.status === 'low' ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-error-container/10 text-error-dim border border-error/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" />
-                          {item.statusLabel}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-secondary-container/20 text-on-secondary-fixed-variant">
-                          {item.statusLabel}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-5 text-right">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          type="button"
-                          className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-surface-container"
-                          onClick={() => openEditProduct(item)}
-                          aria-label={`Editar ${item.name}`}
-                        >
-                          <Icon name="edit" />
-                        </button>
-                        {canAdmin ? (
-                          <button
-                            type="button"
-                            className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors"
-                            onClick={() => confirmDeleteItem(item)}
-                            aria-label={`Excluir ${item.name}`}
-                          >
-                            <Icon name="delete" />
-                          </button>
+                    </Td>
+                    <Td tone="muted">{item.codigo}</Td>
+                    <Td>
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <GroupTag item={item} />
+                        {[item.subgrupo, item.formato].filter(Boolean).length ? (
+                          <span className="text-xs text-on-surface-variant">
+                            {[item.subgrupo, item.formato].filter(Boolean).join(' · ')}
+                          </span>
                         ) : null}
                       </div>
-                    </td>
-                  </tr>
+                    </Td>
+                    <Td tone={item.lowStock ? 'danger' : 'strong'}>{item.stock}</Td>
+                    <Td tone="muted">{item.minStock}</Td>
+                    <Td align="right" tone="strong">
+                      {item.cost}
+                    </Td>
+                    <Td>
+                      {item.lowStock ? (
+                        <StatusPill tone="danger" dot>
+                          <Icon name="warning" className="text-sm" />
+                          Estoque baixo
+                        </StatusPill>
+                      ) : (
+                        <StatusPill tone="success">
+                          <Icon name="check" className="text-sm" />
+                          Estável
+                        </StatusPill>
+                      )}
+                    </Td>
+                  </Tr>
                 ))}
-              </tbody>
-            </table>
+              </TBody>
+            </DataTable>
+            <Pagination state={stockPage} />
           </div>
-        </div>
-
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {(data.metrics || []).map((metric) => {
-            const tone = metricTone[metric.tone] || metricTone.secondary;
-            return (
-              <div
-                key={metric.id}
-                className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm space-y-4"
+        ) : (
+          <div className="space-y-4">
+          <EntityCardGrid>
+            {stockPage.rows.map((item) => (
+              <EntityCard
+                key={item.id}
+                image={item.image || item.foto}
+                icon="inventory_2"
+                title={item.nome || item.name}
+                onClick={() => openProduct(item)}
+                badge={
+                  item.lowStock ? (
+                    <StatusPill tone="danger" dot>
+                      <Icon name="warning" className="text-sm" />
+                      Estoque baixo
+                    </StatusPill>
+                  ) : (
+                    <StatusPill tone="success">
+                      <Icon name="check" className="text-sm" />
+                      Estável
+                    </StatusPill>
+                  )
+                }
               >
-                <div className="flex justify-between items-start">
-                  <Icon
-                    name={metric.icon}
-                    className={`p-3 rounded-xl ${tone.iconWrap}`}
-                  />
-                  <span className={`text-xs font-bold uppercase tracking-wider ${tone.badge}`}>
-                    {metric.badge}
-                  </span>
+                <p className="text-sm text-on-surface-variant">
+                  {item.codigo}
+                  {item.formato ? ` · ${item.formato}` : ''}
+                </p>
+                <GroupTag item={item} />
+                {item.marca ? <p className="text-sm text-on-surface-variant">{item.marca}</p> : null}
+                <div className="mt-auto flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-on-surface-variant">Estoque atual</p>
+                    <p className={`font-headline text-xl font-extrabold ${item.lowStock ? 'text-error' : 'text-on-surface'}`}>
+                      {item.stock}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold text-on-surface">{item.cost}</p>
                 </div>
-                <div>
-                  <h3 className="text-sm font-medium text-on-surface-variant">{metric.label}</h3>
-                  <p className="text-3xl font-extrabold text-on-surface">{metric.value}</p>
-                </div>
-                <div className="w-full h-1 bg-surface-variant rounded-full overflow-hidden">
-                  <div
-                    className={`h-full ${tone.bar} ${progressWidth[metric.progress] || 'w-1/2'}`}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </section>
+              </EntityCard>
+            ))}
+          </EntityCardGrid>
+          <Pagination state={stockPage} />
+          </div>
+        )}
+        </>
+        ) : section === 'production' ? (
+          <section className="space-y-6">
+            <FilterBar
+              actions={
+                <Button onClick={openProduction}>
+                  <Icon name="add" />
+                  Registrar produção
+                </Button>
+              }
+            >
+              <SearchField
+                value={productionQuery}
+                onChange={setProductionQuery}
+                placeholder="Buscar produção"
+                label="Buscar produção"
+              />
+              <DateRangeField
+                from={fromDate}
+                to={toDate}
+                onChange={({ from, to }) => {
+                  setFromDate(from);
+                  setToDate(to);
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  const day = toIsoDate();
+                  setFromDate(day);
+                  setToDate(day);
+                }}
+              >
+                <Icon name="today" />
+                Hoje
+              </Button>
+            </FilterBar>
+            <div className="space-y-4">
+            <DataTable>
+              <THead>
+                <Th>Produto</Th>
+                <Th>Quantidade produzida</Th>
+                <Th>Estoque atual</Th>
+                <Th>Data/Hora</Th>
+                <Th align="right">Ações</Th>
+              </THead>
+              <TBody>
+                {rangedProductions.length === 0 ? (
+                  <EmptyRow colSpan={5}>
+                    {fromDate === toDate && fromDate === today
+                      ? 'Nenhuma produção hoje.'
+                      : fromDate === toDate
+                        ? 'Nenhuma produção neste dia.'
+                        : 'Nenhuma produção neste período.'}
+                  </EmptyRow>
+                ) : productionPage.rows.length === 0 ? (
+                  <EmptyRow colSpan={5}>Nenhuma produção encontrada.</EmptyRow>
+                ) : (
+                  productionPage.rows.map((row) => {
+                    const product = productOf(row.produto_id);
+                    const locked = instantClosedByCash(row.data_producao, data?.closings);
+                    return (
+                    <Tr key={row.id}>
+                      <Td>
+                        <div className="flex items-center gap-3">
+                          <TablePhoto src={product?.foto || product?.image} />
+                          <span className="font-semibold text-on-surface">{productName(row.produto_id)}</span>
+                        </div>
+                      </Td>
+                      <Td>{row.quantidade}</Td>
+                      <Td>{productStock(row.produto_id)}</Td>
+                      <Td tone="muted" className="whitespace-nowrap">
+                        {productionStamp(row.data_producao)}
+                      </Td>
+                      <Td align="right" nowrap>
+                        {locked ? (
+                          '—'
+                        ) : (
+                          <TableActions>
+                            <Button type="button" size="icon" variant="secondary" onClick={() => openEditProduction(row)} aria-label="Editar produção">
+                              <Icon name="edit" />
+                            </Button>
+                            <Button type="button" size="icon" variant="danger" onClick={() => confirmDeleteProduction(row)} aria-label="Excluir produção">
+                              <Icon name="delete" />
+                            </Button>
+                          </TableActions>
+                        )}
+                      </Td>
+                    </Tr>
+                    );
+                  })
+                )}
+              </TBody>
+            </DataTable>
+            <Pagination state={productionPage} />
+            </div>
+          </section>
+        ) : section === 'grupos' ? (
+          <GroupsPanel groups={data.groups || []} formats={data.formats || []} items={data.items || []} />
+        ) : (
+          <CatalogPage embedded tab={section} />
+        )}
       </div>
 
-      <footer className="mt-12 px-4 md:px-8 py-6 border-t border-surface-variant/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-on-surface-variant text-sm font-body">
-        <div className="flex flex-wrap gap-4 md:gap-6">
-          <span className="font-semibold text-on-surface">Marquinho's</span>
-          <span>Bar e Petiscos</span>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <a className="hover:text-on-surface transition-colors min-h-11 inline-flex items-center" href="#">
-            Política de Privacidade
-          </a>
-          <a className="hover:text-on-surface transition-colors min-h-11 inline-flex items-center" href="#">
-            Termos de Uso
-          </a>
-        </div>
-      </footer>
-
-      <button
+      {section === 'grupos' ? null : (
+      <Button
         type="button"
-        onClick={openStockEntry}
-        className="fixed bottom-6 right-4 w-14 h-14 min-h-14 min-w-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all md:hidden z-50"
-        aria-label="Registrar entrada"
+        size="icon"
+        onClick={
+          section === 'production'
+            ? openProduction
+            : section === 'promocoes'
+              ? () => openModal('new-promotion', { items: data.items || [], onSuccess: refreshInventory })
+              : section === 'combos'
+                ? () => openModal('new-combo', { items: data.items || [], onSuccess: refreshInventory })
+                : openNewProduct
+        }
+        className="fixed bottom-6 right-4 z-50 shadow-lg md:hidden"
+        aria-label={
+          section === 'production'
+            ? 'Registrar produção'
+            : section === 'promocoes'
+              ? 'Nova promoção'
+              : section === 'combos'
+                ? 'Novo combo'
+                : 'Novo produto'
+        }
       >
         <Icon name="add" />
-      </button>
+      </Button>
+      )}
     </>
   );
 }

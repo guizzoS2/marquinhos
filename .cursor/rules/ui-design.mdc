@@ -1,0 +1,127 @@
+---
+description: Regras de design e UI/UX do Marquinho's pedidas no painel
+alwaysApply: true
+---
+
+# Design e UI/UX
+
+Vale para o Marquinho's. Tipografia, tamanho, cor, raio e componentes são os que já existem no sistema (`packages/ui` e os controles do app). Não inventar cor, classe, raio ou altura nova. Tela não pode quebrar nem estourar no desktop, no tablet ou no celular.
+
+O responsivo geral continua em `ui-responsivo.mdc`.
+
+## Página
+
+- Padding igual em toda tela: `p-4` no celular, `p-8` no desktop. A borda esquerda não muda de tela para tela.
+- O espaço entre seções, e entre a barra de filtros e o conteúdo de baixo, é o mesmo em todas as telas (`space-y-6`).
+- Título e descrição no mesmo tamanho e na mesma posição em todas as telas.
+- Título com mais de uma palavra: só a primeira letra da primeira palavra é maiúscula. O resto fica minúsculo. Ex.: "Fluxo de caixa", "Visão geral", "Entradas vs saídas", "Todas as movimentações".
+- Vale para título de tela, item do menu, card, seção e modal.
+- Exceção: nome próprio e sigla. Ex.: "Marquinho's", "Firebase", "PDV", "PIX".
+- Sem `letter-spacing` / `tracking-*`.
+
+## Altura, fonte e fundo
+
+- Botão, filtro, busca, dropdown, data e página da paginação têm a mesma altura (`h-11`, 44px) e a mesma fonte (`text-sm`).
+- O texto de dentro segue essa fonte.
+- Busca não é negrito (`font-normal`). O placeholder tem a mesma cor do texto normal.
+- Com texto, o X à direita limpa a busca.
+- Controle normal (nem ativo nem desabilitado) usa o mesmo fundo do dropdown "Todos": branco (`bg-surface`).
+- Ativo e desabilitado podem ser diferentes. O selecionado da pílula amarela continua amarelo.
+- Foco só troca a borda para a primária. Sem ring extra.
+
+## Lista/Cards e Calendário/Lista
+
+- É controle segmentado, não aba.
+- Lista é o padrão de quem ainda não escolheu. Cards fica gravado para aquele usuário depois que ele troca.
+- A casca é `rounded-xl`, com borda da mesma cor dos outros filtros (`border-outline`). O miolo selecionado é `rounded-lg` e fica dentro do padding. A altura de fora é `h-11`.
+- Trocar a cor da borda não muda o raio. A pílula amarela não desalinha.
+- Só o item selecionado é negrito. O outro fica peso normal, na mesma cor de texto dos controles normais.
+
+## Ordem da barra de filtros
+
+Da esquerda para a direita:
+
+1. Lista/Cards ou Calendário/Lista. Sempre o primeiro, sempre à esquerda.
+2. Dropdown de filtro (categoria, função), logo ao lado.
+3. Busca, logo depois.
+4. Datas e período, quando a tela tiver.
+
+À direita: exportar e importar. O botão de adicionar (Novo produto, Nova categoria, Nova promoção, Novo combo, e qualquer "novo") é o mais à direita.
+
+## Cards de métrica
+
+Visão geral (Faturamento, Custos, Lucro líquido, Ticket médio, Qtd. de pedidos, Freelas, Funcionários, Despesas fixas, Despesas variáveis) e Fluxo de caixa (Receita total, Despesas totais, Despesas fixas, Despesas variáveis, Margem contribuição, Lucro estimado, Lucro líquido).
+
+- No máximo 5 cards na mesma linha.
+- Se sobrar linha, ela estica na mesma largura da linha de cima.
+- 6 cards: 3 em cima e 3 embaixo. 7: 4 e 3. Sempre no máximo 5.
+- No celular, um card por linha.
+- Card branco, borda fina, ícone em quadrado amarelo, rótulo menor, valor maior.
+
+## Botões com texto (fora de tabela)
+
+Todo botão com texto que não está numa tabela tem ícone e texto. O ícone vem antes do texto. Isso inclui Fechar caixa, Salvar comanda, Finalizar venda, e os botões de modal: Cancelar, Cadastrar cliente, Salvar, Confirmar fechamento, Adicionar, Registrar, e os que não foram citados.
+
+Texto com mais de uma palavra: só a primeira letra da primeira palavra é maiúscula. A segunda palavra fica inteira minúscula. Ex.: "Salvar comanda", "Finalizar venda", "Confirmar fechamento", "Nova categoria".
+
+A mesma ação usa sempre o mesmo ícone:
+
+- Criar, novo, adicionar, cadastrar, registrar: `add`
+- Salvar: `save`
+- Confirmar, finalizar, dar baixa: `check`
+- Cancelar: `cancel`
+- Fechar: `close`
+- Excluir, remover: `delete`
+- Editar: `edit`
+- Reativar: `restart_alt`
+- Exportar: `download`
+- Importar e escolher arquivo: `file_upload`
+- Entrar: `login`
+- Sair: `logout`
+- Fechar caixa: `lock`
+- Data: `calendar_month` antes do texto. "Hoje": `today`
+
+Ícone sozinho continua só ícone: fechar (X), menu, setas, paginação, toast e o botão flutuante de adicionar.
+
+Filtro de nome (Todos, Bebidas, Lista, Cards) não ganha ícone de ação.
+
+## Tabela
+
+O título da coluna fica no mesmo lado do valor. Texto à esquerda. Número, valor e ações à direita.
+
+Editar, excluir, reativar e cancelar compra dentro de tabela são só o ícone, com o nome da ação no `aria-label`. Fora da tabela, o mesmo botão volta a ter ícone e texto.
+
+## Arquivo
+
+"Escolher arquivo" não usa o botão quadrado do navegador. É o botão do sistema: pill, `h-11`, ícone `file_upload` antes do texto "Escolher arquivo", e o nome do arquivo ao lado (ou "Nenhum arquivo escolhido").
+
+## Abas de seção
+
+Texto em negrito e linha amarela na opção ativa. Sem setas de scroll na aba.
+
+## Fluxo de caixa
+
+- O período mostra o ícone de calendário antes da data.
+- Entrada e saída têm editar e excluir. Não só a saída.
+
+## PDV
+
+Duas abas: Carrinho e Comandas.
+
+### Carrinho
+
+- Grade: vitrine flexível à esquerda, carrinho na coluna direita. No celular, empilha. Não quebra ao lado da sidebar.
+- Respiro entre seções. Card e campo têm borda, para não sumir no fundo.
+- Card de produto maior: foto com canto arredondado, nome, preço em negrito embaixo, botão "+" amarelo no canto inferior direito. O "+" só adiciona.
+- Clique no produto abre um modal com as especificações.
+- A lista de produtos rola na própria área. A página não cresce sem fim.
+- O painel do carrinho não tem scroll interno.
+- Cada item mostra miniatura, nome inteiro e valor inteiro. O seletor de quantidade fica embaixo (menos, número, mais amarelo), para o botão não cortar o texto.
+- Onde era o cliente, um dropdown lista as comandas abertas. Dá para vender sem comanda.
+- Forma de pagamento são botões lado a lado, com ícone à esquerda. Não é dropdown.
+
+### Comandas
+
+- Tela própria para ver e criar comanda.
+- Cards pequenos, com ícone de comanda, número e valor.
+- Clique na comanda abre um modal com as compras que ainda não foram fechadas.

@@ -1,189 +1,70 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Icon } from './Icon';
 import { Button } from './Button';
+import { DataTable, EmptyRow, TBody, Td, Th, THead, Tr } from './DataTable';
+import { Dropdown } from './Dropdown';
 import { Input } from './Input';
 import { useModal } from '../../contexts/ModalContext';
 import { useToast } from '../../contexts/ToastContext';
-import { useAuth } from '../../contexts/AuthContext';
 import {
-  createCashExpense,
   createCashIncome,
-  createFreelancer,
-  createSupplier,
-  fetchCashFlow,
-  fetchInventory,
+  editCashIncome,
   fetchSuppliers,
-  addStockEntry,
 } from '../../services/dashboardService';
-import { expenseCategories } from '../../services/fallbacks';
-import { isStockRole } from '../../services/roles';
+import { ExpenseForm } from '../cashflow/ExpenseForm';
+import { ExpenseTypesPanel } from '../cashflow/ExpenseTypesPanel';
+import { MovementDetail } from '../cashflow/MovementDetail';
+import { CloseDayForm } from '../sales/CloseDayForm';
+import { NewSaleForm } from '../sales/NewSaleForm';
+import { NewFreelancerForm } from '../freelancers/NewFreelancerForm';
+import { DailyForm } from '../freelancers/DailyForm';
+import { ShiftDetailForm } from '../freelancers/ShiftDetailForm';
+import { MENU_GROUPS } from '../../services/catalogTaxonomy';
+import { parseCashFlowDate, toIsoDate } from '../../services/cashFlowUtils';
 import { ProductForm } from '../inventory/ProductForm';
+import { ProductDetail } from '../inventory/ProductDetail';
+import { CategoryForm } from '../inventory/CategoryForm';
+import { ProductionForm } from '../inventory/ProductionForm';
+import { ComboForm } from '../catalog/ComboForm';
+import { ComboDetail } from '../catalog/ComboDetail';
+import { PromotionForm } from '../catalog/PromotionForm';
+import { CustomerForm } from '../pdv/CustomerForm';
+import { NewComandaForm } from '../pdv/NewComandaForm';
+import { PurchaseForm } from '../suppliers/PurchaseForm';
+import { NewSupplierForm } from '../suppliers/NewSupplierForm';
+import { SuppliersList } from '../suppliers/SuppliersList';
 
 const titles = {
   'new-order': 'Nova Venda',
-  'stock-entry': 'Entrada de Mercadoria',
+  'new-sale': 'Nova venda',
   'new-product': 'Novo produto',
   'edit-product': 'Editar produto',
-  'new-daily': 'Nova Diária',
-  'new-freelancer': 'Novo Freelancer',
-  'new-supplier': 'Novo Fornecedor',
+  'product-detail': 'Detalhes do produto',
+  'new-category': 'Nova categoria',
+  'new-production': 'Registrar produção',
+  'edit-production': 'Editar produção',
+  'new-promotion': 'Nova promoção',
+  'edit-promotion': 'Editar promoção',
+  'new-combo': 'Novo combo',
+  'edit-combo': 'Editar combo',
+  'combo-detail': 'Detalhes do combo',
+  'new-customer': 'Novo cliente',
+  'new-comanda': 'Nova comanda',
+  'new-daily': 'Registrar diária',
+  'shift-detail': 'Agendamento',
+  'new-freelancer': 'Novo freelancer',
+  'new-supplier': 'Novo fornecedor',
+  'edit-supplier': 'Editar fornecedor',
+  'new-purchase': 'Nova compra',
+  'suppliers-list': 'Fornecedores',
   'supplier-detail': 'Histórico do fornecedor',
-  'new-expense': 'Nova Despesa',
-  'import-statement': 'Importar Extrato',
+  'new-expense': 'Nova compra',
+  'expense-types': 'Categorias',
+  'close-day': 'Fechar caixa',
+  'import-statement': 'Importar extrato',
   confirm: 'Confirmar ação',
 };
-
-function NewFreelancerForm({ onSuccess, onCancel }) {
-  const toast = useToast();
-  const [form, setForm] = useState({
-    name: '',
-    role: 'Barman',
-    dailyRate: '',
-    status: 'available',
-    image: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      await createFreelancer(form);
-      toast.success('Freelancer cadastrado com sucesso.');
-      onSuccess?.();
-      onCancel();
-    } catch {
-      setError('Não foi possível cadastrar o freelancer.');
-      toast.error('Falha ao cadastrar freelancer.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
-      <Input
-        label="Nome completo"
-        name="name"
-        value={form.name}
-        onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-        required
-      />
-      <Input
-        label="Função / especialidade"
-        name="role"
-        value={form.role}
-        onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
-        required
-      />
-      <Input
-        label="Valor da diária (R$)"
-        name="dailyRate"
-        type="number"
-        min="0"
-        step="0.01"
-        value={form.dailyRate}
-        onChange={(e) => setForm((prev) => ({ ...prev, dailyRate: e.target.value }))}
-        required
-      />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-          Status inicial
-        </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-          value={form.status}
-          onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
-        >
-          <option value="available">Disponível</option>
-          <option value="on_shift">Em turno</option>
-          <option value="pending_payment">Pendente pagamento</option>
-        </select>
-      </div>
-      <Input
-        label="URL da foto (opcional)"
-        name="image"
-        value={form.image}
-        onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
-      />
-      {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
-      <div className="flex flex-wrap gap-3 justify-end">
-        <Button variant="secondary" type="button" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? 'Salvando...' : 'Adicionar freelancer'}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-function NewSupplierForm({ onSuccess, onCancel }) {
-  const toast = useToast();
-  const [form, setForm] = useState({
-    name: '',
-    contact: '',
-    cnpj: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      await createSupplier(form);
-      toast.success('Fornecedor cadastrado.');
-      onSuccess?.();
-      onCancel();
-    } catch {
-      setError('Não foi possível cadastrar o fornecedor.');
-      toast.error('Falha ao cadastrar fornecedor.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
-      <Input
-        label="Nome"
-        name="name"
-        value={form.name}
-        onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-        required
-      />
-      <Input
-        label="Contato"
-        name="contact"
-        value={form.contact}
-        onChange={(e) => setForm((prev) => ({ ...prev, contact: e.target.value }))}
-        required
-      />
-      <Input
-        label="CNPJ"
-        name="cnpj"
-        value={form.cnpj}
-        onChange={(e) => setForm((prev) => ({ ...prev, cnpj: e.target.value }))}
-        required
-      />
-      {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
-      <div className="flex flex-wrap gap-3 justify-end">
-        <Button variant="secondary" type="button" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? 'Salvando...' : 'Adicionar fornecedor'}
-        </Button>
-      </div>
-    </form>
-  );
-}
 
 function SupplierDetailView({ supplierId, fallbackSupplier, onCancel }) {
   const { data } = useQuery({
@@ -204,19 +85,19 @@ function SupplierDetailView({ supplierId, fallbackSupplier, onCancel }) {
     <div className="space-y-6">
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1 sm:col-span-2">
-          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest">
+          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase">
             Nome
           </dt>
           <dd className="font-headline font-bold text-on-surface">{supplier.name}</dd>
         </div>
         <div className="space-y-1">
-          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest">
+          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase">
             Contato
           </dt>
           <dd className="text-on-surface">{supplier.contact || '—'}</dd>
         </div>
         <div className="space-y-1">
-          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest">
+          <dt className="text-xs font-label font-bold text-on-surface-variant uppercase">
             CNPJ
           </dt>
           <dd className="text-on-surface">{supplier.cnpj || '—'}</dd>
@@ -225,240 +106,53 @@ function SupplierDetailView({ supplierId, fallbackSupplier, onCancel }) {
 
       <div className="space-y-3">
         <h4 className="font-headline font-bold text-on-surface">Histórico de compras</h4>
-        <div className="overflow-x-auto rounded-xl border border-outline-variant/20">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-surface-container-low text-on-surface-variant font-medium">
-              <tr>
-                <th className="px-4 py-3">Data</th>
-                <th className="px-4 py-3">Categoria</th>
-                <th className="px-4 py-3 text-right">Valor</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/20">
-              {history.map((row) => (
-                <tr key={row.id || `${row.date}-${row.value}`}>
-                  <td className="px-4 py-3 text-on-surface-variant">{row.date}</td>
-                  <td className="px-4 py-3 text-on-surface">{row.category}</td>
-                  <td className="px-4 py-3 text-right font-bold text-error">{row.value}</td>
-                </tr>
-              ))}
-              {!history.length ? (
-                <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-on-surface-variant">
-                    Nenhuma compra vinculada.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+        <DataTable>
+          <THead>
+            <Th>Data</Th>
+            <Th>Categoria</Th>
+            <Th align="right">Valor</Th>
+          </THead>
+          <TBody>
+            {history.map((row) => (
+              <Tr key={row.id || `${row.date}-${row.value}`}>
+                <Td tone="muted">{row.date}</Td>
+                <Td>{row.category}</Td>
+                <Td align="right" tone="danger">
+                  {row.value}
+                </Td>
+              </Tr>
+            ))}
+            {!history.length ? <EmptyRow colSpan={3}>Nenhuma compra vinculada.</EmptyRow> : null}
+          </TBody>
+        </DataTable>
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={onCancel}>Fechar</Button>
+        <Button onClick={onCancel}>
+          <Icon name="close" />
+          Fechar
+        </Button>
       </div>
     </div>
   );
 }
 
-function NewExpenseForm({ onSuccess, onCancel, categories: categoriesProp }) {
-  const toast = useToast();
-  const categories = categoriesProp?.length ? categoriesProp : expenseCategories;
-  const initialCategory = categories[0];
-  const { data: suppliersData } = useQuery({
-    queryKey: ['suppliers'],
-    queryFn: fetchSuppliers,
-  });
-  const suppliers = suppliersData?.suppliers || [];
-  const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    supplier: '',
-    supplierId: '',
-    categoryId: initialCategory?.id || 'bebidas',
-    nature: initialCategory?.defaultNature || 'variable',
-    value: '',
-    recurrence: '',
-  });
-  const [natureTouched, setNatureTouched] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const selectedCategory =
-    categories.find((item) => item.id === form.categoryId) || categories[0];
-
-  function handleCategoryChange(categoryId) {
-    const nextCategory = categories.find((item) => item.id === categoryId);
-    setForm((prev) => ({
-      ...prev,
-      categoryId,
-      nature: natureTouched ? prev.nature : nextCategory?.defaultNature || 'variable',
-    }));
-  }
-
-  function handleSupplierSelect(supplierId) {
-    const selected = suppliers.find((item) => String(item.id) === String(supplierId));
-    setForm((prev) => ({
-      ...prev,
-      supplierId,
-      supplier: selected ? selected.name : prev.supplier,
-    }));
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      await createCashExpense({
-        date: form.date,
-        supplier: form.supplier,
-        supplierId: form.supplierId || null,
-        categoryId: form.categoryId,
-        nature: form.nature,
-        amount: Math.round(Number(form.value) * 100),
-        recurrence: form.recurrence || null,
-        source: 'manual',
-      });
-      toast.success('Despesa registrada.');
-      onSuccess?.();
-      onCancel();
-    } catch {
-      setError('Não foi possível registrar a despesa.');
-      toast.error('Falha ao registrar despesa.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
-      <Input
-        label="Data"
-        name="date"
-        type="date"
-        value={form.date}
-        onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
-        required
-      />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-          Fornecedor cadastrado
-        </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-          value={form.supplierId}
-          onChange={(e) => handleSupplierSelect(e.target.value)}
-        >
-          <option value="">Nenhum / avulso</option>
-          {suppliers.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-        <p className="text-[11px] text-on-surface-variant pl-1">
-          Marcar um fornecedor atualiza a última compra e o valor na lista.
-        </p>
-      </div>
-      <Input
-        label="Fornecedor / descrição"
-        name="supplier"
-        value={form.supplier}
-        onChange={(e) =>
-          setForm((prev) => ({ ...prev, supplier: e.target.value, supplierId: prev.supplierId }))
-        }
-        required
-      />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-          Categoria
-        </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-          value={form.categoryId}
-          onChange={(e) => handleCategoryChange(e.target.value)}
-        >
-          {categories.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-          Natureza
-        </label>
-        <div className="flex gap-2 p-1 bg-surface-container-low rounded-2xl">
-          {[
-            { id: 'fixed', label: 'Fixa' },
-            { id: 'variable', label: 'Variável' },
-          ].map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                setNatureTouched(true);
-                setForm((prev) => ({ ...prev, nature: item.id }));
-              }}
-              className={
-                form.nature === item.id
-                  ? 'flex-1 px-4 py-2 min-h-11 rounded-xl bg-primary text-on-primary font-semibold'
-                  : 'flex-1 px-4 py-2 min-h-11 rounded-xl text-on-surface-variant'
-              }
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-[11px] text-on-surface-variant pl-1">
-          Default da categoria {selectedCategory?.name}:{' '}
-          {selectedCategory?.defaultNature === 'fixed' ? 'Fixa' : 'Variável'}
-        </p>
-      </div>
-      <Input
-        label="Valor (R$)"
-        name="value"
-        type="number"
-        min="0"
-        step="0.01"
-        value={form.value}
-        onChange={(e) => setForm((prev) => ({ ...prev, value: e.target.value }))}
-        required
-      />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-          Recorrência
-        </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-          value={form.recurrence}
-          onChange={(e) => setForm((prev) => ({ ...prev, recurrence: e.target.value }))}
-        >
-          <option value="">Única</option>
-          <option value="monthly">Mensal</option>
-        </select>
-      </div>
-      {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
-      <div className="flex flex-wrap gap-3 justify-end">
-        <Button variant="secondary" type="button" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? 'Salvando...' : 'Registrar despesa'}
-        </Button>
-      </div>
-    </form>
-  );
+function cashFormDate(row) {
+  return parseCashFlowDate(row?.date) || toIsoDate(row?.createdAt) || new Date().toISOString().slice(0, 10);
 }
 
-function NewOrderForm({ onSuccess, onCancel }) {
+function reaisInput(cents) {
+  return (Number(cents || 0) / 100).toFixed(2);
+}
+
+function NewOrderForm({ onSuccess, onCancel, income = null }) {
   const toast = useToast();
+  const editing = Boolean(income?.id);
   const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    description: '',
-    category: 'Varejo',
-    value: '',
+    date: editing ? cashFormDate(income) : new Date().toISOString().slice(0, 10),
+    description: income?.description || '',
+    category: income?.categoria && income.categoria !== 'Varejo' ? income.categoria : 'Venda',
+    value: editing ? reaisInput(income.amount) : '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -468,20 +162,22 @@ function NewOrderForm({ onSuccess, onCancel }) {
     setSaving(true);
     setError('');
     try {
-      await createCashIncome({
+      const payload = {
         date: form.date,
         description: form.description,
         category: form.category,
         categoryIcon: form.category === 'Eventos' ? 'celebration' : 'payments',
         categoryTone: form.category === 'Eventos' ? 'tertiary' : 'secondary',
         amount: Math.round(Number(form.value) * 100),
-      });
-      toast.success('Venda registrada no fluxo de caixa.');
+      };
+      if (editing) await editCashIncome(income.id, payload);
+      else await createCashIncome(payload);
+      toast.success(editing ? 'Entrada atualizada.' : 'Venda registrada no fluxo de caixa.');
       onSuccess?.();
       onCancel();
     } catch {
-      setError('Não foi possível registrar a venda.');
-      toast.error('Falha ao registrar venda.');
+      setError(editing ? 'Não foi possível atualizar a entrada.' : 'Não foi possível registrar a venda.');
+      toast.error(editing ? 'Falha ao atualizar entrada.' : 'Falha ao registrar venda.');
     } finally {
       setSaving(false);
     }
@@ -504,18 +200,21 @@ function NewOrderForm({ onSuccess, onCancel }) {
         required
       />
       <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-          Categoria
+        <label className="text-xs font-label font-bold text-on-surface-variant uppercase pl-1">
+          Grupo
         </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
+        <Dropdown
+          label="Grupo"
+          muted
           value={form.category}
-          onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
-        >
-          <option>Varejo</option>
-          <option>Eventos</option>
-          <option>Reservas</option>
-        </select>
+          onChange={(category) => setForm((prev) => ({ ...prev, category }))}
+          options={[...new Set([form.category, 'Venda', ...MENU_GROUPS.map((group) => group.name)].filter(Boolean))].map(
+            (item) => ({
+              value: item,
+              label: item,
+            })
+          )}
+        />
       </div>
       <Input
         label="Valor (R$)"
@@ -529,181 +228,33 @@ function NewOrderForm({ onSuccess, onCancel }) {
       {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button type="submit" disabled={saving}>
-          {saving ? 'Salvando...' : 'Confirmar venda'}
+          <Icon name={editing ? 'save' : 'check'} />
+          {saving ? 'Salvando...' : editing ? 'Salvar' : 'Confirmar venda'}
         </Button>
       </div>
     </form>
   );
 }
 
-function StockEntryForm({ onSuccess, onCancel, items: itemsProp }) {
-  const toast = useToast();
-  const { user } = useAuth();
-  const stockOnly = isStockRole(user?.role);
-  const [items, setItems] = useState(itemsProp || []);
-  const { data: suppliersData } = useQuery({
-    queryKey: ['suppliers'],
-    queryFn: fetchSuppliers,
-    enabled: !stockOnly,
-  });
-  const suppliers = suppliersData?.suppliers || [];
-  const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    itemId: '',
-    quantity: '',
-    supplierId: '',
-    value: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (itemsProp?.length) {
-      setItems(itemsProp);
-      setForm((prev) => ({ ...prev, itemId: String(itemsProp[0].id) }));
-      return;
-    }
-    let active = true;
-    fetchInventory().then((data) => {
-      if (!active) return;
-      setItems(data.items || []);
-      if (data.items?.[0]) {
-        setForm((prev) => ({ ...prev, itemId: String(data.items[0].id) }));
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [itemsProp]);
-
-  function selectedSupplier() {
-    return suppliers.find((item) => String(item.id) === String(form.supplierId));
+function movementTitle(payload) {
+  if (payload?.sale) {
+    return payload.sale.numero_comanda ? `Comanda ${payload.sale.numero_comanda}` : 'Venda';
   }
+  if (payload?.kind === 'compra' || payload?.purchase) return 'Compra';
+  return payload?.movement?.tipo === 'saida' ? 'Saída' : 'Entrada';
+}
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      if (stockOnly) {
-        await addStockEntry({
-          date: form.date,
-          itemId: form.itemId,
-          quantity: Number(form.quantity),
-          linkCash: false,
-        });
-        toast.success('Entrada lançada no estoque.');
-      } else {
-        const supplier = selectedSupplier();
-        if (!supplier) {
-          throw new Error('Selecione um fornecedor.');
-        }
-        await addStockEntry({
-          date: form.date,
-          itemId: form.itemId,
-          quantity: Number(form.quantity),
-          supplierId: form.supplierId,
-          supplier: supplier.name,
-          amount: Math.round(Number(form.value) * 100),
-          linkCash: true,
-        });
-        toast.success('Entrada lançada no estoque e em Saídas.');
-      }
-      onSuccess?.();
-      onCancel();
-    } catch (err) {
-      const message = err?.message || 'Não foi possível registrar a entrada.';
-      setError(message);
-      toast.error(message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
-      <Input
-        label="Data da compra"
-        type="date"
-        value={form.date}
-        onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
-        required
-      />
-      <div className="space-y-2">
-        <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-          Produto
-        </label>
-        <select
-          className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-          value={form.itemId}
-          onChange={(e) => setForm((prev) => ({ ...prev, itemId: e.target.value }))}
-          required
-        >
-          {items.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name} — atual: {item.stock}
-            </option>
-          ))}
-        </select>
-      </div>
-      <Input
-        label="Quantidade de entrada"
-        type="number"
-        min="1"
-        step="1"
-        value={form.quantity}
-        onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
-        required
-      />
-      {stockOnly ? null : (
-        <>
-          <div className="space-y-2">
-            <label className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-widest pl-1">
-              Fornecedor
-            </label>
-            <select
-              className="w-full bg-surface-container-low border-none rounded-2xl py-3 px-4 min-h-11 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none"
-              value={form.supplierId}
-              onChange={(e) => setForm((prev) => ({ ...prev, supplierId: e.target.value }))}
-              required
-            >
-              <option value="">Selecione o fornecedor</option>
-              {suppliers.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Input
-            label="Valor da compra (R$)"
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.value}
-            onChange={(e) => setForm((prev) => ({ ...prev, value: e.target.value }))}
-            required
-          />
-          <p className="text-[11px] text-on-surface-variant pl-1">
-            A compra entra como saída variável no fluxo de caixa e atualiza a última compra do
-            fornecedor.
-          </p>
-        </>
-      )}
-      {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
-      <div className="flex flex-wrap gap-3 justify-end">
-        <Button variant="secondary" type="button" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={saving || !items.length}>
-          {saving ? 'Salvando...' : 'Confirmar entrada'}
-        </Button>
-      </div>
-    </form>
-  );
+function confirmActionIcon(label) {
+  const text = String(label || 'Confirmar');
+  if (text.startsWith('Excluir') || text.startsWith('Remover') || text.startsWith('Apagar')) return 'delete';
+  if (text.startsWith('Cancelar')) return 'cancel';
+  if (text.startsWith('Reativar')) return 'restart_alt';
+  if (text.startsWith('Inativar')) return 'block';
+  return 'check';
 }
 
 function ConfirmForm({ payload, onCancel }) {
@@ -716,8 +267,8 @@ function ConfirmForm({ payload, onCancel }) {
       await payload?.onConfirm?.();
       toast.success(payload?.successMessage || 'Ação concluída.');
       onCancel();
-    } catch {
-      toast.error(payload?.errorMessage || 'Não foi possível concluir a ação.');
+    } catch (err) {
+      toast.error(err?.message || payload?.errorMessage || 'Não foi possível concluir a ação.');
     } finally {
       setSaving(false);
     }
@@ -730,9 +281,11 @@ function ConfirmForm({ payload, onCancel }) {
       </p>
       <div className="flex flex-wrap gap-3 justify-end">
         <Button variant="secondary" type="button" onClick={onCancel}>
+          <Icon name="cancel" />
           Cancelar
         </Button>
         <Button variant="danger" type="button" onClick={handleConfirm} disabled={saving}>
+          <Icon name={confirmActionIcon(payload?.confirmLabel)} />
           {saving ? 'Processando...' : payload?.confirmLabel || 'Confirmar'}
         </Button>
       </div>
@@ -741,39 +294,46 @@ function ConfirmForm({ payload, onCancel }) {
 }
 
 export function AppModal() {
-  const { modal, isOpen, closeModal } = useModal();
-  const [categories, setCategories] = useState(expenseCategories);
-
-  useEffect(() => {
-    if (!isOpen || modal.type !== 'new-expense') return undefined;
-    let active = true;
-    fetchCashFlow()
-      .then((data) => {
-        if (active && data?.categories?.length) setCategories(data.categories);
-      })
-      .catch(() => {
-        if (active) setCategories(expenseCategories);
-      });
-    return () => {
-      active = false;
-    };
-  }, [isOpen, modal.type]);
+  const { modal, isOpen, closeModal, openModal } = useModal();
 
   if (!isOpen) return null;
 
-  const title = titles[modal.type] || 'Confirmação';
+  const title =
+    modal.type === 'movement-detail'
+      ? movementTitle(modal.payload)
+      : modal.type === 'new-promotion' && modal.payload?.reactivate
+      ? 'Reativar promoção'
+      : modal.type === 'new-freelancer' && modal.payload?.person
+        ? 'Editar freelancer'
+        : modal.type === 'new-expense' && modal.payload?.expense
+          ? 'Editar compra'
+          : modal.type === 'close-day' && modal.payload?.readOnly
+            ? 'Fechamento'
+          : modal.type === 'new-sale' && modal.payload?.sale
+            ? 'Editar venda'
+          : modal.type === 'new-order' && modal.payload?.income
+            ? 'Editar entrada'
+            : titles[modal.type] || 'Confirmação';
   const iconName =
     modal.type === 'new-freelancer'
       ? 'person_add'
+      : modal.type === 'new-daily' || modal.type === 'shift-detail'
+        ? 'assignment_add'
       : modal.type === 'new-supplier'
         ? 'local_shipping'
         : modal.type === 'supplier-detail'
           ? 'receipt_long'
           : modal.type === 'new-expense'
             ? 'payments'
-            : modal.type === 'stock-entry'
-              ? 'inventory_2'
-              : modal.type === 'new-order'
+            : modal.type === 'close-day'
+              ? 'lock'
+            : modal.type === 'movement-detail'
+              ? modal.payload?.sale || modal.payload?.movement?.tipo === 'entrada'
+                ? 'point_of_sale'
+                : 'payments'
+            : modal.type === 'new-comanda'
+              ? 'receipt_long'
+            : modal.type === 'new-order' || modal.type === 'new-sale'
                 ? 'point_of_sale'
                 : modal.type === 'confirm'
                   ? 'warning'
@@ -782,7 +342,20 @@ export function AppModal() {
   const wide =
     modal.type === 'import-statement' ||
     modal.type === 'new-product' ||
-    modal.type === 'edit-product';
+    modal.type === 'edit-product' ||
+    modal.type === 'product-detail' ||
+    modal.type === 'new-combo' ||
+    modal.type === 'edit-combo' ||
+    modal.type === 'combo-detail' ||
+    modal.type === 'new-promotion' ||
+    modal.type === 'edit-promotion' ||
+    modal.type === 'new-expense' ||
+    modal.type === 'expense-types' ||
+    modal.type === 'new-purchase' ||
+    modal.type === 'close-day' ||
+    modal.type === 'new-sale' ||
+    modal.type === 'movement-detail' ||
+    modal.type === 'suppliers-list';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -795,7 +368,7 @@ export function AppModal() {
       <div
         className={`relative w-full ${
           wide ? 'max-w-2xl' : 'max-w-lg'
-        } max-h-[90vh] overflow-y-auto bg-surface-container-lowest rounded-2xl shadow-2xl shadow-on-surface/10 p-5 md:p-8 space-y-6`}
+        } max-h-[90vh] min-w-0 overflow-x-hidden overflow-y-auto bg-surface-container-lowest rounded-2xl shadow-2xl shadow-on-surface/10 p-5 md:p-8 space-y-6`}
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -804,42 +377,153 @@ export function AppModal() {
             </div>
             <h3 className="font-headline text-xl font-bold text-on-surface">{title}</h3>
           </div>
-          <button
-            type="button"
-            onClick={closeModal}
-            className="p-2 min-h-11 min-w-11 rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors"
-          >
+          <Button type="button" size="icon" variant="ghost" onClick={closeModal} aria-label="Fechar">
             <Icon name="close" />
-          </button>
+          </Button>
         </div>
 
         {modal.type === 'new-freelancer' ? (
-          <NewFreelancerForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
-        ) : modal.type === 'new-supplier' ? (
-          <NewSupplierForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
+          <NewFreelancerForm
+            person={modal.payload?.person}
+            roles={modal.payload?.roles || ['Barman', 'Garçom', 'Cozinha']}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'new-daily' ? (
+          <DailyForm
+            people={modal.payload?.people || []}
+            roles={modal.payload?.roles || ['Barman', 'Garçom', 'Cozinha']}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'shift-detail' ? (
+          <ShiftDetailForm
+            shift={modal.payload?.shift}
+            people={modal.payload?.people || []}
+            roles={modal.payload?.roles || ['Barman', 'Garçom', 'Cozinha']}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'new-supplier' || modal.type === 'edit-supplier' ? (
+          <NewSupplierForm
+            supplier={modal.payload?.supplier}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'new-purchase' ? (
+          <PurchaseForm
+            items={modal.payload?.items || []}
+            suppliers={modal.payload?.suppliers || []}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'suppliers-list' ? (
+          <SuppliersList
+            onOpen={(supplier) =>
+              openModal('supplier-detail', {
+                supplierId: supplier.id,
+                supplier,
+              })
+            }
+            onEdit={(supplier) =>
+              openModal('edit-supplier', {
+                supplier,
+                onSuccess: modal.payload?.onChanged,
+              })
+            }
+            onDelete={(supplier) => modal.payload?.onDelete?.(supplier)}
+          />
         ) : modal.type === 'supplier-detail' ? (
           <SupplierDetailView
             supplierId={modal.payload?.supplierId}
             fallbackSupplier={modal.payload?.supplier}
             onCancel={closeModal}
           />
+        ) : modal.type === 'expense-types' ? (
+          <ExpenseTypesPanel onClose={closeModal} />
         ) : modal.type === 'new-expense' ? (
-          <NewExpenseForm
-            categories={modal.payload?.categories || categories}
+          <ExpenseForm
+            categories={modal.payload?.categories}
+            expense={modal.payload?.expense}
+            purchase={modal.payload?.purchase}
+            categoryId={modal.payload?.categoryId}
+            staffId={modal.payload?.staffId}
+            staffPayment={Boolean(modal.payload?.staffPayment)}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'close-day' ? (
+          <CloseDayForm payload={modal.payload} onCancel={closeModal} />
+        ) : modal.type === 'movement-detail' ? (
+          <MovementDetail
+            movement={modal.payload?.movement}
+            sale={modal.payload?.sale}
+            purchase={modal.payload?.purchase}
+            onCancel={closeModal}
+          />
+        ) : modal.type === 'new-sale' ? (
+          <NewSaleForm
+            sale={modal.payload?.sale}
+            items={modal.payload?.items || []}
+            promotions={modal.payload?.promotions || []}
+            sales={modal.payload?.sales || []}
+            serverNow={modal.payload?.serverNow}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
         ) : modal.type === 'new-order' ? (
-          <NewOrderForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
-        ) : modal.type === 'stock-entry' ? (
-          <StockEntryForm
-            items={modal.payload?.items}
+          <NewOrderForm
+            income={modal.payload?.income}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'product-detail' ? (
+          <ProductDetail
+            item={modal.payload?.item}
+            canDelete={Boolean(modal.payload?.canDelete)}
+            onEdit={modal.payload?.onEdit}
+            onDelete={modal.payload?.onDelete}
+            onCancel={closeModal}
+          />
+        ) : modal.type === 'new-category' ? (
+          <CategoryForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
+        ) : modal.type === 'new-production' || modal.type === 'edit-production' ? (
+          <ProductionForm
+            items={modal.payload?.items || []}
+            production={modal.payload?.production}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'new-comanda' ? (
+          <NewComandaForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
+        ) : modal.type === 'new-customer' ? (
+          <CustomerForm onCancel={closeModal} onSuccess={modal.payload?.onSuccess} />
+        ) : modal.type === 'new-promotion' || modal.type === 'edit-promotion' ? (
+          <PromotionForm
+            items={modal.payload?.items || []}
+            promotion={modal.payload?.promotion}
+            reactivate={Boolean(modal.payload?.reactivate)}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'new-combo' || modal.type === 'edit-combo' ? (
+          <ComboForm
+            items={modal.payload?.items || []}
+            combo={modal.payload?.combo}
+            parts={modal.payload?.parts || []}
+            onCancel={closeModal}
+            onSuccess={modal.payload?.onSuccess}
+          />
+        ) : modal.type === 'combo-detail' ? (
+          <ComboDetail
+            combo={modal.payload?.combo}
+            parts={modal.payload?.parts || []}
+            onCancel={closeModal}
           />
         ) : modal.type === 'new-product' || modal.type === 'edit-product' ? (
           <ProductForm
             item={modal.payload?.item}
+            categories={modal.payload?.categories}
             onCancel={closeModal}
             onSuccess={modal.payload?.onSuccess}
           />
@@ -851,7 +535,10 @@ export function AppModal() {
               {modal.payload?.message || 'Ação disponível em breve.'}
             </p>
             <div className="flex justify-end">
-              <Button onClick={closeModal}>Fechar</Button>
+              <Button onClick={closeModal}>
+                <Icon name="close" />
+                Fechar
+              </Button>
             </div>
           </div>
         )}

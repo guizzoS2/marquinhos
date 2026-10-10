@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { Card } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/PageHeader';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
+import { FileField } from '../components/ui/FileField';
 import { Icon } from '../components/ui/Icon';
+import { StatusPill } from '../components/ui/DataTable';
+import { UserAvatar } from '../components/ui/UserAvatar';
 import { roleLabel } from '../services/roles';
 import { getUserProfile } from '../services/firestoreService';
+import { readLocalImage } from '../services/readLocalImage';
+
+const panel = 'bg-surface border border-outline rounded-xl p-4 md:p-5';
 
 export function ProfilePage() {
   const { user, updateProfile } = useAuth();
@@ -51,6 +57,21 @@ export function ProfilePage() {
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
+  async function handlePhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setError('');
+    try {
+      const photoURL = await readLocalImage(file, { maxEdge: 160, maxChars: 1800 });
+      setForm((prev) => ({ ...prev, photoURL }));
+    } catch (err) {
+      const text = err?.message || 'Não foi possível ler a foto.';
+      setError(text);
+      toast.error(text);
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setSaving(true);
@@ -69,98 +90,73 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 md:space-y-8">
-      <section className="space-y-2">
-        <h1 className="font-headline text-3xl font-extrabold text-on-surface tracking-tight">
-          Perfil do Usuário
-        </h1>
-        <p className="text-on-surface-variant font-body">
-          Dados da sua conta neste bar.
-        </p>
-      </section>
+    <div className="p-4 md:p-8 space-y-6">
+      <PageHeader title="Perfil" description="Dados da sua conta neste bar." />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-        <Card className="p-5 md:p-8 space-y-6">
-          <div className="flex flex-col items-center text-center space-y-4">
-            <img
-              alt="Avatar do perfil"
-              className="w-28 h-28 rounded-2xl object-cover ring-4 ring-primary-container/20"
-              src={form.photoURL}
-            />
+      <form className={`${panel} space-y-6`} onSubmit={handleSubmit}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <UserAvatar
+            src={form.photoURL}
+            className="h-20 w-20 shrink-0"
+            rounded="rounded-xl"
+            iconClass="text-[5rem] leading-none"
+          />
+          <div className="min-w-0 space-y-2">
             <div>
-              <h2 className="font-headline text-xl font-bold text-on-surface">
-                {form.name || 'Usuário'}
-              </h2>
-              <p className="text-sm text-on-surface-variant">{form.title}</p>
+              <h2 className="font-headline text-xl font-bold text-on-surface">{form.name || 'Usuário'}</h2>
+              <p className="text-sm text-on-surface-variant">{form.title || 'Sem cargo'}</p>
             </div>
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-container/30 text-on-secondary-container text-xs font-bold uppercase tracking-wider">
-              <Icon name="verified" className="text-sm" />
-              {roleLabel(user?.role)}
-            </span>
+            <StatusPill tone="accent">{roleLabel(user?.role)}</StatusPill>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <FileField
+                id="profile-photo"
+                ariaLabel="Foto do perfil"
+                accept="image/*"
+                onChange={handlePhoto}
+                cleared={!form.photoURL}
+              />
+              {form.photoURL ? (
+                <Button type="button" variant="secondary" onClick={() => setForm((prev) => ({ ...prev, photoURL: '' }))}>
+                  <Icon name="delete" />
+                  Remover foto
+                </Button>
+              ) : null}
+            </div>
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-5 md:p-8 lg:col-span-2">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Nome completo"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                required
-              />
-              <Input
-                label="Cargo"
-                name="title"
-                value={form.title}
-                onChange={handleChange}
-              />
-              <Input
-                label="E-mail"
-                name="email"
-                type="email"
-                value={form.email}
-                onChange={handleChange}
-                required
-                disabled
-              />
-              <Input
-                label="Telefone"
-                name="phone"
-                value={form.phone}
-                onChange={handleChange}
-              />
-              <Input
-                label="Empresa"
-                name="company"
-                value={form.company}
-                onChange={handleChange}
-                containerClassName="md:col-span-2"
-              />
-              <Input
-                label="URL da foto"
-                name="photoURL"
-                value={form.photoURL}
-                onChange={handleChange}
-                containerClassName="md:col-span-2"
-              />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input label="Nome completo" name="name" value={form.name} onChange={handleChange} required />
+          <Input label="Cargo" name="title" value={form.title} onChange={handleChange} />
+          <Input
+            label="E-mail"
+            name="email"
+            type="email"
+            value={form.email}
+            onChange={handleChange}
+            required
+            disabled
+          />
+          <Input label="Telefone" name="phone" value={form.phone} onChange={handleChange} />
+          <Input
+            label="Empresa"
+            name="company"
+            value={form.company}
+            onChange={handleChange}
+            containerClassName="md:col-span-2"
+          />
+        </div>
 
-            {message ? (
-              <p className="text-sm font-medium text-secondary">{message}</p>
-            ) : null}
-            {error ? <p className="text-sm font-medium text-error">{error}</p> : null}
+        {message ? <p className="text-sm font-medium text-on-surface">{message}</p> : null}
+        {error ? <p className="text-sm font-medium text-error">{error}</p> : null}
 
-            <div className="flex justify-end">
-              <Button type="submit" disabled={saving} className="w-full sm:w-auto">
-                <Icon name="save" />
-                {saving ? 'Salvando...' : 'Salvar alterações'}
-              </Button>
-            </div>
-          </form>
-        </Card>
-      </div>
+        <div className="flex justify-end">
+          <Button type="submit" disabled={saving} className="w-full sm:w-auto">
+            <Icon name="save" />
+            {saving ? 'Salvando...' : 'Salvar alterações'}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

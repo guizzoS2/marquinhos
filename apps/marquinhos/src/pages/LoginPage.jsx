@@ -3,7 +3,9 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
+import { Icon } from '../components/ui/Icon';
 import { Card } from '../components/ui/Card';
+import { AppFooter } from '../components/layout/AppFooter';
 import { BrandLogo } from '../components/layout/BrandLogo';
 import { isFirebaseConfigured } from '../services/firebase';
 import { homeForRole } from '../services/roles';
@@ -17,14 +19,17 @@ export function LoginPage() {
 
   if (!isFirebaseConfigured()) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center p-4 sm:p-6 font-body">
-        <Card className="w-full max-w-md p-5 sm:p-8 space-y-3">
-          <h1 className="font-headline text-2xl font-extrabold">Firebase obrigatório</h1>
-          <p className="text-sm text-on-surface-variant">
-            Configure FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID e FIREBASE_APP_ID
-            em apps/marquinhos/.env
-          </p>
-        </Card>
+      <div className="min-h-screen bg-surface flex flex-col font-body">
+        <div className="flex flex-1 items-center justify-center p-4 sm:p-6">
+          <Card className="w-full max-w-md p-5 sm:p-8 space-y-3">
+            <h1 className="font-headline text-2xl font-extrabold">Firebase obrigatório</h1>
+            <p className="text-sm text-on-surface-variant">
+              Configure FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID e FIREBASE_APP_ID
+              em apps/marquinhos/.env
+            </p>
+          </Card>
+        </div>
+        <AppFooter />
       </div>
     );
   }
@@ -47,7 +52,8 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface flex items-center justify-center p-4 sm:p-6 font-body">
+    <div className="min-h-screen bg-surface flex flex-col font-body">
+      <div className="flex flex-1 items-center justify-center p-4 sm:p-6">
       <Card className="w-full max-w-md p-5 sm:p-8 space-y-6" as="form" onSubmit={handleSubmit}>
         <div className="flex flex-col items-center gap-4 text-center">
           <BrandLogo variant="full" className="w-44 h-44" />
@@ -73,9 +79,12 @@ export function LoginPage() {
         {error ? <p className="text-sm text-error font-medium">{error}</p> : null}
 
         <Button type="submit" className="w-full" disabled={submitting}>
+          <Icon name="login" />
           {submitting ? 'Entrando...' : 'Entrar'}
         </Button>
       </Card>
+      </div>
+      <AppFooter />
     </div>
   );
 }

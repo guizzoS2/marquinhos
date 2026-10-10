@@ -1,10 +1,11 @@
+import { EXPENSE_TYPES } from './catalogTaxonomy';
 import { buildCashFlowSummary } from './cashFlowUtils';
 
 export const overviewFallback = {
   metrics: [
     {
       id: 'revenue',
-      label: 'Faturamento Diário',
+      label: 'Faturamento diário',
       value: 'R$ 0',
       badge: '',
       badgeTone: 'neutral',
@@ -12,7 +13,7 @@ export const overviewFallback = {
     },
     {
       id: 'freela-cost',
-      label: 'Custo de Freelas Hoje',
+      label: 'Custo de freelas hoje',
       value: 'R$ 0',
       badge: '',
       badgeTone: 'neutral',
@@ -20,7 +21,7 @@ export const overviewFallback = {
     },
     {
       id: 'stock-alert',
-      label: 'Alerta de Estoque',
+      label: 'Alerta de estoque',
       value: '0 Itens',
       badge: '',
       badgeTone: 'neutral',
@@ -37,16 +38,7 @@ export const overviewFallback = {
   suggestion: null,
 };
 
-export const expenseCategories = [
-  { id: 'bebidas', name: 'Bebidas', type: 'expense', defaultNature: 'variable', icon: 'local_shipping' },
-  { id: 'freelancer', name: 'Freelancer', type: 'expense', defaultNature: 'variable', icon: 'person' },
-  { id: 'suprimentos', name: 'Suprimentos', type: 'expense', defaultNature: 'variable', icon: 'ac_unit' },
-  { id: 'utilidades', name: 'Utilidades', type: 'expense', defaultNature: 'fixed', icon: 'bolt' },
-  { id: 'aluguel', name: 'Aluguel', type: 'expense', defaultNature: 'fixed', icon: 'home' },
-  { id: 'software', name: 'Software', type: 'expense', defaultNature: 'fixed', icon: 'devices' },
-  { id: 'salarios', name: 'Salários', type: 'expense', defaultNature: 'fixed', icon: 'badge' },
-  { id: 'manutencao', name: 'Manutenção', type: 'expense', defaultNature: 'variable', icon: 'build' },
-];
+export const expenseCategories = EXPENSE_TYPES;
 
 export const cashFlowFallback = {
   period: new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
@@ -57,37 +49,15 @@ export const cashFlowFallback = {
 };
 
 export const inventoryFallback = {
-  filters: ['Todos', 'Cervejas', 'Destilados', 'Insumos', 'Soft Drinks'],
+  filters: ['Todos', 'Bebidas alcoólicas', 'Bebidas não alcoólicas', 'Comidas, porções e petiscos', 'Mercearia'],
   items: [],
-  metrics: [
-    {
-      id: 'low-stock',
-      tone: 'error',
-      badge: 'Ação',
-      icon: 'warning',
-      label: 'Itens em estoque baixo',
-      value: '0',
-      progress: 0,
-    },
-    {
-      id: 'inventory-value',
-      tone: 'secondary',
-      badge: 'Ativo',
-      icon: 'inventory',
-      label: 'Valor do inventário',
-      value: 'R$ 0',
-      progress: 0,
-    },
-    {
-      id: 'turnover',
-      tone: 'tertiary',
-      badge: 'Giro',
-      icon: 'trending_up',
-      label: 'Giro de estoque (mês)',
-      value: '—',
-      progress: 0,
-    },
-  ],
+  entries: [],
+  productions: [],
+  promotions: [],
+  comboItems: [],
+  sales: [],
+  closings: [],
+  purchases: [],
 };
 
 export const freelancersFallback = {

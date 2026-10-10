@@ -1,17 +1,17 @@
 import { NavLink } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../ui/Icon';
 import { Button } from '../ui/Button';
 import { BrandLogo } from './BrandLogo';
 import { useAuth } from '../../contexts/AuthContext';
-import { useModal } from '../../contexts/ModalContext';
 import { isStockRole } from '../../services/roles';
 
 const allNavItems = [
-  { to: '/', label: 'Visão Geral', icon: 'dashboard', end: true, admin: true },
-  { to: '/fluxo-caixa', label: 'Fluxo de Caixa', icon: 'payments', admin: true },
+  { to: '/', label: 'Visão geral', icon: 'dashboard', end: true, admin: true },
+  { to: '/fluxo-caixa', label: 'Fluxo de caixa', icon: 'payments', admin: true },
+  { to: '/vendas', label: 'Vendas', icon: 'point_of_sale', admin: true },
+  { to: '/compras', label: 'Compras e despesas', icon: 'receipt_long', admin: true },
   { to: '/estoque', label: 'Estoque', icon: 'inventory_2' },
-  { to: '/fornecedores', label: 'Fornecedores', icon: 'local_shipping', admin: true },
+  { to: '/pdv', label: 'PDV', icon: 'point_of_sale' },
   { to: '/freelancers', label: 'Freelancers', icon: 'group', admin: true },
   { to: '/equipe', label: 'Equipe da casa', icon: 'badge', admin: true },
   { to: '/perfil', label: 'Perfil', icon: 'person' },
@@ -19,8 +19,6 @@ const allNavItems = [
 
 export function Sidebar({ open = false, onNavigate }) {
   const { logout, user } = useAuth();
-  const { openModal } = useModal();
-  const queryClient = useQueryClient();
   const stockOnly = isStockRole(user?.role);
   const navItems = allNavItems.filter((item) => !item.admin || !stockOnly);
 
@@ -63,28 +61,10 @@ export function Sidebar({ open = false, onNavigate }) {
       </nav>
 
       <div className="pt-4 border-t border-outline-variant/20 space-y-1">
-        {stockOnly ? null : (
-          <Button
-            className="w-full"
-            onClick={() =>
-              openModal('new-order', {
-                onSuccess: () =>
-                  queryClient.invalidateQueries({ queryKey: ['cash-flow'] }),
-              })
-            }
-          >
-            <Icon name="add" />
-            Novo Pedido
-          </Button>
-        )}
-        <button
-          type="button"
-          onClick={logout}
-          className="w-full flex items-center gap-3 px-3 py-2 min-h-11 text-on-surface-variant hover:text-error transition-colors"
-        >
+        <Button type="button" variant="ghost" className="w-full justify-start" onClick={logout}>
           <Icon name="logout" />
-          <span>Sair</span>
-        </button>
+          Sair
+        </Button>
       </div>
     </aside>
   );

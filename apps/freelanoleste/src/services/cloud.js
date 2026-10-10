@@ -114,6 +114,7 @@ const USER_FIELDS = [
   'company',
   'photoURL',
   'permissions',
+  'disabled',
   'createdAt',
   'updatedAt',
   'uid',
