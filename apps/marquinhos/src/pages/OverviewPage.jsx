@@ -80,25 +80,23 @@ export function OverviewPage() {
                   <h2 className="text-xl font-extrabold">Alertas do sistema</h2>
                 </div>
                 {alerts.length ? (
-                  <div className="flex min-h-0 flex-1 flex-col justify-center">
-                    <ul className="divide-y divide-outline-variant overflow-y-auto">
-                      {alerts.map((alert) => (
-                        <li key={alert.id}>
-                          <button
-                            type="button"
-                            onClick={() => openProduct(alert.productId)}
-                            className="flex min-h-11 w-full items-center gap-3 py-3 text-left first:pt-0 last:pb-0"
-                          >
-                            <Icon name={alert.icon || 'warning'} className="text-error" />
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-bold text-on-surface">{alert.name}</p>
-                              <p className="text-xs text-on-surface-variant">{alert.detail}</p>
-                            </div>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <ul className="max-h-96 divide-y divide-outline-variant overflow-y-auto">
+                    {alerts.map((alert) => (
+                      <li key={alert.id}>
+                        <button
+                          type="button"
+                          onClick={() => openProduct(alert.productId)}
+                          className="flex min-h-11 w-full items-center gap-3 py-3 text-left"
+                        >
+                          <Icon name={alert.icon || 'warning'} className="text-error" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-on-surface">{alert.name}</p>
+                            <p className="text-xs text-on-surface-variant">{alert.detail}</p>
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 ) : (
                   <p className="flex flex-1 items-center text-sm text-on-surface-variant">Nenhum alerta.</p>
                 )}

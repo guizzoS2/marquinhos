@@ -159,6 +159,29 @@ function countLabel(count, singular, plural) {
   return `${total} ${count === 1 ? singular : plural}`;
 }
 
+function lineUnitCents(line) {
+  const qty = Number(line?.quantidade);
+  const fromUnit = reaisToCents(line?.valor_unitario);
+  const totalCents = reaisToCents(line?.valor_total);
+  const fromTotal = Number.isFinite(qty) && qty > 0 && totalCents > 0 ? Math.round(totalCents / qty) : 0;
+  return Math.max(fromUnit, fromTotal);
+}
+
+function paidUnitCents(purchase, line) {
+  const unit = lineUnitCents(line);
+  if (!unit) return 0;
+  const lines = purchase?.itens || [];
+  let sum = 0;
+  lines.forEach((row) => {
+    const qty = Number(row?.quantidade);
+    if (!Number.isFinite(qty) || qty <= 0) return;
+    sum += lineUnitCents(row) * qty;
+  });
+  const paid = reaisToCents(purchase?.total);
+  if (paid > 0 && sum > 0 && paid !== sum) return Math.round(unit * (paid / sum));
+  return unit;
+}
+
 function latestUnitCostCents(purchases, productId) {
   const rows = (purchases || [])
     .filter((purchase) => purchase?.status !== 'cancelada')
@@ -171,7 +194,7 @@ function latestUnitCostCents(purchases, productId) {
   for (const purchase of rows) {
     const line = (purchase.itens || []).find((item) => String(item.produto_id) === String(productId));
     if (!line) continue;
-    const cents = reaisToCents(line.valor_unitario);
+    const cents = paidUnitCents(purchase, line);
     if (cents > 0) return cents;
   }
   return null;
@@ -426,9 +449,11 @@ export function aggregateOverview(period, sources, now = new Date()) {
         icon: 'warning',
       });
     }
-    const cost = latestUnitCostCents(inventory.purchases, item.id);
-    const price = parseMoneyToCents(item.valor_unitario);
-    if (cost != null && price < cost) {
+    const purchaseCost = latestUnitCostCents(inventory.purchases, item.id) || 0;
+    const catalogCost = parseMoneyToCents(item.custo_compra);
+    const cost = Math.max(purchaseCost, catalogCost);
+    const price = parseMoneyToCents(item.valor_unitario || item.cost);
+    if (cost > 0 && price < cost) {
       alerts.push({
         id: `${item.id}-margin`,
         productId: item.id,
@@ -437,6 +462,11 @@ export function aggregateOverview(period, sources, now = new Date()) {
         icon: 'trending_down',
       });
     }
+  });
+  alerts.sort((left, right) => {
+    const margin = Number(left.detail !== 'Margem negativa') - Number(right.detail !== 'Margem negativa');
+    if (margin) return margin;
+    return String(left.name).localeCompare(String(right.name), 'pt-BR');
   });
 
   const profitTone = profitCents < 0 ? 'negative' : profitCents > 0 ? 'positive' : undefined;
